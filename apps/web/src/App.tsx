@@ -1,10 +1,13 @@
+import { Welcome } from "./Welcome";
+import { Repositories } from "./Repositories";
+import { RepositorySelect } from "./RepositorySelect";
 import { About } from "./About";
 import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
 import { SyncProgress } from "./SyncProgress";
 import { UserMenu } from "./UserMenu";
 import Skeleton from "react-loading-skeleton";
-import { OverviewSkeleton, PRListSkeleton, RepositorySkeleton, ActivitySkeleton, PageSkeleton, AccountSkeleton } from "./LoadingSkeleton";
+import { OverviewSkeleton, PRListSkeleton, ActivitySkeleton, PageSkeleton, AccountSkeleton } from "./LoadingSkeleton";
 import i18n from "./i18n";
 import { LanguageMenu } from "./LanguageMenu";
 import { useTranslation } from "react-i18next";
@@ -14,7 +17,7 @@ import { activitySchema } from "./activity-model";
 import React from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
-import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ChevronRight, ExternalLink } from "lucide-react";
+import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ExternalLink } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
@@ -35,6 +38,7 @@ export default function App() {
   const [params, setParams] = useSearchParams();
   const parsedPage = Number(params.get("page") || 1);
   const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 && parsedPage <= 100000 ? parsedPage - 1 : 0;
+  const repository = (params.get("repo") || "").slice(0, 256);
   const search = (params.get("q") || "").slice(0, 120);
   const [draftSearch, setDraftSearch] = React.useState(search);
   const visitedRoutes = React.useRef(new Map<string, string>());
@@ -63,7 +67,10 @@ export default function App() {
   };
   const setFilter = (f: string, preserveSearch = false) => {
     const path = f === "All" && !preserveSearch ? lastPRRoute.current : filterPaths[f] || "/";
-    const query = preserveSearch ? (search ? "?" + new URLSearchParams({ q: search }) : "") : visitedRoutes.current.get(path) || "";
+    const preserved = new URLSearchParams();
+    if (search) preserved.set("q", search);
+    if (repository) preserved.set("repo", repository);
+    const query = preserveSearch ? (preserved.size ? "?" + preserved : "") : visitedRoutes.current.get(path) || "";
     void navigate(path + query);
   };
   React.useEffect(() => {
@@ -150,12 +157,12 @@ export default function App() {
     staleTime: 30000,
   });
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
-    queryKey: ["prs", filter, page, search],
+    queryKey: ["prs", filter, page, search, repository],
     retry: 1,
     enabled: !!auth?.connected && !["Overview", "Repositories", "About"].includes(filter),
     gcTime: 30 * 60 * 1000,
     queryFn: async ({ signal }) => {
-      const r = await api(apiURL + "/api/v1/pull-requests?" + listParameters(filter, page, search), { credentials: "include", signal });
+      const r = await api(apiURL + "/api/v1/pull-requests?" + listParameters(filter, page, search, repository), { credentials: "include", signal });
       return parsePRPage(await r.json());
     },
     staleTime: 30000,
@@ -169,7 +176,7 @@ export default function App() {
     refetch: refetchRepositories,
   } = useQuery<RepositorySummary[]>({
     queryKey: ["repositories"],
-    enabled: !!auth?.connected && filter === "Repositories",
+    enabled: !!auth?.connected && ["Repositories", "Needs attention"].includes(filter),
     gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       const r = await api(apiURL + "/api/v1/repositories", { credentials: "include" });
@@ -177,8 +184,6 @@ export default function App() {
     },
     staleTime: 30000,
   });
-  const repositories = repositoryData ?? [];
-  const filteredRepositories = repositories.filter((repo) => repo.repo.toLowerCase().includes(search.toLowerCase()));
   const clearSearch = () => {
     updateSearch("");
     setDraftSearch("");
@@ -246,7 +251,7 @@ export default function App() {
           </button>
           <button className={filter === "Needs attention" ? "active" : ""} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
             <Inbox size={17} aria-hidden="true" />
-            <span>{t("navAttention")}</span> <b>{authLoading || summaryLoading ? <Skeleton width={14} height={10} /> : (summary?.attention ?? "—")}</b>
+            <span>{t("navAttention")}</span> {(authLoading || auth?.connected) && <b>{authLoading || summaryLoading ? <Skeleton width={14} height={10} /> : (summary?.attention ?? "—")}</b>}
           </button>
           <button className={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
@@ -299,7 +304,7 @@ export default function App() {
       <main id="main-content" tabIndex={-1} className="@container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5">
         <header className="page-header">
           <div>
-            <h1>{filter === "About" ? t("navAbout") : authLoading ? <Skeleton width={120} height={23} /> : !auth?.connected ? "PR Desk" : filter === "Overview" ? t("achievements") : filter === "Repositories" ? t("navRepositories") : filter === "Needs attention" ? t("navAttention") : t("navAll")}</h1>
+            <h1>{filter === "About" ? t("navAbout") : authLoading ? <Skeleton width={120} height={23} /> : !auth?.connected ? t("welcomeHeading") : filter === "Overview" ? t("achievements") : filter === "Repositories" ? t("navRepositories") : filter === "Needs attention" ? t("navAttention") : t("navAll")}</h1>
 
             {oauthError && (
               <p className="error" role="alert">
@@ -311,7 +316,7 @@ export default function App() {
             <time className="header-date">{new Intl.DateTimeFormat(i18n.language, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</time>
             <div className="header-actions">
               <LanguageMenu />
-              {authLoading ? <AccountSkeleton /> : <UserMenu connected={!!auth?.connected} username={auth?.username} onDisconnect={() => logoutMutation.mutate()} disconnecting={logoutMutation.isPending} disconnectError={logoutMutation.isError} />}
+              {authLoading ? <AccountSkeleton /> : auth?.connected || filter === "About" ? <UserMenu connected={!!auth?.connected} username={auth?.username} onDisconnect={() => logoutMutation.mutate()} disconnecting={logoutMutation.isPending} disconnectError={logoutMutation.isError} /> : null}
             </div>
           </div>
         </header>
@@ -337,31 +342,9 @@ export default function App() {
             </button>
           </section>
         ) : !auth?.connected ? (
-          <section className="connection-card">
-            <div className="connection-icon">
-              <GitPullRequest size={30} />
-            </div>
-            <h2>{t("welcomeTitle")}</h2>
-            <p>{t("welcomeDescription")}</p>
-            <a className="primary-action" href={apiURL + "/api/v1/auth/github"}>
-              <GitPullRequest size={18} />
-              {t("connectGitHub")}
-            </a>
-            <div className="connection-features">
-              <span>
-                <LayoutDashboard size={16} />
-                {t("navOverview")}
-              </span>
-              <span>
-                <Inbox size={16} />
-                {t("navAttention")}
-              </span>
-              <span>
-                <RefreshCw size={16} />
-                {t("backgroundUpdates")}
-              </span>
-            </div>
-          </section>
+          <Welcome />
+        ) : filter === "Repositories" ? (
+          <Repositories repositories={repositoryData} loading={repositoriesLoading} error={repositoriesError} retry={() => void refetchRepositories()} />
         ) : filter === "Overview" ? (
           <React.Suspense fallback={<OverviewSkeleton controls />}>
             <Overview onAccessGranted={() => syncMutation.mutate(true)} />
@@ -394,83 +377,6 @@ export default function App() {
                 </div>
               ))}
             </section>
-            {filter === "Repositories" && (
-              <section className="repositories" id="repositories">
-                <div className="list-heading">
-                  <h2>
-                    {t("repositories")} <span>{repositoriesLoading ? <Skeleton width={20} /> : filteredRepositories.length}</span>
-                  </h2>
-                  {searchControl}
-                </div>
-                {repositoriesError && repositoryData && (
-                  <div className="sync-status-error" role="status">
-                    <span>{t("refreshFailedKeepData")}</span>
-                    <button className="access-recheck" onClick={() => refetchRepositories()}>
-                      {t("retry")}
-                    </button>
-                  </div>
-                )}
-                {repositoriesLoading ? (
-                  <RepositorySkeleton />
-                ) : repositoriesError && !repositoryData ? (
-                  <div className="empty-state" role="alert">
-                    <AlertTriangle size={28} />
-                    <h2>{t("unableRepositories")}</h2>
-                    <button className="secondary-action" onClick={() => refetchRepositories()}>
-                      {t("retry")}
-                    </button>
-                  </div>
-                ) : filteredRepositories.length === 0 ? (
-                  <div className="empty-state">
-                    <FolderGit2 size={28} />
-                    <h2>{t("emptyResultsTitle")}</h2>
-                    <p>{t(search ? "emptyResultsDescription" : "noRepos")}</p>
-                    {search && (
-                      <button className="secondary-action" onClick={clearSearch}>
-                        {t("clearFilters")}
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="repo-grid grid grid-cols-1 @[760px]/dashboard:grid-cols-2 @[1250px]/dashboard:grid-cols-3">
-                    {filteredRepositories.map((r) => (
-                      <article className="repo-card" key={r.repo}>
-                        <a className="repo-name" title={r.repo} href={`https://github.com/${r.repo}`} target="_blank" rel="noopener noreferrer">
-                          <FolderGit2 size={18} aria-hidden="true" />
-                          <span>
-                            <small>{r.repo.split("/")[0]}</small>
-                            <strong>{r.repo.split("/").slice(1).join("/")}</strong>
-                          </span>
-                          <ExternalLink size={14} className="repo-external" aria-hidden="true" />
-                        </a>
-                        <dl className="repo-metrics">
-                          {[
-                            [t("prs"), r.total],
-                            [t("open"), r.open],
-                            [t("conflicts"), r.conflicts],
-                            [t("navAttention"), r.needs_attention],
-                          ].map(([label, value]) => (
-                            <div key={label}>
-                              <dt>{label}</dt>
-                              <dd>{value}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        <button
-                          className="repo-pr-filter"
-                          onClick={() => {
-                            void navigate(filterPaths.All + "?" + new URLSearchParams({ q: r.repo }));
-                          }}
-                        >
-                          <span>{t("viewRepositoryPRs")}</span>
-                          <ChevronRight size={16} aria-hidden="true" />
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
             {filter !== "Repositories" && (
               <>
                 <div className="list-heading">
@@ -483,6 +389,23 @@ export default function App() {
                       </small>
                     )}
                   </h2>
+                  {repository && (
+                    <button
+                      className="search-chip"
+                      onClick={() =>
+                        setParams((current) => {
+                          const next = new URLSearchParams(current);
+                          next.delete("repo");
+                          next.delete("page");
+                          return next;
+                        })
+                      }
+                      aria-label={t("clearRepositoryFilter")}
+                    >
+                      {repository}
+                      <X size={14} />
+                    </button>
+                  )}
                   {search && (
                     <button className="search-chip" onClick={clearSearch} aria-label={t("clearFilters")}>
                       {search}
@@ -492,6 +415,27 @@ export default function App() {
                 </div>
                 <div className="toolbar">
                   {searchControl}
+                  {filter === "Needs attention" && (
+                    <RepositorySelect
+                      repositories={repositoryData || []}
+                      loading={repositoriesLoading}
+                      value={repository}
+                      onChange={(value) =>
+                        setParams((current) => {
+                          const next = new URLSearchParams(current);
+                          if (value) next.set("repo", value);
+                          else next.delete("repo");
+                          next.delete("page");
+                          return next;
+                        })
+                      }
+                    />
+                  )}
+                  {filter === "Needs attention" && repositoriesError && (
+                    <button className="access-recheck" onClick={() => refetchRepositories()}>
+                      {t("retry")}
+                    </button>
+                  )}
                   {filter !== "Needs attention" && (
                     <div className="filters max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
                       {[
@@ -519,14 +463,24 @@ export default function App() {
                 {!isLoading && (!isError || data) && shown.length === 0 && (
                   <div className="empty-state">
                     <Inbox size={28} />
-                    <h2>{t(filter === "Needs attention" && !search && page === 0 ? "caughtUp" : "emptyResultsTitle")}</h2>
-                    <p>{t(search || page > 0 ? "emptyResultsDescription" : filter === "Needs attention" ? "noActionNeeded" : "noOpenResults")}</p>
+                    <h2>{t(filter === "Needs attention" && !search && !repository && page === 0 ? "caughtUp" : "emptyResultsTitle")}</h2>
+                    <p>{t(search || repository || page > 0 ? "emptyResultsDescription" : filter === "Needs attention" ? "noActionNeeded" : "noOpenResults")}</p>
                     {page > 0 ? (
                       <button className="secondary-action" onClick={() => setPage(0)}>
                         {t("firstPage")}
                       </button>
-                    ) : search ? (
-                      <button className="secondary-action" onClick={clearSearch}>
+                    ) : search || repository ? (
+                      <button
+                        className="secondary-action"
+                        onClick={() => {
+                          setDraftSearch("");
+                          setParams((current) => {
+                            const next = new URLSearchParams(current);
+                            for (const key of ["q", "repo", "page"]) next.delete(key);
+                            return next;
+                          });
+                        }}
+                      >
                         {t("clearFilters")}
                       </button>
                     ) : (

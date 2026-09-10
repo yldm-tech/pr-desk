@@ -130,25 +130,25 @@ export function PRListSkeleton({ count = 5 }: { count?: number }) {
 export function RepositorySkeleton({ count = 6 }: { count?: number }) {
   return (
     <LoadingFrame className="repository-skeleton">
-      <div className="repo-grid grid grid-cols-1 @[760px]/dashboard:grid-cols-2 @[1250px]/dashboard:grid-cols-3">
+      <div className="repository-rows">
         {Array.from({ length: count }, (_, i) => (
-          <article className="repo-card" key={i}>
-            <div className="repo-name w-full">
-              <Skeleton width={18} height={18} />
+          <div className="repository-row" key={i}>
+            <div className="repository-identity">
+              <Skeleton width={36} height={36} />
               <div className="skeleton-flex">
-                <Skeleton width={i % 2 ? "65%" : "80%"} height={18} />
+                <Skeleton width="45%" height={11} />
+                <Skeleton width="75%" height={16} />
               </div>
             </div>
-            <div className="repo-metrics w-full">
-              {[0, 1, 2, 3].map((n) => (
-                <div key={n}>
-                  <Skeleton width="70%" height={12} />
-                  <Skeleton width={30} height={24} />
-                </div>
-              ))}
+            {[0, 1, 2].map((key) => (
+              <div className="repository-number" key={key}>
+                <Skeleton width={24} height={18} />
+              </div>
+            ))}
+            <div className="repository-action">
+              <Skeleton width={70} height={15} />
             </div>
-            <Skeleton height={36} containerClassName="w-full" />
-          </article>
+          </div>
         ))}
       </div>
     </LoadingFrame>
@@ -266,6 +266,34 @@ export function StatsSkeleton() {
 
 export function PageSkeleton({ page }: { page: string }) {
   if (page === "Overview") return <OverviewSkeleton controls />;
+  if (page === "Repositories")
+    return (
+      <div className="repository-workspace">
+        <LoadingFrame>
+          <div className="repository-summary">
+            {[0, 1, 2].map((key) => (
+              <div className="repository-summary-item" key={key}>
+                <Skeleton width={80} height={13} />
+                <Skeleton width={30} height={27} />
+              </div>
+            ))}
+          </div>
+        </LoadingFrame>
+        <div className="repository-list-panel">
+          <LoadingFrame>
+            <div className="repository-controls">
+              <Skeleton height={40} containerClassName="flex-1" />
+              <Skeleton width={100} height={40} />
+              <Skeleton width={100} height={40} />
+            </div>
+            <div className="repository-list-caption">
+              <Skeleton width={140} height={12} />
+            </div>
+          </LoadingFrame>
+          <RepositorySkeleton />
+        </div>
+      </div>
+    );
   return (
     <div className="page-skeleton">
       <StatsSkeleton />

@@ -46,3 +46,13 @@ test("pagination and filters are sent to the backend", async () => {
   assert.equal(new URLSearchParams(listParameters("Needs attention", 0)).get("attention"), "true");
   assert.equal(parsePRPage({ data: [row], total: 55 }).total, 55);
 });
+
+test("repository filtering composes with attention, search and pagination", async () => {
+  const { listParameters } = await import("./pr-model.ts");
+  const params = new URLSearchParams(listParameters("Needs attention", 2, "fix", "org/tool"));
+  assert.equal(params.get("repo"), "org/tool");
+  assert.equal(params.get("attention"), "true");
+  assert.equal(params.get("search"), "fix");
+  assert.equal(params.get("offset"), "100");
+  assert.equal(new URLSearchParams(listParameters("All", 0)).has("repo"), false);
+});

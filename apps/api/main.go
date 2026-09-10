@@ -520,6 +520,9 @@ func (s *Server) listPRs(c *gin.Context) {
 	if rs := c.Query("review_status"); rs != "" {
 		q = q.Where("review_status = ?", rs)
 	}
+	if repo := c.Query("repo"); repo != "" {
+		q = q.Where("repo = ?", repo)
+	}
 	if search := strings.TrimSpace(c.Query("search")); search != "" {
 		if len(search) > 120 {
 			c.JSON(400, gin.H{"error": "search query is too long"})
