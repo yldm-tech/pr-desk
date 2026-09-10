@@ -73,6 +73,8 @@ JavaScript tooling uses Vite+ 0.3.1 and Bun 1.3.4. From the repository root use 
 
 ## Background synchronization
 
+Successful GitHub login immediately starts a background sync after saving the connection. It does not delay the redirect or depend on the callback request staying open. Existing checkpoints and advisory locks prevent duplicate work; server shutdown cancels the task. The periodic worker remains a fallback if the process stops before login-triggered work completes.
+
 The API starts a `robfig/cron` worker automatically. Every 30 seconds it checks eligible connections and runs incremental syncs that are due, normally five minutes after the previous successful completion. The browser can be closed; the API and PostgreSQL must remain running. Failed runs wait at least 15 minutes, and first-time connections still import full history. Expired (30-day) and disconnected sessions are excluded.
 
 Automatic and manual runs share `syncSession` and PostgreSQL advisory locks. The checkpoint is checked again under the lock, so replicas do not repeat freshly completed work. A scan skips overlapping invocations and processes sessions serially to limit GitHub search pressure. Each run has a 30-minute timeout; server shutdown cancels active worker requests. Checkpoints and failure cooldowns survive restarts. The frontend only polls progress and refreshes cached views.
