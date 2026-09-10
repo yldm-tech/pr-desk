@@ -1,0 +1,51 @@
+services:
+  web:
+    profiles: ["production"]
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports: ["127.0.0.1:${WEB_PORT:-5174}:80"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+  api:
+    build: ./apps/api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: host=postgres user=prdashboard password=prdashboard dbname=prdashboard port=5432 sslmode=disable
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      PORT: ${PORT:-8080}
+      GITHUB_REDIRECT_URL: ${GITHUB_REDIRECT_URL:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+    ports: ["127.0.0.1:${PORT:-8080}:${PORT:-8080}"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${PORT:-8080}/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: prdashboard
+      POSTGRES_USER: prdashboard
+      POSTGRES_PASSWORD: prdashboard
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prdashboard -d prdashboard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+volumes:
+  pgdata:

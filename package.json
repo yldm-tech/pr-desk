@@ -1,0 +1,16 @@
+{
+  "name": "pr-dashboard",
+  "private": true,
+  "packageManager": "bun@1.3.4",
+  "scripts": {
+    "dev": "bun run --cwd frontend dev",
+    "build": "bun run --cwd frontend build",
+    "test": "make test"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "engines": {
+    "bun": ">=1.3.4"
+  }
+}
