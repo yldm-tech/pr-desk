@@ -3,8 +3,13 @@ services:
     profiles: ["production"]
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: apps/web/Dockerfile
     restart: unless-stopped
+    environment:
+      API_UPSTREAM: api:${PORT:-8080}
+    depends_on:
+      api:
+        condition: service_healthy
     ports: ["127.0.0.1:${WEB_PORT:-5174}:80"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health >/dev/null || exit 1"]
@@ -13,7 +18,9 @@ services:
       retries: 5
       start_period: 5s
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: host=postgres user=prdashboard password=prdashboard dbname=prdashboard port=5432 sslmode=disable
