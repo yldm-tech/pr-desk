@@ -75,6 +75,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for local checks and pull request guidanc
 
 The chart and public repository badges become available once the repository is public. [View stargazers on GitHub](https://github.com/yldm-tech/pr-desk/stargazers).
 
-## License status
+## License
 
-A project license has not been selected yet. Public visibility alone does not grant an open-source license. See the [open-source readiness review](docs/open-source-readiness.md) for remaining release decisions and third-party notices.
+PR Desk is licensed under the [Apache License, Version 2.0](LICENSE).
