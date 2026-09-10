@@ -1,6 +1,6 @@
 # Follow-up workspace: development operations
 
-The implementation on this branch is incomplete. Account storage, follow-up state and the browser interface are available; actual gonotify sending, destination management and the production notification worker still need integration. The checklist in [follow-up-plan.md](follow-up-plan.md) is the completion authority. Do not deploy this branch as a finished notification service.
+Account storage, follow-up state, browser settings, Telegram destination management and the production notification worker are implemented on this branch. The checklist in [follow-up-plan.md](follow-up-plan.md) remains the completion authority. Configure at least one destination before expecting delivery.
 
 ## Account upgrade
 
@@ -30,6 +30,6 @@ From the root, run `bun run check`, `bun run test:web`, `bunx playwright install
 
 IANA timezone data is embedded into the Go executable with `time/tzdata`, so timezone validation and daily schedule calculations do not depend on the minimal production image containing an OS zoneinfo package.
 
-## Notification work still required
+## Notification delivery
 
-The outbox implements five-minute event aggregation, per-destination delivery records/retries, a single initial inventory, daily local-time summaries and long-message splitting. Sending never marks tasks read or handled. Before activation, finish the identified gonotify adapter, encrypted destination configuration/API/UI, language settings, paused-sync context, production worker wiring and adapter-level tests. No live test message should be sent without explicit authorization.
+The outbox implements five-minute event aggregation, per-destination delivery records/retries, a single initial inventory, daily local-time summaries and long-message splitting. Telegram credentials are encrypted at rest and sent through `github.com/nikoksr/notify`; sending never marks tasks read or handled. The worker runs on the background scheduler and retries failures with backoff. Do not send a live test message without explicit authorization.
