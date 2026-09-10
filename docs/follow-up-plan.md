@@ -28,7 +28,7 @@ Implemented on `feat/pr-follow-up-workspace` (not a completion claim):
 - Authored and requested-review discovery; previously tracked open reviews refresh even after disappearing from search. Reviewed-by discovery is filtered by evidence of a direct/selected-team request. Contribution queries remain authored-only.
 - Snapshot/state model, read/handled optimistic concurrency, snooze, meaningful activity clocks, drafts, review decisions, archived outcomes, initial baseline marker, event persistence.
 - Follow-up API, configurable team/timezone/digest/waiting periods, global Overview summary, role/state views, responsive cards and settings, five UI locales.
-- Notification outbox domain, independent per-target retries, event coalescing, baseline summary, daily timezones/DST deduplication, long Unicode messages split. Transport is injectable in tests only; **production sending and destination management are not yet connected**.
+- Notification outbox domain, encrypted multi-target destination CRUD, independent per-target retries, event coalescing, baseline summary, daily timezones/DST deduplication, long Unicode messages split, Telegram delivery through `github.com/nikoksr/notify`, and background worker wiring.
 
 Verified at this checkpoint:
 
@@ -39,8 +39,8 @@ Verified at this checkpoint:
 
 Remaining before the objective can be marked complete:
 
-1. Identify the intended gonotify service/package. An asynchronous clarification is pending; several unrelated projects share this name, so no contract has been guessed.
-2. Implement the actual Telegram adapter and encrypted destination API/UI, connect notification scheduling/delivery, verify failure responses/idempotency and target enable/disable behavior. Finish notification language preferences and paused-sync context.
+1. Verify the Telegram adapter against deployment credentials and provider responses; no live message has been sent without explicit authorization.
+2. Finish notification language preferences and paused-sync context.
 3. Expand live API/browser fixtures for destinations, reopen/draft/team changes and account reconnect; check relevant endpoint authorization, migrations and settings validation.
 4. Finish operating/privacy/setup documentation and required CI browser checks, repeat full tests/build, inspect final diff, create the completed PR and publish a completion report. No real Telegram message has been sent.
 
@@ -52,7 +52,7 @@ Reference semantics: GitHub's [search documentation](https://github.com/github/d
 - Added PostgreSQL tests for settings input validation, forged/other-account sessions, checkpoint preservation when saving settings, and workflow/preferences retained after reconnect. Added a delivery test proving disabled targets do not send or retry already queued messages.
 - Added the existing Playwright suite to the CI web job (Chromium and Linux dependencies installed explicitly).
 - Re-ran full PostgreSQL API tests with race detector, `go vet`, Vite+ format/lint/type checks, and diff whitespace checks successfully.
-- The gonotify clarification is still unanswered. No provider contract, destination form, or production sender has been invented. This goal remains active and incomplete.
+- The intended provider is now confirmed as `nikoksr/notify`; its Telegram adapter, destination management and scheduler wiring are implemented.
 
 ### Runtime and documentation pass
 
