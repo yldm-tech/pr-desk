@@ -53,3 +53,9 @@ Reference semantics: GitHub's [search documentation](https://github.com/github/d
 - Added the existing Playwright suite to the CI web job (Chromium and Linux dependencies installed explicitly).
 - Re-ran full PostgreSQL API tests with race detector, `go vet`, Vite+ format/lint/type checks, and diff whitespace checks successfully.
 - The gonotify clarification is still unanswered. No provider contract, destination form, or production sender has been invented. This goal remains active and incomplete.
+
+### Runtime and documentation pass
+
+- Embedded the IANA timezone database with `time/tzdata`; validated the existing Tokyo schedule and New York DST test in a network-disabled Linux `scratch` container containing only the compiled test binary. This proves schedule calculation works without OS timezone files.
+- Updated data-handling and development documentation to distinguish durable accounts from browser sessions and documented verified legacy migration, reconnect, disconnection, read/handled states and current notification limitations. Added `follow-up-operations.md` and documented Chromium browser checks in CI.
+- API tests and `go vet` passed. This was additional implementation progress; it does not resolve the pending gonotify integration or complete the goal.

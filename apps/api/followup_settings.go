@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"time"
+	_ "time/tzdata" // The minimal production image has no system zoneinfo database.
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm/clause"

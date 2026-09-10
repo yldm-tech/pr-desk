@@ -4,7 +4,7 @@ The workflows use GitHub-hosted Ubuntu runners, PR cancellation, independent mai
 
 ## Checks
 
-- Web: `setup-vp` installs the pinned Vite+ version, uses Bun from root `packageManager` with a frozen lockfile, then runs `vp check`, Vitest and the production build.
+- Web: `setup-vp` installs the pinned Vite+ version, uses Bun from root `packageManager` with a frozen lockfile, then runs `vp check`, Vitest, Chromium Playwright tests with synthetic API fixtures, and the production build. Browser tests exercise follow-up navigation, state actions, settings and mobile layout without contacting a real GitHub account or sending Telegram messages.
 - API: Go version from `apps/api/go.mod`, `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too. PR runs do not share uploaded Go caches.
 - Container: build the single root-context `apps/api/Dockerfile` without pushing; run embedded asset and routing tests against the real web bundle.
 - `workflow_dispatch` can rerun CI when needed. Main runs are not cancelled by later pushes.
