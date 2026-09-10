@@ -195,8 +195,8 @@ func (s *Server) logout(c *gin.Context) {
 	if sid != "" {
 		s.db.Where("session_id = ?", sid).Delete(&OAuthToken{})
 	}
-	c.SetCookie("pr_connected", "", -1, "/", "", c.Request.TLS != nil, true)
-	c.SetCookie("pr_session", "", -1, "/", "", c.Request.TLS != nil, true)
+	c.SetCookie("pr_connected", "", -1, "/", "", secureCookies(c), true)
+	c.SetCookie("pr_session", "", -1, "/", "", secureCookies(c), true)
 	c.JSON(200, gin.H{"connected": false})
 }
 func (s *Server) authStatus(c *gin.Context) {
@@ -281,7 +281,7 @@ func githubAuth(c *gin.Context) {
 		return
 	}
 	state := base64.RawURLEncoding.EncodeToString(b)
-	c.SetCookie("oauth_state", state, 600, "/", "", c.Request.TLS != nil, true)
+	c.SetCookie("oauth_state", state, 600, "/", "", secureCookies(c), true)
 	oauthCfg := githubOAuthConfig()
 	c.Redirect(http.StatusFound, oauthCfg.AuthCodeURL(state))
 }
@@ -294,7 +294,7 @@ func githubCallback(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "invalid oauth state"})
 			return
 		}
-		c.SetCookie("oauth_state", "", -1, "/", "", c.Request.TLS != nil, true)
+		c.SetCookie("oauth_state", "", -1, "/", "", secureCookies(c), true)
 		redirect := os.Getenv("WEB_ORIGIN")
 		if redirect == "" {
 			redirect = "http://localhost:5173"
@@ -307,7 +307,7 @@ func githubCallback(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "invalid oauth state"})
 		return
 	}
-	c.SetCookie("oauth_state", "", -1, "/", "", c.Request.TLS != nil, true)
+	c.SetCookie("oauth_state", "", -1, "/", "", secureCookies(c), true)
 	oauthCfg := githubOAuthConfig()
 	oauthCtx := context.WithValue(c.Request.Context(), oauth2.HTTPClient, githubHTTPClient)
 	tok, err := oauthCfg.Exchange(oauthCtx, code)
@@ -346,8 +346,8 @@ func githubCallback(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("pr_connected", "1", 86400*30, "/", "", c.Request.TLS != nil, true)
-	c.SetCookie("pr_session", sessionID, 86400*30, "/", "", c.Request.TLS != nil, true)
+	c.SetCookie("pr_connected", "1", 86400*30, "/", "", secureCookies(c), true)
+	c.SetCookie("pr_session", sessionID, 86400*30, "/", "", secureCookies(c), true)
 	// Never expose the access token to the browser; return to the local UI.
 	redirect := os.Getenv("WEB_ORIGIN")
 	if redirect == "" {

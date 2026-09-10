@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -27,4 +28,11 @@ func requireMutationOrigin(c *gin.Context) {
 		return
 	}
 	c.Next()
+}
+
+// The configured public origin remains HTTPS when TLS terminates at a proxy.
+// Do not trust client-supplied forwarded headers to decide cookie security.
+func secureCookies(c *gin.Context) bool {
+	origin, err := url.Parse(webOrigin())
+	return c.Request.TLS != nil || (err == nil && origin.Scheme == "https")
 }
