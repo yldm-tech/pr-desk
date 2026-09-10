@@ -266,6 +266,34 @@ export function StatsSkeleton() {
 
 export function PageSkeleton({ page }: { page: string }) {
   if (page === "Overview") return <OverviewSkeleton controls />;
+  if (page === "Repositories")
+    return (
+      <div className="repository-workspace">
+        <LoadingFrame>
+          <div className="repository-summary">
+            {[0, 1, 2].map((key) => (
+              <div className="repository-summary-item" key={key}>
+                <Skeleton width={80} height={13} />
+                <Skeleton width={30} height={27} />
+              </div>
+            ))}
+          </div>
+        </LoadingFrame>
+        <div className="repository-list-panel">
+          <LoadingFrame>
+            <div className="repository-controls">
+              <Skeleton height={40} containerClassName="flex-1" />
+              <Skeleton width={100} height={40} />
+              <Skeleton width={100} height={40} />
+            </div>
+            <div className="repository-list-caption">
+              <Skeleton width={140} height={12} />
+            </div>
+          </LoadingFrame>
+          <RepositorySkeleton />
+        </div>
+      </div>
+    );
   return (
     <div className="page-skeleton">
       <StatsSkeleton />
