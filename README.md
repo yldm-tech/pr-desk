@@ -1,5 +1,7 @@
 # PR Desk
 
+**English** · [简体中文](doc/README.zh-CN.md) · [日本語](doc/README.ja.md) · [한국어](doc/README.ko.md) · [Español](doc/README.es.md)
+
 [![CI](https://github.com/yldm-tech/pr-desk/actions/workflows/ci.yml/badge.svg)](https://github.com/yldm-tech/pr-desk/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/yldm-tech/pr-desk)](https://github.com/yldm-tech/pr-desk/releases)
 [![Go](https://img.shields.io/badge/Go-1.26.8-00ADD8?logo=go&logoColor=white)](apps/api/go.mod)
@@ -32,12 +34,13 @@ Private PRs require installing the App on the relevant repositories with read ac
 apps/
   api/                  Go API, PostgreSQL models and tests
   web/                  React/Vite frontend and tests
+doc/                    Translated README files
 docs/                   Development, operations and library decisions
 scripts/                Backup and CI runner helpers
 .github/workflows/      CI checks and gated image releases
 ```
 
-Vite+ (`vp`) provides development, build, test, format and lint commands. Bun manages the JavaScript workspace from the root; Go dependencies remain in `apps/api/go.mod`. The application Docker build uses the repository root as their context.
+Vite+ (`vp`) provides development, build, test, format and lint commands. Bun manages the JavaScript workspace from the root; Go dependencies remain in `apps/api/go.mod`. The application Docker build uses the repository root as its context.
 
 ## Commands
 
