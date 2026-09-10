@@ -6,8 +6,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import ky from "ky";
 import { z } from "zod";
+import { shouldRefreshAfterSync, type SyncSnapshot } from "./sync-model";
 
 const progressSchema = z.object({
+  last_synced_at: z.string().nullable().optional(),
   mode: z.string().optional(),
   history_count: z.number().optional(),
   open_count: z.number().optional(),
@@ -25,7 +27,7 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
   const client = useQueryClient();
-  const previous = useRef(false);
+  const previous = useRef<SyncSnapshot | undefined>(undefined);
   const query = useQuery({
     queryKey: ["sync-progress"],
     enabled: connected,
@@ -40,11 +42,11 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
   const running = query.data?.status === "running";
   useEffect(() => {
     onRunningChange(running);
-    if (previous.current && !running) {
+    if (shouldRefreshAfterSync(previous.current, query.data)) {
       for (const key of ["overview", "stats", "repositories", "prs"]) void client.invalidateQueries({ queryKey: [key] });
     }
-    previous.current = running;
-  }, [running, onRunningChange, client]);
+    previous.current = query.data;
+  }, [running, query.data, onRunningChange, client]);
   const failed = query.data?.status === "failed" || query.data?.status === "interrupted";
   if (connected && query.isPending && !pending) return <SyncStatusSkeleton />;
   if (connected && query.isError && !pending && !running && !failed)
@@ -56,7 +58,16 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
         </button>
       </div>
     );
-  if (!pending && !running && !failed) return connected ? <p className="auto-sync-note">{t("autoSyncSchedule")}</p> : null;
+  if (!pending && !running && !failed) {
+    if (!connected) return null;
+    const lastSynced = Date.parse(query.data?.last_synced_at ?? "");
+    return (
+      <div className="auto-sync-note" role="status">
+        <p>{query.data?.status === "idle" && !Number.isFinite(lastSynced) ? t("firstSyncQueued") : t("autoSyncSchedule")}</p>
+        {Number.isFinite(lastSynced) && <p>{t("lastSynced", { time: new Date(lastSynced).toLocaleString() })}</p>}
+      </div>
+    );
+  }
   const data = running || failed ? query.data : undefined;
   const total = data?.total ?? 0;
   const completed = Math.min(data?.completed ?? 0, total || Infinity);
@@ -71,6 +82,7 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
   const countKey = activePhase === "details" ? "syncDetailCount" : activePhase === "saving" ? "syncSaveCount" : activePhase === "open" ? "syncOpenCount" : "syncFetchCount";
   return (
     <section className="sync-progress-panel" data-paused={failed || phase === "waiting" ? "true" : "false"} aria-label={t("syncProgress")}>
+      {!failed && data?.mode !== "incremental" && <p>{t("firstSyncHelp")}</p>}
       <div className="sync-progress-heading">
         <strong>{t(data?.mode === "incremental" ? "incrementalSync" : "syncProgress")}</strong>
         <span>{phaseLabel}</span>

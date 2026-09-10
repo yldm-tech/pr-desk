@@ -1,5 +1,5 @@
 ARG VP_IMAGE=ghcr.io/voidzero-dev/vite-plus:0.3.1
-ARG GO_IMAGE=mirror.gcr.io/library/golang:1.25.5-alpine
+ARG GO_IMAGE=mirror.gcr.io/library/golang:1.26.8-alpine
 ARG RUNTIME_IMAGE=mirror.gcr.io/library/alpine:3.22
 FROM ${VP_IMAGE} AS web
 WORKDIR /home/vp/app
@@ -23,4 +23,5 @@ RUN apk add --no-cache ca-certificates wget
 COPY --from=build /pr-desk /pr-desk
 COPY apps/api/docs /docs
 EXPOSE 8080
+USER 10001:10001
 ENTRYPOINT ["/pr-desk"]

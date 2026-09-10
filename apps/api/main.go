@@ -15,6 +15,9 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -95,7 +98,7 @@ func main() {
 	if dsn == "" {
 		dsn = "host=localhost user=postgres password=postgres dbname=pr_dashboard port=5432 sslmode=disable"
 	}
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{LogLevel: logger.Warn, SlowThreshold: time.Second, ParameterizedQueries: true})})
 	if err != nil {
 		panic(err)
 	}
@@ -106,7 +109,12 @@ func main() {
 	defer stopWorkers()
 	s := &Server{db: db, workerCtx: workerCtx}
 	appServer = s
-	r := gin.Default()
+	r := gin.New()
+	// Do not log OAuth query parameters, cookies, or private search terms.
+	r.Use(safeRequestLogger(), gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, _ any) {
+		log.Print("Request panic recovered; sensitive request details omitted")
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+	}))
 	registerWeb(r, frontendFiles())
 	r.Use(func(c *gin.Context) {
 		c.SetSameSite(http.SameSiteLaxMode)
@@ -211,7 +219,7 @@ func (s *Server) authStatus(c *gin.Context) {
 func (s *Server) comments(c *gin.Context) {
 	var v []ReviewComment
 	if err := sessionPRQuery(c, s.db).Where("pull_request_id = ?", c.Param("id")).Order("created_at desc").Find(&v).Error; err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": "Unable to load comments"})
 		return
 	}
 	c.JSON(200, gin.H{"data": v})
@@ -613,14 +621,19 @@ func (s *Server) listPRs(c *gin.Context) {
 	}
 	q = q.Limit(limit).Offset(offset)
 	if err := q.Find(&prs).Error; err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": "Unable to load pull requests"})
 		return
 	}
 	c.JSON(200, gin.H{"data": prs, "total": total, "limit": limit, "offset": offset})
 }
 func (s *Server) getPR(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
 	var p PullRequest
-	if err := sessionPRQuery(c, s.db).First(&p, c.Param("id")).Error; err != nil {
+	if err := sessionPRQuery(c, s.db).First(&p, id).Error; err != nil {
 		c.JSON(404, gin.H{"error": "not found"})
 		return
 	}
@@ -629,7 +642,7 @@ func (s *Server) getPR(c *gin.Context) {
 func (s *Server) createPR(c *gin.Context) {
 	var p PullRequest
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(400, gin.H{"error": "Invalid pull request payload"})
 		return
 	}
 	p.SessionID = requestSessionID(c)
@@ -639,7 +652,7 @@ func (s *Server) createPR(c *gin.Context) {
 		return
 	}
 	if err := s.db.Create(&p).Error; err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(500, gin.H{"error": "Unable to save pull request"})
 		return
 	}
 	c.JSON(201, p)

@@ -8,6 +8,14 @@ dist/
 *.local
 *.dump
 *.sql
+*.sql.gz
+*.dump.gz
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.p12
+*.pfx
 .DS_Store
 .playwright-cli/
 output/

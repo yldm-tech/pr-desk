@@ -47,9 +47,20 @@ func TestSyncProgressPersistsCountsAndIsolatesSessions(t *testing.T) {
 	tracker.advance()
 	tracker.advance()
 	tracker.finish(true)
+	lastSynced := time.Now().UTC().Truncate(time.Second)
+	if err := db.Model(&OAuthToken{}).Where("session_id = ?", "progress-a").Update("history_synced_at", lastSynced).Error; err != nil {
+		t.Fatal(err)
+	}
 	_, p = read("progress-a")
 	if p.Status != "complete" || p.Completed != 2 || p.RetryAt != 0 {
 		t.Fatalf("invalid completion %#v", p)
+	}
+	if p.LastSyncedAt == nil || !p.LastSyncedAt.Equal(lastSynced) {
+		t.Fatal("progress did not expose the successful sync timestamp")
+	}
+	_, other = read("progress-b")
+	if other.LastSyncedAt != nil {
+		t.Fatal("successful sync timestamp leaked between sessions")
 	}
 	tracker.set("history", 0, 0)
 	tracker.finish(false)

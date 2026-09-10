@@ -15,18 +15,19 @@ import (
 )
 
 type syncProgress struct {
-	HistoryCount   *int      `json:"history_count,omitempty"`
-	OpenCount      *int      `json:"open_count,omitempty"`
-	ResumePhase    string    `json:"resume_phase,omitempty"`
-	ErrorCode      string    `json:"error_code,omitempty"`
-	NextAutoSyncAt time.Time `json:"next_auto_sync_at"`
-	Mode           string    `json:"mode"`
-	Status         string    `json:"status"`
-	Phase          string    `json:"phase"`
-	Completed      int       `json:"completed"`
-	Total          int       `json:"total"`
-	RetryAt        int64     `json:"retry_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	LastSyncedAt   *time.Time `json:"last_synced_at,omitempty"`
+	HistoryCount   *int       `json:"history_count,omitempty"`
+	OpenCount      *int       `json:"open_count,omitempty"`
+	ResumePhase    string     `json:"resume_phase,omitempty"`
+	ErrorCode      string     `json:"error_code,omitempty"`
+	NextAutoSyncAt time.Time  `json:"next_auto_sync_at"`
+	Mode           string     `json:"mode"`
+	Status         string     `json:"status"`
+	Phase          string     `json:"phase"`
+	Completed      int        `json:"completed"`
+	Total          int        `json:"total"`
+	RetryAt        int64      `json:"retry_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 type syncTracker struct {
 	searchPhase string
@@ -101,6 +102,7 @@ func (s *Server) getSyncProgress(c *gin.Context) {
 		progress.Status = "interrupted"
 	}
 	progress.NextAutoSyncAt = nextAutoSyncAt(token, time.Now())
+	progress.LastSyncedAt = token.HistorySyncedAt
 	c.JSON(200, progress)
 }
 

@@ -1,11 +1,11 @@
 # CI/CD
 
-The workflows follow `yldm-tech/glean`: organization self-hosted runners (`yldm-backend-runners`), PR cancellation, independent main CI runs, and release gated by a successful `CI` workflow on main. Runner proxy forwarding comes from Glean's existing helper; Go/runtime images and CI PostgreSQL use `mirror.gcr.io` for this runner network; frontend compilation uses the pinned official Vite+ image from GHCR.
+The workflows use GitHub-hosted Ubuntu runners, PR cancellation, independent main CI runs, and release gated by a successful `CI` workflow on main. Untrusted contribution code must not execute on internal infrastructure runners. The optional proxy helper emits nothing when no proxy is configured; Go/runtime images and CI PostgreSQL use the public `mirror.gcr.io` mirror, and frontend compilation uses the pinned official Vite+ image from GHCR.
 
 ## Checks
 
 - Web: `setup-vp` installs the pinned Vite+ version, uses Bun from root `packageManager` with a frozen lockfile, then runs `vp check`, Vitest and the production build.
-- API: Go version from `apps/api/go.mod`, with local runner caches (no duplicate remote cache upload), `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too.
+- API: Go version from `apps/api/go.mod`, `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too. PR runs do not share uploaded Go caches.
 - Container: build the single root-context `apps/api/Dockerfile` without pushing; run embedded asset and routing tests against the real web bundle.
 - `workflow_dispatch` can rerun CI when needed. Main runs are not cancelled by later pushes.
 
@@ -27,4 +27,4 @@ Configure application secrets in the deployment environment, never in build argu
 
 The production frontend uses same-origin `/api` requests, so the image works at different hostnames without rebuilding. There is no separate web image or Nginx service. `VITE_API_URL` can override this for custom builds; local Vite development defaults to `http://localhost:8081`. `make production` runs this architecture locally.
 
-Unlike Glean's existing application, this repository has no ArgoCD application or target environment yet. This pipeline publishes deployable images; it does not modify `yldm-platform` or deploy to a cluster. A deployment can consume the explicit image versions once its target is configured.
+This pipeline publishes deployable images; it does not modify a deployment repository or deploy to a cluster. Operators can consume explicit image versions through their own deployment process.
