@@ -211,9 +211,14 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
           x: {
             scale: () => scaleBand().padding(0.48),
             axis: {
-              tickLabels: { thin: { minGap: 12 } },
+              tickLabels: { rotate: -35, thin: false },
               line: false,
-              ticks: { size: 0, padding: 12, format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")) },
+              ticks: {
+                values: months.map(({ month }) => month),
+                size: 0,
+                padding: 12,
+                format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")),
+              },
             },
           },
           y: { scale: scaleLinear, nice: true, grid: true, axis: { line: false, ticks: { size: 0, count: 4, padding: 10 } } },
