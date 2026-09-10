@@ -100,7 +100,7 @@ func (f *FollowUp) advanceFacts(next FollowUpFacts, now time.Time) []string {
 			f.NeedsConfirmation = true
 		}
 	} else {
-		if initial && next.Requested {
+		if initial && (next.Requested || !next.RequestedAt.IsZero()) {
 			f.NeedsConfirmation = true
 		}
 		// Submitted review decisions clear that round. COMMENTED is not a decision.
@@ -111,6 +111,11 @@ func (f *FollowUp) advanceFacts(next FollowUpFacts, now time.Time) []string {
 				f.WaitingSince = next.MyReviewAt
 			}
 		}
+		// A single poll can observe both our review and the author's later reply.
+		// Only feedback preceding the review is covered by that decision.
+		if next.MyReview == "CHANGES_REQUESTED" && humanChanged && next.HumanAt.After(next.MyReviewAt) {
+			f.NeedsConfirmation = true
+		}
 		if requestChanged {
 			reasons = append(reasons, "review_requested")
 			f.NeedsConfirmation = true
@@ -119,7 +124,7 @@ func (f *FollowUp) advanceFacts(next FollowUpFacts, now time.Time) []string {
 			reasons = append(reasons, "approval_revoked")
 			f.NeedsConfirmation = true
 		}
-		if next.MyReview == "CHANGES_REQUESTED" && next.HeadSHA != previous.HeadSHA && !initial && (!decision || next.AuthorAt.After(next.MyReviewAt)) {
+		if next.MyReview == "CHANGES_REQUESTED" && ((initial && next.AuthorAt.After(next.MyReviewAt)) || (!initial && next.HeadSHA != previous.HeadSHA && (!decision || next.AuthorAt.After(next.MyReviewAt)))) {
 			reasons = append(reasons, "author_updated")
 			f.NeedsConfirmation = true
 			f.WaitingSince = now
@@ -136,6 +141,9 @@ func (f *FollowUp) advanceFacts(next FollowUpFacts, now time.Time) []string {
 		if next.Role == "reviewer" && next.Requested {
 			f.NeedsConfirmation = true
 			reasons = append(reasons, "review_requested")
+		}
+		if next.Role == "authored" && f.NeedsConfirmation {
+			reasons = append(reasons, "human_feedback")
 		}
 	}
 	// Human progress (and revisions when waiting on an author) is the clock,

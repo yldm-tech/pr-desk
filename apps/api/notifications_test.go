@@ -138,3 +138,28 @@ func TestUnicodeNotificationChunking(t *testing.T) {
 		}
 	}
 }
+
+func TestDisabledDestinationDoesNotSendQueuedMessages(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Now().UTC()
+	target := NotificationDestination{SessionID: "owner", Name: "disabled-after-queue", Enabled: true}
+	db.Create(&target)
+	if err := queueMessage(db, []NotificationDestination{target}, "test", "synthetic notification", now); err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&target).Update("enabled", false)
+	called := false
+	claimed, err := s.deliverOneNotification(context.Background(), now, func(context.Context, NotificationDestination, NotificationDelivery) error { called = true; return nil })
+	if err != nil || !claimed || called {
+		t.Fatal("disabled destination sent", err)
+	}
+	var delivery NotificationDelivery
+	db.First(&delivery)
+	if delivery.SkippedAt == nil || delivery.SentAt != nil {
+		t.Fatal("disabled target reported sent")
+	}
+	if claimed, err := s.deliverOneNotification(context.Background(), now.Add(time.Hour), func(context.Context, NotificationDestination, NotificationDelivery) error { called = true; return nil }); err != nil || claimed || called {
+		t.Fatal("skipped delivery was retried", err)
+	}
+}

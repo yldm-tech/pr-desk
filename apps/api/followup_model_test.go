@@ -161,3 +161,47 @@ func TestReviewTeamSelectionDoesNotIncludeUnrequestedParticipation(t *testing.T)
 		}
 	}
 }
+
+func TestReviewBaselineAndResponseBetweenPolls(t *testing.T) {
+	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name          string
+		review        string
+		reply, commit bool
+	}{
+		{"comment-only review remains pending", "", false, false},
+		{"reply after change request", "CHANGES_REQUESTED", true, false},
+		{"commit after change request", "CHANGES_REQUESTED", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			facts := FollowUpFacts{Role: "reviewer", DirectRequest: true, CreatedAt: now.Add(-24 * time.Hour), RequestedAt: now.Add(-3 * time.Hour), MyReview: tc.review, MyReviewID: 1, MyReviewAt: now.Add(-2 * time.Hour), HeadSHA: "head"}
+			if tc.reply {
+				facts.HumanVersion = "author-reply"
+				facts.HumanAt = now.Add(-time.Hour)
+			}
+			if tc.commit {
+				facts.AuthorAt = now.Add(-time.Hour)
+			}
+			var row FollowUp
+			if events := row.advanceFacts(facts, now); len(events) != 0 {
+				t.Fatal("baseline produced notifications")
+			}
+			if !row.NeedsConfirmation {
+				t.Fatal("baseline lost pending review")
+			}
+		})
+	}
+	var row FollowUp
+	facts := FollowUpFacts{Role: "reviewer", Requested: true, CreatedAt: now.Add(-24 * time.Hour)}
+	row.advanceFacts(facts, now)
+	facts.Requested = false
+	facts.MyReview = "CHANGES_REQUESTED"
+	facts.MyReviewID = 4
+	facts.MyReviewAt = now.Add(time.Hour)
+	facts.HumanAt = now.Add(2 * time.Hour)
+	facts.HumanVersion = "later-reply"
+	row.advanceFacts(facts, now.Add(3*time.Hour))
+	if !row.NeedsConfirmation {
+		t.Fatal("review and later author reply in same poll lost reply")
+	}
+}

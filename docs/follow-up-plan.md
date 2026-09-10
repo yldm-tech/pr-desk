@@ -45,3 +45,11 @@ Remaining before the objective can be marked complete:
 4. Finish operating/privacy/setup documentation and required CI browser checks, repeat full tests/build, inspect final diff, create the completed PR and publish a completion report. No real Telegram message has been sent.
 
 Reference semantics: GitHub's [search documentation](https://github.com/github/docs/blob/main/content/search-github/searching-on-github/searching-issues-and-pull-requests.md) states review-requested matches disappear after review; [issue events](https://docs.github.com/en/rest/using-the-rest-api/issue-event-types) supply explicit request/ready events. These are why discovery and durable tracking are separate.
+
+### Follow-up verification pass
+
+- Corrected review snapshots that contain both a submitted change request and a later author reply: the later reply remains actionable. Initial inventories now also preserve pending comment-only reviews and revisions made after a change request. Draft-to-ready transitions emit previously suppressed actionable human feedback.
+- Added PostgreSQL tests for settings input validation, forged/other-account sessions, checkpoint preservation when saving settings, and workflow/preferences retained after reconnect. Added a delivery test proving disabled targets do not send or retry already queued messages.
+- Added the existing Playwright suite to the CI web job (Chromium and Linux dependencies installed explicitly).
+- Re-ran full PostgreSQL API tests with race detector, `go vet`, Vite+ format/lint/type checks, and diff whitespace checks successfully.
+- The gonotify clarification is still unanswered. No provider contract, destination form, or production sender has been invented. This goal remains active and incomplete.
