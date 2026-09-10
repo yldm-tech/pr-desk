@@ -7,13 +7,17 @@ Local Web dashboard for GitHub pull requests, built with Go/Gin, GORM/PostgreSQL
 1. Copy `.env.example` to `.env`. Generate a unique encryption key with `openssl rand -hex 16` and set `TOKEN_ENCRYPTION_KEY` to the resulting 32 characters. Keep this key stable across restarts and out of version control.
 2. Create a GitHub App with user authorization enabled and callback URL `http://localhost:8080/api/v1/auth/github/callback`. Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` in `.env`.
 3. Run `docker compose up -d --build` to start PostgreSQL and the API. Compose loads the environment values from `.env`.
-4. Run `bun install --frozen-lockfile && bun run dev`. Open `http://localhost:5173` and connect GitHub.
+4. Run `bun install --frozen-lockfile && bun run dev`. Set `WEB_ORIGIN=http://localhost:5173` and `VITE_API_URL=http://localhost:8080` for this development setup. Open `http://localhost:5173` and connect GitHub.
 
 To run the API outside Docker, start PostgreSQL with `docker compose up -d postgres` and export `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `WEB_ORIGIN` into the API process environment before running `cd apps/api && go run .`. The Go binary does not automatically load `.env` files. Use the database connection settings in `.env.example`. `PORT` defaults to `8080`.
 
 If those ports are occupied, set `PORT=8081`, `WEB_ORIGIN=http://localhost:5174`, and `GITHUB_REDIRECT_URL=http://localhost:8081/api/v1/auth/github/callback` in `.env`. Register the same callback in GitHub, run `docker compose up -d --build api`, then start the frontend with `cd apps/web && VITE_API_URL=http://localhost:8081 bun run dev --port 5174`. The API container restarts automatically unless explicitly stopped. Check `curl http://localhost:8081/health` and `docker compose ps` when troubleshooting connectivity; open port 5174 for the dashboard.
 
-For a containerized static frontend, run `make production` (or `WEB_PORT=5174 docker compose --profile production up -d --build web`) after configuring `.env`. The web container serves the SPA through Nginx, exposes `/health`, and restarts automatically. Stop it with `WEB_PORT=5174 docker compose --profile production down web`.
+## Embedded application
+
+`make production` builds the frontend with Bun and embeds its assets into the Go binary using standard `go:embed`. Compose runs one application container plus PostgreSQL. Open `http://localhost:8080` (or the configured `PORT`). Set `WEB_ORIGIN` to that same browser-facing URL and `GITHUB_REDIRECT_URL` to its `/api/v1/auth/github/callback`; register this callback in GitHub. Existing development settings pointing to port 5174 must be changed when switching to the embedded UI.
+
+`make build` produces `dist/pr-desk`. It includes the web assets and requires no frontend directory at runtime. Export the database, encryption key and OAuth environment before running it. The build uses `-tags webembed`; building with that tag without generated assets fails. Plain `go run .` and `go test ./...` remain available for API development without a frontend build. Vite remains the development server for hot reload.
 
 ## Token storage
 

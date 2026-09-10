@@ -49,22 +49,17 @@ jobs:
         if: always()
         run: scripts/ci-postgres.sh stop
   containers:
-    name: Build ${{ matrix.app }} image
+    name: Build embedded application image
     runs-on: yldm-backend-runners
     timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        app: [api, web]
     env:
-      APP: ${{ matrix.app }}
-      IMAGE: pr-desk-ci-${{ matrix.app }}:${{ github.run_id }}-${{ github.run_attempt }}
+      IMAGE: pr-desk-ci:${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - name: Build production image
         run: |
           mapfile -t proxy_args < <(scripts/runner-proxy.sh build-args)
-          docker build "${proxy_args[@]}" -f "apps/$APP/Dockerfile" -t "$IMAGE" .
+          docker build "${proxy_args[@]}" -f apps/api/Dockerfile -t "$IMAGE" .
       - name: Remove test image
         if: always()
         run: docker image rm "$IMAGE" 2>/dev/null || true

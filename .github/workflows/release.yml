@@ -47,34 +47,27 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build both tested images
+      - name: Build tested application image
         shell: bash
         run: |
           mapfile -t proxy_args < <(scripts/runner-proxy.sh build-args)
-          for app in api web; do
-            image="ghcr.io/${GH_REPO}-${app}"
-            docker build "${proxy_args[@]}" -f "apps/$app/Dockerfile" \
-              --label "org.opencontainers.image.source=https://github.com/$GH_REPO" \
-              --label "org.opencontainers.image.revision=$RELEASE_SHA" \
-              --label "org.opencontainers.image.version=$VERSION" \
-              -t "$image:$VERSION" -t "$image:sha-$RELEASE_SHA" .
-          done
-      - name: Push images and publish release
+          image="ghcr.io/${GH_REPO}"
+          docker build "${proxy_args[@]}" -f apps/api/Dockerfile \
+            --label "org.opencontainers.image.source=https://github.com/$GH_REPO" \
+            --label "org.opencontainers.image.revision=$RELEASE_SHA" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            -t "$image:$VERSION" -t "$image:sha-$RELEASE_SHA" .
+      - name: Push image and publish release
         shell: bash
         run: |
-          for app in api web; do
-            image="ghcr.io/${GH_REPO}-${app}"
-            docker push "$image:$VERSION"
-            docker push "$image:sha-$RELEASE_SHA"
-          done
-          # An older CI run finishing late must not roll the latest images back.
+          image="ghcr.io/${GH_REPO}"
+          docker push "$image:$VERSION"
+          docker push "$image:sha-$RELEASE_SHA"
+          # A late older CI run must not roll latest back.
           current=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
           if [ "$current" = "$RELEASE_SHA" ]; then
-            for app in api web; do
-              image="ghcr.io/${GH_REPO}-${app}"
-              docker tag "$image:$VERSION" "$image:latest"
-              docker push "$image:latest"
-            done
+            docker tag "$image:$VERSION" "$image:latest"
+            docker push "$image:latest"
           fi
           if ! gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release create "v$VERSION" --verify-tag --title "v$VERSION" --generate-notes --latest=false
@@ -82,14 +75,11 @@ jobs:
           {
             echo "## Published $VERSION"
             echo "Source: $RELEASE_SHA"
-            echo "- ghcr.io/${GH_REPO}-api:$VERSION"
-            echo "- ghcr.io/${GH_REPO}-web:$VERSION"
+            echo "- $image:$VERSION"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Remove local release images
         if: always()
         shell: bash
         run: |
-          for app in api web; do
-            image="ghcr.io/${GH_REPO}-${app}"
-            docker image rm "$image:$VERSION" "$image:sha-$RELEASE_SHA" "$image:latest" 2>/dev/null || true
-          done
+          image="ghcr.io/${GH_REPO}"
+          docker image rm "$image:$VERSION" "$image:sha-$RELEASE_SHA" "$image:latest" 2>/dev/null || true
