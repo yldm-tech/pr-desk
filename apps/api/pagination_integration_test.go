@@ -57,3 +57,53 @@ func TestPaginationAndAttention(t *testing.T) {
 		}
 	}
 }
+
+func TestRepositoryFilterIsExactAndSessionScoped(t *testing.T) {
+	db := integrationDB(t)
+	if err := db.Create(&[]OAuthToken{{SessionID: "repo-filter"}, {SessionID: "another-session"}}).Error; err != nil {
+		t.Fatal(err)
+	}
+	rows := []PullRequest{
+		{SessionID: "repo-filter", Repo: "org/tool", Number: 1, State: "open", HasConflicts: true},
+		{SessionID: "repo-filter", Repo: "org/tool", Number: 2, State: "open", ReviewStatus: "changes_requested"},
+		{SessionID: "repo-filter", Repo: "org/tool", Number: 3, State: "closed", HasConflicts: true},
+		{SessionID: "another-session", Repo: "org/tool", Number: 4, State: "open", HasConflicts: true},
+		{SessionID: "repo-filter", Repo: "org/tools", Number: 5, State: "open", HasConflicts: true},
+		{SessionID: "repo-filter", Repo: "org/tool", Number: 6, State: "open"},
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	router := gin.New()
+	router.GET("/prs", (&Server{db: db}).listPRs)
+	for _, tc := range []struct {
+		query        string
+		total, count int
+	}{
+		{"?repo=org%2Ftool", 3, 3},
+		{"?repo=org%2Ftool&attention=true", 2, 2},
+		{"?repo=org%2Ftool&attention=true&limit=1&offset=1", 2, 1},
+		{"?repo=org%2Fmissing", 0, 0},
+		{"?repo=org%2Ftool&search=missing", 0, 0},
+	} {
+		req := httptest.NewRequest("GET", "/prs"+tc.query, nil)
+		req.AddCookie(&http.Cookie{Name: "pr_session", Value: "repo-filter"})
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		var result struct {
+			Data  []PullRequest
+			Total int
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if rec.Code != 200 || result.Total != tc.total || len(result.Data) != tc.count {
+			t.Fatalf("%s: status=%d total=%d count=%d", tc.query, rec.Code, result.Total, len(result.Data))
+		}
+		for _, row := range result.Data {
+			if row.Repo != "org/tool" || row.SessionID != "" || row.Number == 4 {
+				t.Fatal("filter returned another repository or session")
+			}
+		}
+	}
+}

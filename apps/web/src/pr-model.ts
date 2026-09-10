@@ -48,8 +48,9 @@ export function parsePRPage(body: unknown) {
   const parsed = listSchema.parse(body);
   return { items: parsePRList(parsed), total: parsed.total };
 }
-export function listParameters(filter: string, page: number, search = "") {
+export function listParameters(filter: string, page: number, search = "", repository = "") {
   const q = new URLSearchParams({ limit: "50", offset: String(page * 50) });
+  if (repository) q.set("repo", repository);
   if (search.trim()) q.set("search", search.trim());
   if (filter === "Needs attention") q.set("attention", "true");
   else if (filter !== "All") {

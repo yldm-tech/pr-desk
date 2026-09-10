@@ -130,25 +130,25 @@ export function PRListSkeleton({ count = 5 }: { count?: number }) {
 export function RepositorySkeleton({ count = 6 }: { count?: number }) {
   return (
     <LoadingFrame className="repository-skeleton">
-      <div className="repo-grid grid grid-cols-1 @[760px]/dashboard:grid-cols-2 @[1250px]/dashboard:grid-cols-3">
+      <div className="repository-rows">
         {Array.from({ length: count }, (_, i) => (
-          <article className="repo-card" key={i}>
-            <div className="repo-name w-full">
-              <Skeleton width={18} height={18} />
+          <div className="repository-row" key={i}>
+            <div className="repository-identity">
+              <Skeleton width={36} height={36} />
               <div className="skeleton-flex">
-                <Skeleton width={i % 2 ? "65%" : "80%"} height={18} />
+                <Skeleton width="45%" height={11} />
+                <Skeleton width="75%" height={16} />
               </div>
             </div>
-            <div className="repo-metrics w-full">
-              {[0, 1, 2, 3].map((n) => (
-                <div key={n}>
-                  <Skeleton width="70%" height={12} />
-                  <Skeleton width={30} height={24} />
-                </div>
-              ))}
+            {[0, 1, 2].map((key) => (
+              <div className="repository-number" key={key}>
+                <Skeleton width={24} height={18} />
+              </div>
+            ))}
+            <div className="repository-action">
+              <Skeleton width={70} height={15} />
             </div>
-            <Skeleton height={36} containerClassName="w-full" />
-          </article>
+          </div>
         ))}
       </div>
     </LoadingFrame>
