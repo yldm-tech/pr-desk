@@ -3,6 +3,13 @@ import assert from "node:assert/strict";
 import { parsePRList } from "./pr-model.ts";
 const row = { id: 9, number: 81, repo: "https://api.github.com/repos/org/repo", title: "Example", state: "open" };
 
+test("PR links reject executable and off-site URLs", () => {
+  for (const url of ["javascript:alert(1)", "https://github.com.evil.test/o/r", "https://user:password@github.com/o/r", "data:text/html,test"]) {
+    assert.equal(parsePRList({ data: [{ ...row, url }], total: 1 })[0].url, undefined);
+  }
+  assert.equal(parsePRList({ data: [{ ...row, url: "https://github.com/o/r/pull/1" }], total: 1 })[0].url, "https://github.com/o/r/pull/1");
+});
+
 test("empty nullable API collection is a valid empty list", () => {
   assert.deepEqual(parsePRList({ data: null, total: 0 }), []);
 });

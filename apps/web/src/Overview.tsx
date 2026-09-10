@@ -36,8 +36,8 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
   const [params, setParams] = useSearchParams();
   const currentYear = new Date().getUTCFullYear();
   const requestedYear = Number(params.get("year"));
-  const year = Number.isInteger(requestedYear) && requestedYear >= 1970 && requestedYear <= currentYear ? requestedYear : currentYear;
-  const visibility = params.get("visibility") === "private" ? "private" : "public";
+  const year = Number.isInteger(requestedYear) && requestedYear >= 2008 && requestedYear <= currentYear ? requestedYear : currentYear;
+  const visibility = params.get("visibility") === "all" ? "all" : params.get("visibility") === "private" ? "private" : "public";
   const changeScope = (key: string, value: string) =>
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -79,6 +79,11 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
         <button className="secondary-action" onClick={() => query.refetch()}>
           {t("retry")}
         </button>
+        {visibility !== "all" && (
+          <button className="secondary-action" onClick={() => changeScope("visibility", "all")}>
+            {t("allContributions")}
+          </button>
+        )}
       </div>
     );
   const counts = query.data.visibility_counts;
@@ -95,6 +100,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
       )}
       <Tabs.Root value={visibility} onValueChange={(value) => changeScope("visibility", value)}>
         <Tabs.List className="visibility-tabs" aria-label={t("visibilityScope")}>
+          <Tabs.Trigger value="all">{t("allContributions")}</Tabs.Trigger>
           <Tabs.Trigger value="public">
             {t("publicOnly")} <span>{query.isPlaceholderData || (!query.data.history_complete && !counts.public_repositories) ? "—" : (counts.public_repositories?.toLocaleString() ?? "—")}</span>
           </Tabs.Trigger>
@@ -104,7 +110,9 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
         </Tabs.List>
       </Tabs.Root>
       <p className="visibility-feedback" role="status" aria-live="polite">
-        {visibility === "public" ? (
+        {visibility === "all" ? (
+          t("showingAllContributions")
+        ) : visibility === "public" ? (
           query.isPlaceholderData ? (
             t("loading")
           ) : (

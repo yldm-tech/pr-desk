@@ -102,10 +102,17 @@ func githubJSON(ctx context.Context, token, method, endpoint string, body any, t
 	}
 	_, err = client.Do(ctx, req, target)
 	if err != nil {
-		return fmt.Errorf("GitHub request unavailable")
+		return &githubRequestError{cause: err}
 	}
 	return nil
 }
+
+// Retain typed rate-limit/status errors for retry classification without
+// exposing upstream bodies, URLs or credentials in user-facing messages.
+type githubRequestError struct{ cause error }
+
+func (e *githubRequestError) Error() string { return "GitHub request unavailable" }
+func (e *githubRequestError) Unwrap() error { return e.cause }
 
 func fetchPages[T any](ctx context.Context, token, endpoint string) ([]T, error) {
 	all := []T{}
@@ -214,8 +221,13 @@ func checkSummary(runs []checkRun, combined string) string {
 }
 
 func (s *Server) activity(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
 	var pr PullRequest
-	if sessionPRQuery(c, s.db).First(&pr, c.Param("id")).Error != nil {
+	if sessionPRQuery(c, s.db).First(&pr, id).Error != nil {
 		c.JSON(404, gin.H{"error": "not found"})
 		return
 	}

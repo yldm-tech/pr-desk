@@ -117,6 +117,8 @@ func (p *syncTracker) recordFailure(err error) {
 	var response *github.ErrorResponse
 	var network *url.Error
 	switch {
+	case errors.Is(err, errHistoryStorage), errors.Is(err, errDetailStorage):
+		code = "storage"
 	case errors.Is(err, errHistoryStorage):
 		code = "storage"
 	case errors.Is(err, context.Canceled):

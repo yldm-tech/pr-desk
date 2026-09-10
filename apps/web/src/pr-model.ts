@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safeGitHubLink } from "./activity-model";
 
 export const PRSchema = z.object({
   id: z.number().int().positive(),
@@ -21,7 +22,15 @@ export function parsePRList(body: unknown) {
   return (listSchema.parse(body).data ?? []).map((row) => {
     const state = row.merged_at ? "merged" : row.state === "closed" ? "closed" : row.review_status || row.state || "open";
     const date = row.updated_at ? new Date(row.updated_at) : null;
-    return { ...row, repo: row.repo.replace(/^https:\/\/api\.github\.com\/repos\//, ""), status: labels[state] ?? state, updated: date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Unknown", comments: row.comments_count ?? 0, conflict: row.has_conflicts ?? false };
+    return {
+      ...row,
+      url: row.url ? safeGitHubLink(row.url) : undefined,
+      repo: row.repo.replace(/^https:\/\/api\.github\.com\/repos\//, ""),
+      status: labels[state] ?? state,
+      updated: date && !Number.isNaN(date.getTime()) ? date.toLocaleString() : "Unknown",
+      comments: row.comments_count ?? 0,
+      conflict: row.has_conflicts ?? false,
+    };
   });
 }
 export type PR = ReturnType<typeof parsePRList>[number];

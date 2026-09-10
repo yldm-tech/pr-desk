@@ -1,4 +1,6 @@
 {
+  "allContributions": "All contributions",
+  "showingAllContributions": "Showing all contributions in this period, including repositories whose visibility has not been classified.",
   "language": "Language",
   "overview": "Overview",
   "attention": "Needs my attention",

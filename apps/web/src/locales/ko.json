@@ -1,4 +1,6 @@
 {
+  "allContributions": "모든 기여",
+  "showingAllContributions": "공개 여부가 아직 확인되지 않은 저장소를 포함하여 이 기간의 모든 기여를 표시합니다.",
   "language": "언어",
   "overview": "개요",
   "attention": "처리 필요",
