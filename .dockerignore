@@ -8,3 +8,9 @@ node_modules
 output
 *.dump
 *.pem
+**/.env
+**/.env.*
+**/.playwright-cli
+**/output
+**/*.pem
+**/*.key
