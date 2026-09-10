@@ -198,6 +198,10 @@ func main() {
 	api.GET("/follow-up-settings", s.getFollowUpSettings)
 	api.POST("/follow-up-settings", s.saveFollowUpSettings)
 	api.GET("/review-teams", s.listReviewTeams)
+	api.GET("/notification-destinations", s.listNotificationDestinations)
+	api.POST("/notification-destinations", s.saveNotificationDestination)
+	api.PUT("/notification-destinations/:id", s.saveNotificationDestination)
+	api.DELETE("/notification-destinations/:id", s.deleteNotificationDestination)
 	addr := ":8080"
 	if port := os.Getenv("PORT"); port != "" {
 		addr = ":" + port
