@@ -27,7 +27,7 @@ func TestConcurrentSyncRejectedAndFailureReleasesSlot(t *testing.T) {
 	}
 	s := &Server{db: db}
 	r := gin.New()
-	r.POST("/sync", s.syncGitHub)
+	r.POST("/sync", s.syncInlineForTest)
 	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan int, 1)
 	finished := make(chan struct{})
 	var releaseOnce sync.Once

@@ -82,14 +82,12 @@ export default function App() {
   const syncMutation = useMutation({
     onMutate: () => setSyncFeedback(null),
     mutationFn: async (full: boolean | void = false) => {
-      const r = await api(apiURL + "/api/v1/sync" + (full ? "?full=1" : ""), { method: "POST", credentials: "include", timeout: 30 * 60 * 1000 });
-      return z.object({ synced: z.number() }).parse(await r.json());
+      const r = await api(apiURL + "/api/v1/sync" + (full ? "?full=1" : ""), { method: "POST", credentials: "include", timeout: 30000 });
+      return z.object({ status: z.literal("queued") }).parse(await r.json());
     },
-    onSuccess: (result) => {
-      setSyncFeedback({ message: t("syncCompleted", { count: result.synced }), error: false });
-    },
+    onSuccess: () => setSyncFeedback(null),
     onSettled: () => {
-      // A completed sync does not wait for every view to fetch its new snapshot.
+      // Read durable progress immediately after submission or a lost response.
       for (const key of ["prs", "sync-progress", "stats", "overview", "repositories", "repository-access"]) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
@@ -116,6 +114,9 @@ export default function App() {
   });
   const [remoteSyncing, setRemoteSyncing] = React.useState(false);
   const syncing = syncMutation.isPending || remoteSyncing;
+  React.useEffect(() => {
+    if (remoteSyncing) setSyncFeedback(null);
+  }, [remoteSyncing]);
   const commentsQuery = useQuery({
     queryKey: ["activity", selected?.id],
     staleTime: 60000,
@@ -306,7 +307,7 @@ export default function App() {
           </div>
         </header>
         <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} />
-        {syncFeedback && (
+        {syncFeedback && !remoteSyncing && (
           <div className={`sync-feedback ${syncFeedback.error ? "sync-feedback-error" : ""}`} role={syncFeedback.error ? "alert" : "status"}>
             <span>{syncFeedback.message}</span>
             <button aria-label={t("close")} onClick={() => setSyncFeedback(null)}>

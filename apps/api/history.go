@@ -11,6 +11,9 @@ import (
 	"time"
 )
 
+type historyPageSinkKey struct{}
+type historyPageSink func([]*github.Issue) error
+
 // Share a conservative search budget across sessions; avoid bursts between partitions.
 var historySearchLimiter = rate.NewLimiter(rate.Every(3*time.Second), 1)
 
@@ -52,6 +55,11 @@ func fetchHistory(ctx context.Context, gh *github.Client, query string, from, th
 		for {
 			if result.GetIncompleteResults() {
 				return fmt.Errorf("GitHub returned incomplete history")
+			}
+			if sink, ok := ctx.Value(historyPageSinkKey{}).(historyPageSink); ok {
+				if err := sink(result.Issues); err != nil {
+					return err
+				}
 			}
 			received += len(result.Issues)
 			for _, item := range result.Issues {

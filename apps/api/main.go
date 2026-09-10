@@ -43,8 +43,9 @@ type PullRequest struct {
 	UpdatedAt     time.Time  `json:"updated_at" gorm:"index"`
 }
 type OAuthToken struct {
-	FullSyncPending bool   `json:"-"`
-	SyncProgress    string `json:"-"`
+	SyncRequestedAt *time.Time `json:"-"`
+	FullSyncPending bool       `json:"-"`
+	SyncProgress    string     `json:"-"`
 	GitHubCreatedAt *time.Time
 	HistorySyncedAt *time.Time
 	HistoryTotal    int
@@ -365,11 +366,6 @@ type syncResult struct {
 	body   gin.H
 }
 
-func (s *Server) syncGitHub(c *gin.Context) {
-	result := s.syncSession(c.Request.Context(), requestSessionID(c), c.Query("auto") == "1", c.Query("full") == "1")
-	c.JSON(result.status, result.body)
-}
-
 func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bool) (result syncResult) {
 	var t OAuthToken
 	if sid == "" || s.db.Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)).First(&t).Error != nil {
@@ -400,6 +396,9 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 			return syncResult{500, gin.H{"error": "Unable to schedule full sync"}}
 		}
 		t.FullSyncPending = true
+	}
+	if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Update("sync_requested_at", nil).Error; err != nil {
+		return syncResult{500, gin.H{"error": "Unable to start sync"}}
 	}
 	incremental := t.HistorySyncedAt != nil && !t.FullSyncPending
 	mode := "full"
@@ -443,6 +442,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	if incremental {
 		since = t.HistorySyncedAt
 	}
+	ctx = context.WithValue(ctx, historyPageSinkKey{}, historyPageSink(func(items []*github.Issue) error { return s.saveHistoryPage(ctx, sid, items) }))
 	items, err := fetchSyncHistory(ctx, gh, query, from, syncStarted, since)
 	if err != nil {
 		progress.recordFailure(err)
@@ -457,21 +457,6 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 			return syncResult{http.StatusTooManyRequests, gin.H{"error": "GitHub rate limit reached; retry sync later"}}
 		}
 		return syncResult{status, gin.H{"error": "Unable to complete GitHub history sync; retry to refresh"}}
-	}
-	// Persist the authoritative search snapshot first. Enrichment can be slow or unavailable; it must not leave a newly connected account looking empty.
-	progress.set("saving", 0, len(items))
-	for index, x := range items {
-		var pr PullRequest
-		updates := map[string]interface{}{"repo_private": nil, "title": x.GetTitle(), "state": x.GetState(), "repo": strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/"), "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time}
-		if links := x.GetPullRequestLinks(); links != nil && links.MergedAt != nil {
-			updates["merged_at"] = links.MergedAt.Time
-		}
-		if err := s.db.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Assign(updates).FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
-			return syncResult{500, gin.H{"error": "Unable to save pull requests"}}
-		}
-		if (index+1)%100 == 0 {
-			progress.set("saving", index+1, len(items))
-		}
 	}
 	progress.set("saving", len(items), len(items))
 	openTotal := 0
