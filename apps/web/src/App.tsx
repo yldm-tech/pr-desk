@@ -17,6 +17,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { parsePRPage, listParameters, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
+const appVersion = import.meta.env.VITE_APP_VERSION || "dev";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
 const filterPaths: Record<string, string> = { Overview: "/", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
@@ -229,7 +230,10 @@ export default function App() {
       <aside className="min-[901px]:w-[208px] min-[901px]:max-[1200px]:px-3 max-[900px]:static max-[900px]:grid max-[900px]:h-auto max-[900px]:w-full max-[900px]:grid-cols-[minmax(0,1fr)_auto] max-[900px]:gap-3 max-[900px]:overflow-visible max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:p-4">
         <a href="#/" className="brand max-[900px]:p-0 max-[900px]:self-center max-[480px]:text-[17px] max-[480px]:gap-1.5">
           <img className="logo" src="/favicon.svg" alt="" />
-          <span>PR Desk</span>
+          <span className="flex flex-col gap-0.5 leading-tight">
+            <span>PR Desk</span>
+            <span className="brand-version text-[11px] font-normal tracking-normal text-[var(--muted)]">{appVersion === "dev" ? "dev" : `v${appVersion}`}</span>
+          </span>
         </a>
         <nav
           aria-label={t("mainNavigation")}
