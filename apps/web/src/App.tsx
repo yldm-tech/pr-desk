@@ -251,7 +251,12 @@ export default function App() {
           </button>
           <button className={filter === "Needs attention" ? "active" : ""} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
             <Inbox size={17} aria-hidden="true" />
-            <span>{t("navAttention")}</span> {(authLoading || auth?.connected) && <b>{authLoading || summaryLoading ? <Skeleton width={14} height={10} /> : (summary?.attention ?? "—")}</b>}
+            <span>{t("navAttention")}</span>
+            {(authLoading || auth?.connected) && (
+              <b style={{ visibility: authLoading || summaryLoading ? "hidden" : undefined }} aria-hidden={authLoading || summaryLoading || undefined}>
+                {summary?.attention ?? "—"}
+              </b>
+            )}
           </button>
           <button className={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
