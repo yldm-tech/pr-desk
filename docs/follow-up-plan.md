@@ -40,7 +40,7 @@ Verified at this checkpoint:
 Remaining before the objective can be marked complete:
 
 1. Verify the Telegram adapter against deployment credentials and provider responses; no live message has been sent without explicit authorization.
-2. Finish notification language preferences and paused-sync context.
+2. Validate notification language preferences and paused-sync context in the final browser audit.
 3. Expand live API/browser fixtures for destinations, reopen/draft/team changes and account reconnect; check relevant endpoint authorization, migrations and settings validation.
 4. Finish operating/privacy/setup documentation and required CI browser checks, repeat full tests/build, inspect final diff, create the completed PR and publish a completion report. No real Telegram message has been sent.
 
