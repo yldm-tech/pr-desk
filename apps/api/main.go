@@ -103,6 +103,7 @@ func main() {
 	s := &Server{db}
 	appServer = s
 	r := gin.Default()
+	registerWeb(r, frontendFiles())
 	r.Use(func(c *gin.Context) {
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.Next()
