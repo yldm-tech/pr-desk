@@ -211,5 +211,18 @@
   "caughtUp": "当前无需处理",
   "noActionNeeded": "暂时没有需要你处理的 Pull Request。",
   "noOpenResults": "当前范围内没有开放的 Pull Request。",
-  "firstPage": "返回首页"
+  "firstPage": "返回首页",
+  "navAbout": "关于项目",
+  "aboutTagline": "每一份贡献，都有迹可循。",
+  "aboutDescription": "PR Desk 是为同时参与多个 GitHub 仓库的贡献者打造的个人面板。集中查看 Pull Request、评审动态和贡献历史，省去逐个仓库查找的麻烦。",
+  "aboutRepository": "GitHub 仓库",
+  "aboutFeatures": "项目功能",
+  "aboutOverviewTitle": "贡献概览",
+  "aboutOverviewDescription": "按年份查看贡献汇总、合并趋势和仓库分布，公开仓库与私有仓库分别展示。",
+  "aboutAttentionTitle": "待我处理",
+  "aboutAttentionDescription": "跟进评审请求、修改要求、合并冲突和讨论动态，点击 Pull Request 即可回到 GitHub 继续处理。",
+  "aboutSyncTitle": "后台更新",
+  "aboutSyncDescription": "首次导入历史记录后，后台通过增量同步更新变更和开放的 Pull Request，并显示同步进度与重试状态。",
+  "aboutGettingStartedTitle": "开始使用",
+  "aboutGettingStartedDescription": "连接 GitHub 账号即可导入你的 Pull Request。按需授予组织和仓库访问权限，然后在面板中查看贡献、跟进评审。"
 }

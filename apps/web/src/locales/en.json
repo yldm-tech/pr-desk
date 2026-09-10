@@ -211,5 +211,18 @@
   "caughtUp": "You’re all caught up",
   "noActionNeeded": "No pull requests need your attention right now.",
   "noOpenResults": "No open pull requests in this view.",
-  "firstPage": "Back to first page"
+  "firstPage": "Back to first page",
+  "navAbout": "About",
+  "aboutTagline": "Every contribution, in one place.",
+  "aboutDescription": "PR Desk is a personal dashboard for people contributing to multiple GitHub repositories. Keep track of your pull requests, reviews, and contribution history without switching between repositories.",
+  "aboutRepository": "GitHub repository",
+  "aboutFeatures": "What you can do",
+  "aboutOverviewTitle": "Explore contributions",
+  "aboutOverviewDescription": "See contribution totals, merge trends, and repository distribution by year. View public and private repositories separately.",
+  "aboutAttentionTitle": "Know what needs you",
+  "aboutAttentionDescription": "Follow review requests, requested changes, conflicts, and discussion activity. Open a pull request directly to continue the conversation.",
+  "aboutSyncTitle": "Stay up to date",
+  "aboutSyncDescription": "After the first history import, background incremental sync refreshes changes and open pull requests. Progress and retry states stay visible.",
+  "aboutGettingStartedTitle": "Get started",
+  "aboutGettingStartedDescription": "Connect your GitHub account to import your pull requests. Grant the relevant organization and repository access when needed, then use the dashboard to explore your contributions and follow up on reviews."
 }
