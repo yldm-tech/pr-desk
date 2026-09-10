@@ -44,7 +44,7 @@ func TestSyncFailedDetailsPreserveStoredState(t *testing.T) {
 	})}
 	router := gin.New()
 	s := &Server{db: tx}
-	router.POST("/sync", s.syncGitHub)
+	router.POST("/sync", s.syncInlineForTest)
 	req := httptest.NewRequest("POST", "/sync", nil)
 	req.AddCookie(&http.Cookie{Name: "pr_session", Value: "test-session"})
 	rec := httptest.NewRecorder()

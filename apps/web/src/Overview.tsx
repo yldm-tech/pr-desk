@@ -96,10 +96,10 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
       <Tabs.Root value={visibility} onValueChange={(value) => changeScope("visibility", value)}>
         <Tabs.List className="visibility-tabs" aria-label={t("visibilityScope")}>
           <Tabs.Trigger value="public">
-            {t("publicOnly")} <span>{query.isPlaceholderData ? "—" : (counts.public_repositories?.toLocaleString() ?? "—")}</span>
+            {t("publicOnly")} <span>{query.isPlaceholderData || (!query.data.history_complete && !counts.public_repositories) ? "—" : (counts.public_repositories?.toLocaleString() ?? "—")}</span>
           </Tabs.Trigger>
           <Tabs.Trigger value="private">
-            {t("privateOnly")} <span>{access.data?.can_read_private === false || access.data?.has_installations === false ? t("notAuthorized") : query.isPlaceholderData ? "—" : (counts.private_repositories?.toLocaleString() ?? "—")}</span>
+            {t("privateOnly")} <span>{access.data?.can_read_private === false || access.data?.has_installations === false ? t("notAuthorized") : query.isPlaceholderData || (!query.data.history_complete && !counts.private_repositories) ? "—" : (counts.private_repositories?.toLocaleString() ?? "—")}</span>
           </Tabs.Trigger>
         </Tabs.List>
       </Tabs.Root>

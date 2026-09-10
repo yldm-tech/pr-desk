@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	github "github.com/google/go-github/v68/github"
+	"log"
 	"net/url"
 	"strings"
 	"sync"
@@ -116,6 +117,8 @@ func (p *syncTracker) recordFailure(err error) {
 	var response *github.ErrorResponse
 	var network *url.Error
 	switch {
+	case errors.Is(err, errHistoryStorage):
+		code = "storage"
 	case errors.Is(err, context.Canceled):
 		code = "interrupted"
 	case errors.Is(err, context.DeadlineExceeded):
@@ -147,6 +150,7 @@ func (p *syncTracker) recordFailure(err error) {
 		}
 	}
 	p.value.ErrorCode = code
+	log.Printf("GitHub sync failure: code=%s phase=%s completed=%d total=%d", code, p.value.Phase, p.value.Completed, p.value.Total)
 	p.save()
 }
 func (p *syncTracker) finishResult(success bool, result syncResult, ctxErr error) {

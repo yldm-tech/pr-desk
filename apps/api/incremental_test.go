@@ -45,7 +45,7 @@ func TestIncrementalSyncPreservesHistoryAndCheckpointOnFailure(t *testing.T) {
 	})}
 	router := gin.New()
 	s := &Server{db: tx}
-	router.POST("/sync", s.syncGitHub)
+	router.POST("/sync", s.syncInlineForTest)
 	run := func() int {
 		req := httptest.NewRequest("POST", "/sync", nil)
 		req.AddCookie(&http.Cookie{Name: "pr_session", Value: "incremental"})
@@ -108,7 +108,7 @@ func TestFullSyncRequestPersistsAcrossFailure(t *testing.T) {
 	})}
 	router := gin.New()
 	s := &Server{db: tx}
-	router.POST("/sync", s.syncGitHub)
+	router.POST("/sync", s.syncInlineForTest)
 	run := func(path string) int {
 		req := httptest.NewRequest("POST", path, nil)
 		req.AddCookie(&http.Cookie{Name: "pr_session", Value: "full-retry"})
