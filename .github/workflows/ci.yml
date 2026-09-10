@@ -37,7 +37,8 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: apps/api/go.mod
-          cache-dependency-path: apps/api/go.sum
+          # Persistent runners already keep their Go caches on disk.
+          cache: false
       - run: scripts/ci-postgres.sh start
       - name: Vet and test with race detection
         working-directory: apps/api

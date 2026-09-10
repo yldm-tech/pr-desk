@@ -5,7 +5,7 @@ The workflows follow `yldm-tech/glean`: organization self-hosted runners (`yldm-
 ## Checks
 
 - Web: Bun version from root `packageManager`, frozen lockfile, unit tests, TypeScript and Vite build.
-- API: Go version from `apps/api/go.mod`, `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too.
+- API: Go version from `apps/api/go.mod`, with local runner caches (no duplicate remote cache upload), `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too.
 - Containers: build both root-context Dockerfiles without pushing.
 - `workflow_dispatch` can rerun CI when needed. Main runs are not cancelled by later pushes.
 
