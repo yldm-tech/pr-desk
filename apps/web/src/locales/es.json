@@ -211,5 +211,18 @@
   "caughtUp": "Todo al día",
   "noActionNeeded": "No hay Pull Requests que necesiten tu atención.",
   "noOpenResults": "No hay Pull Requests abiertos en esta vista.",
-  "firstPage": "Volver a la primera página"
+  "firstPage": "Volver a la primera página",
+  "navAbout": "Acerca del proyecto",
+  "aboutTagline": "Todas tus contribuciones, en un solo lugar.",
+  "aboutDescription": "PR Desk es un panel personal para quienes contribuyen a varios repositorios de GitHub. Consulta tus pull requests, revisiones e historial de contribuciones sin cambiar de repositorio.",
+  "aboutRepository": "Repositorio en GitHub",
+  "aboutFeatures": "Funciones del proyecto",
+  "aboutOverviewTitle": "Explora tus contribuciones",
+  "aboutOverviewDescription": "Consulta los totales, las tendencias de fusiones y la distribución por repositorio y año. Los repositorios públicos y privados se muestran por separado.",
+  "aboutAttentionTitle": "Identifica tareas pendientes",
+  "aboutAttentionDescription": "Sigue las solicitudes de revisión, los cambios solicitados, los conflictos y las conversaciones. Abre un pull request para continuar en GitHub.",
+  "aboutSyncTitle": "Actualizaciones en segundo plano",
+  "aboutSyncDescription": "Tras la primera importación del historial, la sincronización incremental actualiza los cambios y los pull requests abiertos. Puedes consultar el progreso y los reintentos.",
+  "aboutGettingStartedTitle": "Primeros pasos",
+  "aboutGettingStartedDescription": "Conecta tu cuenta de GitHub para importar tus pull requests. Autoriza el acceso a organizaciones y repositorios cuando sea necesario y usa el panel para consultar tus contribuciones y dar seguimiento a las revisiones."
 }

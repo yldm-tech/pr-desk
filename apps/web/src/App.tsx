@@ -1,3 +1,5 @@
+import { About } from "./About";
+import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
 import { SyncProgress } from "./SyncProgress";
 import { UserMenu } from "./UserMenu";
@@ -12,15 +14,14 @@ import { activitySchema } from "./activity-model";
 import React from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
-import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, X, ChevronRight, ExternalLink } from "lucide-react";
+import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ChevronRight, ExternalLink } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { parsePRPage, listParameters, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
-const appVersion = import.meta.env.VITE_APP_VERSION || "dev";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
-const filterPaths: Record<string, string> = { Overview: "/", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
+const filterPaths: Record<string, string> = { Overview: "/", About: "/about", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
 function statusKey(status: string) {
   return ({ Open: "openCount", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
 }
@@ -151,7 +152,7 @@ export default function App() {
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["prs", filter, page, search],
     retry: 1,
-    enabled: !!auth?.connected && !["Overview", "Repositories"].includes(filter),
+    enabled: !!auth?.connected && !["Overview", "Repositories", "About"].includes(filter),
     gcTime: 30 * 60 * 1000,
     queryFn: async ({ signal }) => {
       const r = await api(apiURL + "/api/v1/pull-requests?" + listParameters(filter, page, search), { credentials: "include", signal });
@@ -232,12 +233,12 @@ export default function App() {
           <img className="logo" src="/favicon.svg" alt="" />
           <span className="flex flex-col gap-0.5 leading-tight">
             <span>PR Desk</span>
-            <span className="brand-version text-[11px] font-normal tracking-normal text-[var(--muted)]">{appVersion === "dev" ? "dev" : `v${appVersion}`}</span>
+            <span className="brand-version text-[11px] font-normal tracking-normal text-[var(--muted)]">{projectVersion}</span>
           </span>
         </a>
         <nav
           aria-label={t("mainNavigation")}
-          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-4 max-[480px]:grid-cols-4 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button]:text-[11px]"
+          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button>span]:max-w-full max-[480px]:[&>button>span]:wrap-anywhere max-[480px]:[&>button]:text-[11px]"
         >
           <button className={filter === "Overview" ? "active" : ""} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
             <LayoutDashboard size={17} aria-hidden="true" />
@@ -247,13 +248,17 @@ export default function App() {
             <Inbox size={17} aria-hidden="true" />
             <span>{t("navAttention")}</span> <b>{authLoading || summaryLoading ? <Skeleton width={14} height={10} /> : (summary?.attention ?? "—")}</b>
           </button>
-          <button className={!["Overview", "Needs attention", "Repositories"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
+          <button className={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
             <span>{t("navAll")}</span>
           </button>
           <button className={filter === "Repositories" ? "active" : ""} aria-current={filter === "Repositories" ? "page" : undefined} onClick={() => setFilter("Repositories")}>
             <FolderGit2 size={17} aria-hidden="true" />
             <span>{t("navRepositories")}</span>
+          </button>
+          <button className={filter === "About" ? "active" : ""} aria-current={filter === "About" ? "page" : undefined} onClick={() => setFilter("About")}>
+            <Info size={17} aria-hidden="true" />
+            <span>{t("navAbout")}</span>
           </button>
         </nav>
         <div className="sidebottom max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs">
@@ -294,7 +299,7 @@ export default function App() {
       <main id="main-content" tabIndex={-1} className="@container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5">
         <header className="page-header">
           <div>
-            <h1>{authLoading ? <Skeleton width={120} height={23} /> : !auth?.connected ? "PR Desk" : filter === "Overview" ? t("achievements") : filter === "Repositories" ? t("navRepositories") : filter === "Needs attention" ? t("navAttention") : t("navAll")}</h1>
+            <h1>{filter === "About" ? t("navAbout") : authLoading ? <Skeleton width={120} height={23} /> : !auth?.connected ? "PR Desk" : filter === "Overview" ? t("achievements") : filter === "Repositories" ? t("navRepositories") : filter === "Needs attention" ? t("navAttention") : t("navAll")}</h1>
 
             {oauthError && (
               <p className="error" role="alert">
@@ -319,7 +324,9 @@ export default function App() {
             </button>
           </div>
         )}
-        {authLoading ? (
+        {filter === "About" ? (
+          <About />
+        ) : authLoading ? (
           <PageSkeleton page={filter} />
         ) : authError && !auth ? (
           <section className="empty-state" role="alert">

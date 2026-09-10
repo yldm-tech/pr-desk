@@ -211,5 +211,18 @@
   "caughtUp": "対応は完了しています",
   "noActionNeeded": "現在、対応が必要な Pull Request はありません。",
   "noOpenResults": "この表示にはオープンな Pull Request がありません。",
-  "firstPage": "最初のページへ"
+  "firstPage": "最初のページへ",
+  "navAbout": "プロジェクトについて",
+  "aboutTagline": "すべての貢献を、ひとつの場所に。",
+  "aboutDescription": "PR Desk は、複数の GitHub リポジトリに貢献する人のための個人用ダッシュボードです。リポジトリを切り替えずに、プルリクエスト、レビュー、貢献履歴を確認できます。",
+  "aboutRepository": "GitHub リポジトリ",
+  "aboutFeatures": "主な機能",
+  "aboutOverviewTitle": "貢献を振り返る",
+  "aboutOverviewDescription": "年ごとの貢献実績、マージの推移、リポジトリ別の分布を確認できます。公開と非公開のリポジトリは分けて表示します。",
+  "aboutAttentionTitle": "対応事項を確認",
+  "aboutAttentionDescription": "レビュー依頼、変更要求、コンフリクト、議論の更新を確認し、プルリクエストを開いて GitHub で対応できます。",
+  "aboutSyncTitle": "バックグラウンド更新",
+  "aboutSyncDescription": "初回の履歴取り込み後は、差分同期で変更とオープン中のプルリクエストを更新します。進捗と再試行の状態も確認できます。",
+  "aboutGettingStartedTitle": "使い始める",
+  "aboutGettingStartedDescription": "GitHub アカウントを接続してプルリクエストを取り込みます。必要に応じて組織やリポジトリへのアクセスを許可し、貢献やレビューをダッシュボードで確認しましょう。"
 }
