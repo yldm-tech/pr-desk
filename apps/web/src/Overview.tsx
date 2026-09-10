@@ -1,3 +1,4 @@
+import { apiURL } from "./api-url";
 import { useSearchParams } from "react-router-dom";
 import { OverviewSkeleton, AccessSkeleton } from "./LoadingSkeleton";
 import { useMemo, useEffect, useRef } from "react";
@@ -66,7 +67,7 @@ export default function Overview({
     queryFn: ({ signal }) =>
       ky
         .get(
-          (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+          apiURL +
             "/api/v1/repository-access",
           { credentials: "include", signal, retry: 0 },
         )
@@ -110,7 +111,7 @@ export default function Overview({
     queryFn: ({ signal }) =>
       ky
         .get(
-          (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+          apiURL +
             `/api/v1/overview?year=${year}&visibility=${visibility}`,
           { credentials: "include", signal, retry: 0, timeout: 120000 },
         )
@@ -294,7 +295,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   const trendQuery = useQuery({
     queryKey: ["overview", "trend", data.year, visibility, repo],
     enabled: repo !== "all",
-    queryFn: ({signal}) => ky.get((import.meta.env.VITE_API_URL || "http://localhost:8081") + "/api/v1/overview?" + new URLSearchParams({year:String(data.year),visibility,trend_repo:repo}),{credentials:"include",signal,retry:0,timeout:120000}).json().then(value=>schema.parse(value)),
+    queryFn: ({signal}) => ky.get(apiURL + "/api/v1/overview?" + new URLSearchParams({year:String(data.year),visibility,trend_repo:repo}),{credentials:"include",signal,retry:0,timeout:120000}).json().then(value=>schema.parse(value)),
     ...overviewCache,
   });
   const trendLoading = repo !== "all" && trendQuery.isPending;

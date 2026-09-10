@@ -1,3 +1,4 @@
+import { apiURL } from "./api-url";
 import { SyncProgress } from "./SyncProgress";
 import { UserMenu } from "./UserMenu";
 import Skeleton from "react-loading-skeleton";
@@ -129,7 +130,7 @@ export default function App() {
     onMutate: () => setSyncFeedback(null),
     mutationFn: async (full: boolean | void = false) => {
       const r = await api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/sync" + (full ? "?full=1" : ""),
         {
           method: "POST",
@@ -178,7 +179,7 @@ export default function App() {
   const logoutMutation = useMutation({
     mutationFn: () =>
       api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/auth/logout",
         { method: "POST" },
       ),
@@ -197,7 +198,7 @@ export default function App() {
     enabled: !!selected,
     queryFn: async () => {
       const r = await api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           `/api/v1/pull-requests/${selected!.id}/activity`,
         { credentials: "include" },
       );
@@ -208,7 +209,7 @@ export default function App() {
     queryKey: ["auth"],
     queryFn: async () =>
       api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/auth/status",
         { credentials: "include" },
       ).then(async (r) =>
@@ -223,7 +224,7 @@ export default function App() {
     enabled: !!auth?.connected,
     queryFn: async () => {
       const r = await api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/stats",
         { credentials: "include" },
       );
@@ -246,7 +247,7 @@ export default function App() {
     gcTime: 30 * 60 * 1000,
     queryFn: async ({signal}) => {
       const r = await api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/pull-requests?" +
           listParameters(filter, page, search),
         { credentials: "include", signal },
@@ -268,7 +269,7 @@ export default function App() {
     gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       const r = await api(
-        (import.meta.env.VITE_API_URL || "http://localhost:8081") +
+        apiURL +
           "/api/v1/repositories",
         { credentials: "include" },
       );
@@ -379,7 +380,7 @@ export default function App() {
               popup.location.href = event.currentTarget.href;
               popup.focus();
             }}
-            href={(import.meta.env.VITE_API_URL || "http://localhost:8081") + "/api/v1/repository-access/install"}
+            href={apiURL + "/api/v1/repository-access/install"}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -448,7 +449,7 @@ export default function App() {
             </button>
           </div>
         )}
-        {authLoading ? <PageSkeleton page={filter} /> : authError && !auth ? <section className="empty-state" role="alert"><AlertTriangle size={28}/><h2>{t("apiUnavailable")}</h2><button className="secondary-action" onClick={()=>retryAuth()}>{t("retry")}</button></section> : !auth?.connected ? <section className="connection-card"><div className="connection-icon"><GitPullRequest size={30}/></div><h2>{t("welcomeTitle")}</h2><p>{t("welcomeDescription")}</p><a className="primary-action" href={(import.meta.env.VITE_API_URL || "http://localhost:8081") + "/api/v1/auth/github"}><GitPullRequest size={18}/>{t("connectGitHub")}</a><div className="connection-features"><span><LayoutDashboard size={16}/>{t("navOverview")}</span><span><Inbox size={16}/>{t("navAttention")}</span><span><RefreshCw size={16}/>{t("backgroundUpdates")}</span></div></section> : filter === "Overview" ? (
+        {authLoading ? <PageSkeleton page={filter} /> : authError && !auth ? <section className="empty-state" role="alert"><AlertTriangle size={28}/><h2>{t("apiUnavailable")}</h2><button className="secondary-action" onClick={()=>retryAuth()}>{t("retry")}</button></section> : !auth?.connected ? <section className="connection-card"><div className="connection-icon"><GitPullRequest size={30}/></div><h2>{t("welcomeTitle")}</h2><p>{t("welcomeDescription")}</p><a className="primary-action" href={apiURL + "/api/v1/auth/github"}><GitPullRequest size={18}/>{t("connectGitHub")}</a><div className="connection-features"><span><LayoutDashboard size={16}/>{t("navOverview")}</span><span><Inbox size={16}/>{t("navAttention")}</span><span><RefreshCw size={16}/>{t("backgroundUpdates")}</span></div></section> : filter === "Overview" ? (
           <React.Suspense fallback={<OverviewSkeleton controls />}>
             <Overview onAccessGranted={() => syncMutation.mutate(true)} />
           </React.Suspense>

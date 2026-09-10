@@ -1,3 +1,4 @@
+import { apiURL } from "./api-url";
 import { SyncStatusSkeleton } from "./LoadingSkeleton";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
@@ -25,7 +26,7 @@ export function SyncProgress({connected, pending, onRunningChange}: {
   const previous = useRef(false);
   const query = useQuery({
     queryKey: ["sync-progress"], enabled: connected,
-    queryFn: ({signal}) => ky.get((import.meta.env.VITE_API_URL || "http://localhost:8081") + "/api/v1/sync/progress", {credentials:"include",signal,retry:0}).json().then(value=>progressSchema.parse(value)),
+    queryFn: ({signal}) => ky.get(apiURL + "/api/v1/sync/progress", {credentials:"include",signal,retry:0}).json().then(value=>progressSchema.parse(value)),
     refetchInterval: q => pending || q.state.data?.status === "running" ? 1000 : 5000,
     refetchIntervalInBackground: true,
   });

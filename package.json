@@ -1,14 +1,16 @@
 {
-  "name": "pr-dashboard",
+  "name": "pr-desk",
   "private": true,
   "packageManager": "bun@1.3.4",
   "scripts": {
-    "dev": "bun run --cwd frontend dev",
-    "build": "bun run --cwd frontend build",
-    "test": "make test"
+    "dev": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
+    "test": "make test",
+    "test:web": "bun run --cwd apps/web test",
+    "typecheck": "bun run --cwd apps/web typecheck"
   },
   "workspaces": [
-    "frontend"
+    "apps/web"
   ],
   "engines": {
     "bun": ">=1.3.4"

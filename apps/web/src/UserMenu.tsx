@@ -1,3 +1,4 @@
+import { apiURL } from "./api-url";
 import { useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { useQuery } from "@tanstack/react-query";
@@ -27,7 +28,6 @@ const profileSchema = z.object({
   following: z.number(),
   public_repos: z.number(),
 });
-const apiURL = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
 export function UserMenu({
   connected,
