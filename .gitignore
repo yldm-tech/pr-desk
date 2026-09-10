@@ -20,3 +20,5 @@ dist/
 .playwright-cli/
 output/
 apps/api/webdist/
+test-results/
+playwright-report/

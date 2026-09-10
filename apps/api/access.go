@@ -5,12 +5,11 @@ import (
 	github "github.com/google/go-github/v68/github"
 	"net/url"
 	"os"
-	"time"
 )
 
 func (s *Server) repositoryAccess(c *gin.Context) {
 	var connection OAuthToken
-	if s.db.Where("session_id = ? AND created_at > ?", requestSessionID(c), time.Now().Add(-30*24*time.Hour)).First(&connection).Error != nil {
+	if connectionQuery(s.db).Where("session_id = ?", requestSessionID(c)).First(&connection).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}

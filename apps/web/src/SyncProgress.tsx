@@ -43,14 +43,14 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
   useEffect(() => {
     onRunningChange(running);
     if (shouldRefreshAfterSync(previous.current, query.data)) {
-      for (const key of ["overview", "stats", "repositories", "prs"]) void client.invalidateQueries({ queryKey: [key] });
+      for (const key of ["overview", "stats", "repositories", "prs", "follow-ups", "auth"]) void client.invalidateQueries({ queryKey: [key] });
     }
     previous.current = query.data;
   }, [running, query.data, onRunningChange, client]);
   useEffect(() => {
     if (!running) return;
     const timer = window.setInterval(() => {
-      for (const key of ["overview", "stats", "repositories", "prs"]) void client.invalidateQueries({ queryKey: [key] });
+      for (const key of ["overview", "stats", "repositories", "prs", "follow-ups"]) void client.invalidateQueries({ queryKey: [key] });
     }, 10000);
     return () => window.clearInterval(timer);
   }, [running, client]);

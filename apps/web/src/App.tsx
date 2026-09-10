@@ -2,6 +2,8 @@ import { Welcome } from "./Welcome";
 import { Repositories } from "./Repositories";
 import { RepositorySelect } from "./RepositorySelect";
 import { About } from "./About";
+import { FollowUpSummary, FollowUpWorkspace, useFollowUps } from "./FollowUps";
+import { FollowUpSettings } from "./FollowUpSettings";
 import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
 import { SyncProgress } from "./SyncProgress";
@@ -17,14 +19,14 @@ import { activitySchema } from "./activity-model";
 import React from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 
-import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ExternalLink } from "lucide-react";
+import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ExternalLink, Settings2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { parsePRPage, listParameters, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
-const filterPaths: Record<string, string> = { Overview: "/", About: "/about", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
+const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
 function statusKey(status: string) {
   return ({ Open: "openCount", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
 }
@@ -141,7 +143,13 @@ export default function App() {
     isPending: authLoading,
     isError: authError,
     refetch: retryAuth,
-  } = useQuery({ queryKey: ["auth"], queryFn: async () => api(apiURL + "/api/v1/auth/status", { credentials: "include" }).then(async (r) => z.object({ connected: z.boolean(), username: z.string().optional() }).parse(await r.json())), staleTime: 30000 });
+  } = useQuery({
+    queryKey: ["auth"],
+    queryFn: async () => api(apiURL + "/api/v1/auth/status", { credentials: "include" }).then(async (r) => z.object({ connected: z.boolean(), username: z.string().optional(), sync_paused: z.boolean().optional(), last_synced_at: z.string().nullable().optional() }).parse(await r.json())),
+    staleTime: 30000,
+  });
+  const followUps = useFollowUps(!!auth?.connected);
+  const attentionCount = followUps.data ? (followUps.data.counts.authored || 0) + (followUps.data.counts.reviewer || 0) + (followUps.data.counts.follow_up || 0) : undefined;
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -159,7 +167,7 @@ export default function App() {
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["prs", filter, page, search, repository],
     retry: 1,
-    enabled: !!auth?.connected && !["Overview", "Repositories", "About"].includes(filter),
+    enabled: !!auth?.connected && !["Overview", "Repositories", "About", "Settings", "Needs attention"].includes(filter),
     gcTime: 30 * 60 * 1000,
     queryFn: async ({ signal }) => {
       const r = await api(apiURL + "/api/v1/pull-requests?" + listParameters(filter, page, search, repository), { credentials: "include", signal });
@@ -253,12 +261,12 @@ export default function App() {
             <Inbox size={17} aria-hidden="true" />
             <span>{t("navAttention")}</span>
             {(authLoading || auth?.connected) && (
-              <b style={{ visibility: authLoading || summaryLoading ? "hidden" : undefined }} aria-hidden={authLoading || summaryLoading || undefined}>
-                {summary?.attention ?? "—"}
+              <b style={{ visibility: authLoading || followUps.isPending ? "hidden" : undefined }} aria-hidden={authLoading || followUps.isPending || undefined}>
+                {attentionCount ?? "—"}
               </b>
             )}
           </button>
-          <button className={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
+          <button className={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
             <span>{t("navAll")}</span>
           </button>
@@ -272,6 +280,12 @@ export default function App() {
           </button>
         </nav>
         <div className="sidebottom max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs">
+          {auth?.connected && (
+            <button className="organization-access" aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
+              <Settings2 size={16} aria-hidden="true" />
+              <span className="max-[480px]:hidden">{t("followup.settings")}</span>
+            </button>
+          )}
           {auth?.connected && (
             <a
               className="organization-access"
@@ -309,7 +323,25 @@ export default function App() {
       <main id="main-content" tabIndex={-1} className="@container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5">
         <header className="page-header">
           <div>
-            <h1>{filter === "About" ? t("navAbout") : authLoading ? <Skeleton width={120} height={23} /> : !auth?.connected ? t("welcomeHeading") : filter === "Overview" ? t("achievements") : filter === "Repositories" ? t("navRepositories") : filter === "Needs attention" ? t("navAttention") : t("navAll")}</h1>
+            <h1>
+              {filter === "About" ? (
+                t("navAbout")
+              ) : authLoading ? (
+                <Skeleton width={120} height={23} />
+              ) : !auth?.connected ? (
+                t("welcomeHeading")
+              ) : filter === "Settings" ? (
+                t("followup.settings")
+              ) : filter === "Overview" ? (
+                t("achievements")
+              ) : filter === "Repositories" ? (
+                t("navRepositories")
+              ) : filter === "Needs attention" ? (
+                t("navAttention")
+              ) : (
+                t("navAll")
+              )}
+            </h1>
 
             {oauthError && (
               <p className="error" role="alert">
@@ -325,7 +357,12 @@ export default function App() {
             </div>
           </div>
         </header>
-        <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} hidden={filter === "About"} />
+        <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} hidden={filter === "About" || filter === "Settings"} />
+        {auth?.sync_paused && filter !== "About" && (
+          <p className="sync-status-error" role="status">
+            {t("followup.paused")} <a href={apiURL + "/api/v1/auth/github"}>{t("followup.reconnect")}</a>
+          </p>
+        )}
         {filter !== "About" && syncFeedback && !remoteSyncing && (
           <div className={`sync-feedback ${syncFeedback.error ? "sync-feedback-error" : ""}`} role={syncFeedback.error ? "alert" : "status"}>
             <span>{syncFeedback.message}</span>
@@ -348,10 +385,15 @@ export default function App() {
           </section>
         ) : !auth?.connected ? (
           <Welcome />
+        ) : filter === "Settings" ? (
+          <FollowUpSettings />
+        ) : filter === "Needs attention" ? (
+          <FollowUpWorkspace />
         ) : filter === "Repositories" ? (
           <Repositories repositories={repositoryData} loading={repositoriesLoading} error={repositoriesError} retry={() => void refetchRepositories()} />
         ) : filter === "Overview" ? (
           <React.Suspense fallback={<OverviewSkeleton controls />}>
+            <FollowUpSummary />
             <Overview onAccessGranted={() => syncMutation.mutate(true)} />
           </React.Suspense>
         ) : (

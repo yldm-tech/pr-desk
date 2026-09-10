@@ -47,7 +47,7 @@ func (s *Server) syncDueSessions(ctx context.Context) {
 		return
 	}
 	var sessions []OAuthToken
-	if err := s.db.WithContext(ctx).Where("created_at > ? AND session_id <> '' AND token <> ''", time.Now().Add(-30*24*time.Hour)).Order("history_synced_at ASC NULLS FIRST").Find(&sessions).Error; err != nil {
+	if err := connectionQuery(s.db.WithContext(ctx)).Where("session_id <> '' AND token <> ''").Order("history_synced_at ASC NULLS FIRST").Find(&sessions).Error; err != nil {
 		log.Print("Background sync: unable to load eligible connections")
 		return
 	}

@@ -70,6 +70,9 @@ func (p *syncTracker) finish(success bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.value.Status = "failed"
+	if !success && p.value.ErrorCode == "reconnect" {
+		p.db.Model(&OAuthToken{}).Where("session_id = ? AND git_hub_id > 0", p.sid).Update("authorization_error", "reconnect")
+	}
 	if success {
 		p.value.Status = "complete"
 	}
@@ -88,7 +91,11 @@ func historyTracker(ctx context.Context) *syncTracker {
 }
 func (s *Server) getSyncProgress(c *gin.Context) {
 	var token OAuthToken
-	if requestSessionID(c) == "" || s.db.Where("session_id = ? AND created_at > ?", requestSessionID(c), time.Now().Add(-30*24*time.Hour)).First(&token).Error != nil {
+	query := connectionQuery(s.db)
+	if c.GetBool("account_session") {
+		query = s.db
+	}
+	if requestSessionID(c) == "" || query.Where("session_id = ?", requestSessionID(c)).First(&token).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
@@ -104,6 +111,9 @@ func (s *Server) getSyncProgress(c *gin.Context) {
 	}
 	progress.NextAutoSyncAt = nextAutoSyncAt(token, time.Now())
 	progress.LastSyncedAt = token.HistorySyncedAt
+	if token.GitHubID > 0 && (token.AuthorizationError != "" || token.Token == "") {
+		progress.Status, progress.ErrorCode = "failed", "reconnect"
+	}
 	c.JSON(200, progress)
 }
 

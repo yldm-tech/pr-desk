@@ -17,7 +17,7 @@ import (
 func (s *Server) syncGitHub(c *gin.Context) {
 	ctx, sid := c.Request.Context(), requestSessionID(c)
 	var token OAuthToken
-	if sid == "" || s.db.WithContext(ctx).Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)).First(&token).Error != nil {
+	if sid == "" || connectionQuery(s.db.WithContext(ctx)).Where("session_id = ?", sid).First(&token).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
@@ -63,7 +63,7 @@ var errHistoryStorage = errors.New("unable to save history page")
 func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*github.Issue) error {
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, x := range items {
-			updates := map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/"), "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time}
+			updates := map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/"), "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time, "role": "authored", "author": x.GetUser().GetLogin()}
 			if x.Repository != nil && x.Repository.Private != nil {
 				updates["repo_private"] = x.Repository.GetPrivate()
 			}
@@ -73,6 +73,20 @@ func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*githu
 			var pr PullRequest
 			if err := tx.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Assign(updates).FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
 				return err
+			}
+			if x.GetState() == "closed" {
+				var follow FollowUp
+				err := tx.Where("session_id = ? AND pull_request_id = ?", sid, pr.ID).First(&follow).Error
+				if err == nil {
+					facts := follow.facts()
+					facts.Closed = true
+					facts.Merged = pr.MergedAt != nil
+					if err := persistFollowUp(tx, pr, facts, time.Now().UTC()); err != nil {
+						return err
+					}
+				} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
 			}
 		}
 		return nil

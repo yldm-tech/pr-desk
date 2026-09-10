@@ -61,8 +61,10 @@ type activityComment struct {
 	Line      *int      `json:"line"`
 	ReplyTo   uint64    `json:"in_reply_to_id"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 	User      struct {
 		Login string `json:"login"`
+		Type  string `json:"type"`
 	} `json:"user"`
 }
 type reviewThread struct {
@@ -232,7 +234,7 @@ func (s *Server) activity(c *gin.Context) {
 		return
 	}
 	var stored OAuthToken
-	if s.db.Where("session_id = ? AND created_at > ?", requestSessionID(c), time.Now().Add(-30*24*time.Hour)).First(&stored).Error != nil {
+	if connectionQuery(s.db).Where("session_id = ?", requestSessionID(c)).First(&stored).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
