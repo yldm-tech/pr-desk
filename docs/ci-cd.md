@@ -1,10 +1,10 @@
 # CI/CD
 
-The workflows follow `yldm-tech/glean`: organization self-hosted runners (`yldm-backend-runners`), PR cancellation, independent main CI runs, and release gated by a successful `CI` workflow on main. Runner proxy forwarding comes from Glean's existing helper; Docker base images and CI PostgreSQL use `mirror.gcr.io` for this runner network.
+The workflows follow `yldm-tech/glean`: organization self-hosted runners (`yldm-backend-runners`), PR cancellation, independent main CI runs, and release gated by a successful `CI` workflow on main. Runner proxy forwarding comes from Glean's existing helper; Go/runtime images and CI PostgreSQL use `mirror.gcr.io` for this runner network; frontend compilation uses the pinned official Vite+ image from GHCR.
 
 ## Checks
 
-- Web: Bun version from root `packageManager`, frozen lockfile, unit tests, TypeScript and Vite build.
+- Web: `setup-vp` installs the pinned Vite+ version, uses Bun from root `packageManager` with a frozen lockfile, then runs `vp check`, Vitest and the production build.
 - API: Go version from `apps/api/go.mod`, with local runner caches (no duplicate remote cache upload), `go vet`, and `go test -race ./... -count=1` against PostgreSQL 16. Every run gets a unique container and loopback port; cleanup runs on failure too.
 - Container: build the single root-context `apps/api/Dockerfile` without pushing; run embedded asset and routing tests against the real web bundle.
 - `workflow_dispatch` can rerun CI when needed. Main runs are not cancelled by later pushes.

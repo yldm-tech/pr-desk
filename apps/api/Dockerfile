@@ -1,20 +1,21 @@
-ARG BUN_IMAGE=mirror.gcr.io/oven/bun:1.3.4-alpine
+ARG VP_IMAGE=ghcr.io/voidzero-dev/vite-plus:0.3.1
 ARG GO_IMAGE=mirror.gcr.io/library/golang:1.25.5-alpine
 ARG RUNTIME_IMAGE=mirror.gcr.io/library/alpine:3.22
-FROM ${BUN_IMAGE} AS web
-WORKDIR /app
-COPY package.json bun.lock ./
-COPY apps/web/package.json ./apps/web/package.json
-RUN bun install --frozen-lockfile
-COPY apps/web/ ./apps/web/
-RUN bun run build
+FROM ${VP_IMAGE} AS web
+WORKDIR /home/vp/app
+COPY --chown=vp:vp package.json bun.lock bunfig.toml .node-version ./
+COPY --chown=vp:vp apps/web/package.json ./apps/web/package.json
+RUN vp install --frozen-lockfile
+COPY --chown=vp:vp vite.config.ts ./
+COPY --chown=vp:vp apps/web/ ./apps/web/
+RUN vp run build
 
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
 COPY apps/api/go.mod apps/api/go.sum ./
 RUN go mod download
 COPY apps/api/ ./
-COPY --from=web /app/apps/web/dist/ ./webdist/
+COPY --from=web /home/vp/app/apps/web/dist/ ./webdist/
 RUN go test -tags webembed -run 'TestWeb|TestEmbedded' ./... && CGO_ENABLED=0 go build -tags webembed -trimpath -o /pr-desk .
 
 FROM ${RUNTIME_IMAGE}

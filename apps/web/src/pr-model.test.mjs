@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { parsePRList } from "./pr-model.ts";
 const row = { id: 9, number: 81, repo: "https://api.github.com/repos/org/repo", title: "Example", state: "open" };

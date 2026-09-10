@@ -62,7 +62,7 @@ export default function App() {
   const setFilter = (f: string, preserveSearch = false) => {
     const path = f === "All" && !preserveSearch ? lastPRRoute.current : filterPaths[f] || "/";
     const query = preserveSearch ? (search ? "?" + new URLSearchParams({ q: search }) : "") : visitedRoutes.current.get(path) || "";
-    navigate(path + query);
+    void navigate(path + query);
   };
   React.useEffect(() => {
     const focusSearch = (event: KeyboardEvent) => {
@@ -126,7 +126,12 @@ export default function App() {
       return activitySchema.parse(await r.json());
     },
   });
-  const { data: auth, isPending: authLoading, isError: authError, refetch: retryAuth } = useQuery({ queryKey: ["auth"], queryFn: async () => api(apiURL + "/api/v1/auth/status", { credentials: "include" }).then(async (r) => z.object({ connected: z.boolean(), username: z.string().optional() }).parse(await r.json())), staleTime: 30000 });
+  const {
+    data: auth,
+    isPending: authLoading,
+    isError: authError,
+    refetch: retryAuth,
+  } = useQuery({ queryKey: ["auth"], queryFn: async () => api(apiURL + "/api/v1/auth/status", { credentials: "include" }).then(async (r) => z.object({ connected: z.boolean(), username: z.string().optional() }).parse(await r.json())), staleTime: 30000 });
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -225,7 +230,10 @@ export default function App() {
           <img className="logo" src="/favicon.svg" alt="" />
           <span>PR Desk</span>
         </a>
-        <nav aria-label={t("mainNavigation")} className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-4 max-[480px]:grid-cols-4 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button]:text-[11px]">
+        <nav
+          aria-label={t("mainNavigation")}
+          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-4 max-[480px]:grid-cols-4 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button]:text-[11px]"
+        >
           <button className={filter === "Overview" ? "active" : ""} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
             <LayoutDashboard size={17} aria-hidden="true" />
             <span>{t("navOverview")}</span>
@@ -439,7 +447,7 @@ export default function App() {
                         <button
                           className="repo-pr-filter"
                           onClick={() => {
-                            navigate(filterPaths.All + "?" + new URLSearchParams({ q: r.repo }));
+                            void navigate(filterPaths.All + "?" + new URLSearchParams({ q: r.repo }));
                           }}
                         >
                           <span>{t("viewRepositoryPRs")}</span>

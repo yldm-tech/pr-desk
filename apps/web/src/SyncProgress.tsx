@@ -7,7 +7,20 @@ import { useTranslation } from "react-i18next";
 import ky from "ky";
 import { z } from "zod";
 
-const progressSchema = z.object({ mode: z.string().optional(), history_count: z.number().optional(), open_count: z.number().optional(), resume_phase: z.string().optional(), error_code: z.string().optional(), next_auto_sync_at: z.string().optional(), updated_at: z.string().optional(), status: z.enum(["idle", "running", "complete", "failed", "interrupted"]), phase: z.enum(["account", "history", "open", "saving", "details", "waiting"]), completed: z.number(), total: z.number(), retry_at: z.number() });
+const progressSchema = z.object({
+  mode: z.string().optional(),
+  history_count: z.number().optional(),
+  open_count: z.number().optional(),
+  resume_phase: z.string().optional(),
+  error_code: z.string().optional(),
+  next_auto_sync_at: z.string().optional(),
+  updated_at: z.string().optional(),
+  status: z.enum(["idle", "running", "complete", "failed", "interrupted"]),
+  phase: z.enum(["account", "history", "open", "saving", "details", "waiting"]),
+  completed: z.number(),
+  total: z.number(),
+  retry_at: z.number(),
+});
 export function SyncProgress({ connected, pending, onRunningChange }: { connected: boolean; pending: boolean; onRunningChange: (value: boolean) => void }) {
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();

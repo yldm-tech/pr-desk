@@ -27,7 +27,7 @@ Back up the encryption key separately from the database. Changing or losing it m
 
 ## Verification
 
-`make test` runs Go unit tests, frontend data-model regression tests, strict TypeScript checking, and the Vite production build. Frontend tests run with Bun 1.3.4 or newer. Token tests cover round trips, nonce uniqueness, malformed ciphertext, tampering, wrong keys, and invalid configuration. These checks do not prove live OAuth behavior, database migrations, or browser flows; end-to-end coverage is still required.
+`make test` runs Go unit tests, frontend data-model regression tests, strict TypeScript checking, and the Vite production build. Frontend tests run through `vp test` (Vitest); dependencies remain managed by Bun 1.3.4. Token tests cover round trips, nonce uniqueness, malformed ciphertext, tampering, wrong keys, and invalid configuration. These checks do not prove live OAuth behavior, database migrations, or browser flows; end-to-end coverage is still required.
 
 Cookie-authenticated mutation requests must include an `Origin` header matching `WEB_ORIGIN` exactly (including the port). Browsers send this automatically. CLI integrations must supply it explicitly. Requests with absent, opaque, or foreign origins return 403 before executing the operation. OAuth callback GET requests remain supported.
 
@@ -69,7 +69,7 @@ and missing PR permissions. Returning from authorization rechecks access; a
 transition to readable access triggers a sync. Private results remain limited
 to repositories accessible to both the signed-in user and the installed app.
 
-JavaScript tooling uses Bun 1.3.4 or newer. Run `bun install --frozen-lockfile` from the repository root, `bun run build` for the frontend, and `bun run test` for backend tests plus frontend tests and build. The root `bun.lock` is the single dependency lockfile.
+JavaScript tooling uses Vite+ 0.3.1 and Bun 1.3.4. From the repository root use `vp install --frozen-lockfile`, `vp check`, `vp fmt`, `vp run dev`, `vp run build`, and `vp run test`. In `apps/web`, `vp dev`, `vp build`, and `vp test run` directly invoke the web tools. The root `bun.lock` is the single dependency lockfile. Prettier is removed; Oxfmt and Oxlint configuration lives in root `vite.config.ts`.
 
 ## Background synchronization
 

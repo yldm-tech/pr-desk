@@ -17,7 +17,16 @@ import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
 import ky from "ky";
 import { z } from "zod";
-const schema = z.object({ visibility_counts: z.object({ public_repositories: z.number().optional(), private_repositories: z.number().optional(), unknown_repositories: z.number().optional(), public: z.number(), private: z.number(), unknown: z.number() }), history_complete: z.boolean(), history_total: z.number(), year: z.number(), years: z.array(z.number()), summary: z.object({ total: z.number(), merged: z.number(), open: z.number(), closed: z.number(), repositories: z.number() }), repositories: z.array(z.object({ repo: z.string(), total: z.number(), merged: z.number() })), months: z.array(z.object({ month: z.string(), merged: z.number() })) });
+const schema = z.object({
+  visibility_counts: z.object({ public_repositories: z.number().optional(), private_repositories: z.number().optional(), unknown_repositories: z.number().optional(), public: z.number(), private: z.number(), unknown: z.number() }),
+  history_complete: z.boolean(),
+  history_total: z.number(),
+  year: z.number(),
+  years: z.array(z.number()),
+  summary: z.object({ total: z.number(), merged: z.number(), open: z.number(), closed: z.number(), repositories: z.number() }),
+  repositories: z.array(z.object({ repo: z.string(), total: z.number(), merged: z.number() })),
+  months: z.array(z.object({ month: z.string(), merged: z.number() })),
+});
 type Data = z.infer<typeof schema>;
 // Keep visited scopes available while stale data refreshes in the background.
 const overviewCache = { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 };
@@ -190,7 +199,17 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
     () =>
       defineChart({
         marks: [barY(months, { x: "month", y: "merged", fill: "var(--accent)", radius: { end: 5 }, maxThickness: 28 })],
-        scales: { x: { scale: () => scaleBand().padding(0.48), axis: { tickLabels: { thin: { minGap: 12 } }, line: false, ticks: { size: 0, padding: 12, format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")) } } }, y: { scale: scaleLinear, nice: true, grid: true, axis: { line: false, ticks: { size: 0, count: 4, padding: 10 } } } },
+        scales: {
+          x: {
+            scale: () => scaleBand().padding(0.48),
+            axis: {
+              tickLabels: { thin: { minGap: 12 } },
+              line: false,
+              ticks: { size: 0, padding: 12, format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")) },
+            },
+          },
+          y: { scale: scaleLinear, nice: true, grid: true, axis: { line: false, ticks: { size: 0, count: 4, padding: 10 } } },
+        },
         tooltip: {
           use: tooltip,
           items: [

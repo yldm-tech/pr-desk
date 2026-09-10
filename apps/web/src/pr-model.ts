@@ -1,6 +1,19 @@
 import { z } from "zod";
 
-export const PRSchema = z.object({ id: z.number().int().positive(), repo: z.string(), title: z.string(), number: z.number().int().positive(), url: z.string().optional(), merged_at: z.string().nullable().optional(), updated_at: z.string().optional(), review_status: z.string().optional(), checks_status: z.string().optional(), state: z.string().optional(), comments_count: z.number().optional(), has_conflicts: z.boolean().optional() });
+export const PRSchema = z.object({
+  id: z.number().int().positive(),
+  repo: z.string(),
+  title: z.string(),
+  number: z.number().int().positive(),
+  url: z.string().optional(),
+  merged_at: z.string().nullable().optional(),
+  updated_at: z.string().optional(),
+  review_status: z.string().optional(),
+  checks_status: z.string().optional(),
+  state: z.string().optional(),
+  comments_count: z.number().optional(),
+  has_conflicts: z.boolean().optional(),
+});
 const listSchema = z.object({ data: z.array(PRSchema).nullable(), total: z.number() });
 const labels: Record<string, string> = { pending: "Awaiting review", review_requested: "Review requested", changes_requested: "Changes requested", approved: "Approved", open: "Open", closed: "Closed", merged: "Merged" };
 
