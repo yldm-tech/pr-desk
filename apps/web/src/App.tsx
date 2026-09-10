@@ -325,8 +325,8 @@ export default function App() {
             </div>
           </div>
         </header>
-        <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} />
-        {syncFeedback && !remoteSyncing && (
+        <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} hidden={filter === "About"} />
+        {filter !== "About" && syncFeedback && !remoteSyncing && (
           <div className={`sync-feedback ${syncFeedback.error ? "sync-feedback-error" : ""}`} role={syncFeedback.error ? "alert" : "status"}>
             <span>{syncFeedback.message}</span>
             <button aria-label={t("close")} onClick={() => setSyncFeedback(null)}>
