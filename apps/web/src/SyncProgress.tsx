@@ -23,7 +23,7 @@ const progressSchema = z.object({
   total: z.number(),
   retry_at: z.number(),
 });
-export function SyncProgress({ connected, pending, onRunningChange }: { connected: boolean; pending: boolean; onRunningChange: (value: boolean) => void }) {
+export function SyncProgress({ connected, pending, onRunningChange, hidden = false }: { connected: boolean; pending: boolean; onRunningChange: (value: boolean) => void; hidden?: boolean }) {
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
   const client = useQueryClient();
@@ -54,6 +54,8 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
     }, 10000);
     return () => window.clearInterval(timer);
   }, [running, client]);
+  // Keep polling and cache updates active even when this page hides sync status.
+  if (hidden) return null;
   const failed = query.data?.status === "failed" || query.data?.status === "interrupted";
   if (connected && query.isPending && !pending) return <SyncStatusSkeleton />;
   if (connected && query.isError && !pending && !running && !failed)
