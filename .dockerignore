@@ -14,4 +14,14 @@ output
 **/output
 **/*.pem
 **/*.key
+**/*.sql
+**/*.sql.gz
+**/*.dump
+**/*.dump.gz
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+**/*.log
+**/*.p12
+**/*.pfx
 apps/api/webdist
