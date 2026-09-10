@@ -22,8 +22,7 @@ func TestPaginationAndAttention(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// A recently merged PR must not occupy a page slot or count toward totals,
-	// even if its old review/conflict fields are still set.
+	// A recently merged PR must not occupy a page slot or count toward totals, even if its old review/conflict fields are still set.
 	merged := time.Now()
 	if err := db.Create(&PullRequest{SessionID: "pages", Number: 56, Repo: "merged-only", Title: "merged fixture", State: "closed", MergedAt: &merged, UpdatedAt: merged, HasConflicts: true, ReviewStatus: "approved"}).Error; err != nil {
 		t.Fatal(err)

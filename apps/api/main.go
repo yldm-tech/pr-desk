@@ -74,8 +74,7 @@ var githubHTTPClient = &http.Client{Timeout: 20 * time.Second}
 
 func sessionPRQuery(c *gin.Context, db *gorm.DB) *gorm.DB {
 	sid := requestSessionID(c)
-	return db.WithContext(c.Request.Context()).Where("session_id = ?", sid).
-		Where("session_id IN (?)", db.Model(&OAuthToken{}).Select("session_id").Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)))
+	return db.WithContext(c.Request.Context()).Where("session_id = ?", sid).Where("session_id IN (?)", db.Model(&OAuthToken{}).Select("session_id").Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)))
 }
 
 func requestSessionID(c *gin.Context) string { v, _ := c.Cookie("pr_session"); return v }
@@ -453,8 +452,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		}
 		return syncResult{status, gin.H{"error": "Unable to complete GitHub history sync; retry to refresh"}}
 	}
-	// Persist the authoritative search snapshot first. Enrichment can be slow or
-	// unavailable; it must not leave a newly connected account looking empty.
+	// Persist the authoritative search snapshot first. Enrichment can be slow or unavailable; it must not leave a newly connected account looking empty.
 	progress.set("saving", 0, len(items))
 	for index, x := range items {
 		var pr PullRequest
@@ -489,8 +487,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		// Create the session-scoped row before importing child comments.
 		var pr PullRequest
 		repoName := strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/")
-		if err := s.db.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).
-			Assign(map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": repoName, "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time}).
+		if err := s.db.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Assign(map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": repoName, "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time}).
 			FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
 			return fmt.Errorf("Unable to save pull request; sync incomplete")
 		}

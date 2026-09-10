@@ -14,8 +14,7 @@ func webOrigin() string {
 	return "http://localhost:5173"
 }
 
-// CORS controls response access, not whether a browser sends a mutation.
-// Require the configured UI origin before executing cookie-authenticated writes.
+// CORS controls response access, not whether a browser sends a mutation. Require the configured UI origin before executing cookie-authenticated writes.
 func requireMutationOrigin(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:

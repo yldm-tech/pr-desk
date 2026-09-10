@@ -16,8 +16,7 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// Every table and fixture lives in a transaction-local schema and is rolled
-// back. This test never updates application tables or real OAuth connections.
+// Every table and fixture lives in a transaction-local schema and is rolled back. This test never updates application tables or real OAuth connections.
 func TestSyncFailedDetailsPreserveStoredState(t *testing.T) {
 	tx := integrationDB(t)
 	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)

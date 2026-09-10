@@ -15,8 +15,7 @@ COPY apps/api/go.mod apps/api/go.sum ./
 RUN go mod download
 COPY apps/api/ ./
 COPY --from=web /app/apps/web/dist/ ./webdist/
-RUN go test -tags webembed -run 'TestWeb|TestEmbedded' ./... && \
-    CGO_ENABLED=0 go build -tags webembed -trimpath -o /pr-desk .
+RUN go test -tags webembed -run 'TestWeb|TestEmbedded' ./... && CGO_ENABLED=0 go build -tags webembed -trimpath -o /pr-desk .
 
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache ca-certificates wget
