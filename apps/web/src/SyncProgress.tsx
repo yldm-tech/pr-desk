@@ -15,7 +15,7 @@ const progressSchema = z.object({
   error_code: z.string().optional(),
   next_auto_sync_at: z.string().optional(),
   updated_at: z.string().optional(),
-  status: z.enum(["idle", "running", "complete", "failed", "interrupted"]),
+  status: z.enum(["idle", "queued", "running", "complete", "failed", "interrupted"]),
   phase: z.enum(["account", "history", "open", "saving", "details", "waiting"]),
   completed: z.number(),
   total: z.number(),
@@ -34,10 +34,10 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
         .get(apiURL + "/api/v1/sync/progress", { credentials: "include", signal, retry: 0 })
         .json()
         .then((value) => progressSchema.parse(value)),
-    refetchInterval: (q) => (pending || q.state.data?.status === "running" ? 1000 : 5000),
+    refetchInterval: (q) => (pending || q.state.data?.status === "queued" || q.state.data?.status === "running" ? 1000 : 5000),
     refetchIntervalInBackground: true,
   });
-  const running = query.data?.status === "running";
+  const running = connected && (query.data?.status === "queued" || query.data?.status === "running");
   useEffect(() => {
     onRunningChange(running);
     if (previous.current && !running) {
@@ -45,6 +45,13 @@ export function SyncProgress({ connected, pending, onRunningChange }: { connecte
     }
     previous.current = running;
   }, [running, onRunningChange, client]);
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => {
+      for (const key of ["overview", "stats", "repositories", "prs"]) void client.invalidateQueries({ queryKey: [key] });
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [running, client]);
   const failed = query.data?.status === "failed" || query.data?.status === "interrupted";
   if (connected && query.isPending && !pending) return <SyncStatusSkeleton />;
   if (connected && query.isError && !pending && !running && !failed)

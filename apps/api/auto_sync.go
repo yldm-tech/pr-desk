@@ -9,6 +9,9 @@ const autoSyncInterval = 5 * time.Minute
 const autoSyncFailureCooldown = 15 * time.Minute
 
 func nextAutoSyncAt(token OAuthToken, now time.Time) time.Time {
+	if token.SyncRequestedAt != nil {
+		return *token.SyncRequestedAt
+	}
 	next := now
 	if token.HistorySyncedAt != nil {
 		next = token.HistorySyncedAt.Add(autoSyncInterval)
