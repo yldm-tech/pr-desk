@@ -37,7 +37,7 @@ func (s *Server) saveNotificationDestination(c *gin.Context) {
 		return
 	}
 	var in destinationInput
-	if c.ShouldBindJSON(&in) != nil || in.Name == "" || len(in.Name) > 100 || in.ChatID == 0 {
+	if c.ShouldBindJSON(&in) != nil || in.Name == "" || len(in.Name) > 100 {
 		c.JSON(400, gin.H{"error": "Name and chat_id are required"})
 		return
 	}
@@ -56,6 +56,12 @@ func (s *Server) saveNotificationDestination(c *gin.Context) {
 			plain, _ := decrypt(row.ConfigCipher)
 			_ = json.Unmarshal([]byte(plain), &cfg)
 		}
+	} else if in.ChatID == 0 {
+		c.JSON(400, gin.H{"error": "chat_id is required for a new destination"})
+		return
+	}
+	if in.ChatID != 0 {
+		cfg["chat_id"] = in.ChatID
 	}
 	if cfg["token"] == "" {
 		c.JSON(400, gin.H{"error": "token is required for a new destination"})
