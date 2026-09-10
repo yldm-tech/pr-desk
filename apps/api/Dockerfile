@@ -8,7 +8,8 @@ COPY --chown=vp:vp apps/web/package.json ./apps/web/package.json
 RUN vp install --frozen-lockfile
 COPY --chown=vp:vp vite.config.ts ./
 COPY --chown=vp:vp apps/web/ ./apps/web/
-RUN vp run build
+ARG APP_VERSION=dev
+RUN VITE_APP_VERSION="$APP_VERSION" vp run build
 
 FROM ${GO_IMAGE} AS build
 WORKDIR /src

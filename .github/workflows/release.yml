@@ -49,7 +49,7 @@ jobs:
         run: |
           mapfile -t proxy_args < <(scripts/runner-proxy.sh build-args)
           image="ghcr.io/${GH_REPO}"
-          docker build "${proxy_args[@]}" -f apps/api/Dockerfile --label "org.opencontainers.image.source=https://github.com/$GH_REPO" --label "org.opencontainers.image.revision=$RELEASE_SHA" --label "org.opencontainers.image.version=$VERSION" -t "$image:$VERSION" -t "$image:sha-$RELEASE_SHA" .
+          docker build "${proxy_args[@]}" --build-arg APP_VERSION="$VERSION" -f apps/api/Dockerfile --label "org.opencontainers.image.source=https://github.com/$GH_REPO" --label "org.opencontainers.image.revision=$RELEASE_SHA" --label "org.opencontainers.image.version=$VERSION" -t "$image:$VERSION" -t "$image:sha-$RELEASE_SHA" .
       - name: Push image and publish release
         shell: bash
         run: |
