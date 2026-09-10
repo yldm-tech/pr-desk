@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+// Login work outlives the callback request, but stops with the server. The
+// existing advisory lock and checkpoint also arbitrate the scheduler and tabs.
+func (s *Server) startLoginSync(sessionID string) <-chan struct{} {
+	done := make(chan struct{})
+	ctx := s.workerCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	go func() {
+		defer close(done)
+		if ctx.Err() != nil {
+			return
+		}
+		runCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+		defer cancel()
+		result := s.syncSession(runCtx, sessionID, true, false)
+		if result.status >= 400 && result.status != 409 {
+			log.Printf("Login sync failed (HTTP %d); background retry applies", result.status)
+		}
+	}()
+	return done
+}
+
 // Persisted checkpoints survive restarts; advisory locks arbitrate instances.
 func (s *Server) startSyncScheduler(ctx context.Context, schedule string) (*cron.Cron, error) {
 	scheduler := cron.New(cron.WithChain(cron.Recover(cron.DefaultLogger), cron.SkipIfStillRunning(cron.DefaultLogger)))

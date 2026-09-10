@@ -67,7 +67,10 @@ type ReviewComment struct {
 	CommentType   string    `json:"comment_type"`
 }
 
-type Server struct{ db *gorm.DB }
+type Server struct {
+	db        *gorm.DB
+	workerCtx context.Context
+}
 
 var appServer *Server
 var githubHTTPClient = &http.Client{Timeout: 20 * time.Second}
@@ -100,7 +103,9 @@ func main() {
 	if err := db.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}); err != nil {
 		panic(err)
 	}
-	s := &Server{db}
+	workerCtx, stopWorkers := context.WithCancel(context.Background())
+	defer stopWorkers()
+	s := &Server{db: db, workerCtx: workerCtx}
 	appServer = s
 	r := gin.Default()
 	registerWeb(r, frontendFiles())
@@ -172,7 +177,6 @@ func main() {
 			panic(err)
 		}
 	}()
-	workerCtx, stopWorkers := context.WithCancel(context.Background())
 	scheduler, err := s.startSyncScheduler(workerCtx, "@every 30s")
 	if err != nil {
 		panic(err)
@@ -348,6 +352,7 @@ func githubCallback(c *gin.Context) {
 
 	c.SetCookie("pr_connected", "1", 86400*30, "/", "", secureCookies(c), true)
 	c.SetCookie("pr_session", sessionID, 86400*30, "/", "", secureCookies(c), true)
+	appServer.startLoginSync(sessionID)
 	// Never expose the access token to the browser; return to the local UI.
 	redirect := os.Getenv("WEB_ORIGIN")
 	if redirect == "" {
@@ -387,7 +392,8 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	if err := s.db.First(&t, t.ID).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to load sync state"}}
 	}
-	if automatic && time.Now().Before(nextAutoSyncAt(t, time.Now())) {
+	now := time.Now()
+	if automatic && now.Before(nextAutoSyncAt(t, now)) {
 		return syncResult{200, gin.H{"synced": 0, "skipped": true}}
 	}
 	if full {

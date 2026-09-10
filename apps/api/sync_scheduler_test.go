@@ -64,3 +64,77 @@ func TestSchedulerRunsWithoutBrowserAndHonorsCheckpoint(t *testing.T) {
 		t.Fatal("cancelled worker started network work")
 	}
 }
+
+func TestLoginStartsSyncWithoutSchedulerAndHonorsCheckpoint(t *testing.T) {
+	db := integrationDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	encrypted, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := OAuthToken{SessionID: "first-login", Token: encrypted}
+	if err := db.Create(&session).Error; err != nil {
+		t.Fatal(err)
+	}
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	started, release := make(chan struct{}, 1), make(chan struct{})
+	var calls atomic.Int32
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls.Add(1)
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"total_count":0,"items":[]}`)), Request: req}, nil
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Server{db: db, workerCtx: ctx}
+	done := s.startLoginSync(session.SessionID)
+	t.Cleanup(func() { cancel(); <-done })
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("login did not start sync without a scheduler")
+	}
+	select {
+	case <-done:
+		t.Fatal("sync should still be waiting on GitHub")
+	default:
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("login sync did not finish")
+	}
+	var stored OAuthToken
+	if err := db.First(&stored, session.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.HistorySyncedAt == nil {
+		t.Fatal("first login did not persist historical sync")
+	}
+	before := calls.Load()
+	<-s.startLoginSync(session.SessionID)
+	if calls.Load() != before {
+		t.Fatal("login sync ignored the completed checkpoint")
+	}
+}
+
+func TestLoginSyncStopsWithServer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// No database: a cancelled server must return before attempting any work.
+	s := &Server{workerCtx: ctx}
+	select {
+	case <-s.startLoginSync("cancelled"):
+	case <-time.After(time.Second):
+		t.Fatal("login sync did not respect server shutdown")
+	}
+}
