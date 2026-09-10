@@ -47,3 +47,31 @@ func TestMutationOriginGate(t *testing.T) {
 		})
 	}
 }
+
+func TestOAuthCookieSecurityBehindProxy(t *testing.T) {
+	for _, tc := range []struct {
+		name, origin, target string
+		secure               bool
+	}{
+		{"TLS proxy", "https://prdesk.yldm.ai", "http://internal/api/v1/auth/github", true},
+		{"local development", "http://localhost:5174", "http://localhost/api/v1/auth/github", false},
+		{"direct TLS", "http://localhost:5174", "https://localhost/api/v1/auth/github", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("WEB_ORIGIN", tc.origin)
+			r := gin.New()
+			r.GET("/api/v1/auth/github", githubAuth)
+			req := httptest.NewRequest("GET", tc.target, nil)
+			req.Header.Set("X-Forwarded-Proto", "https")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusFound {
+				t.Fatalf("status=%d", w.Code)
+			}
+			cookies := w.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Name != "oauth_state" || cookies[0].Secure != tc.secure || !cookies[0].HttpOnly {
+				t.Fatalf("unexpected OAuth cookie flags: %v", cookies)
+			}
+		})
+	}
+}
