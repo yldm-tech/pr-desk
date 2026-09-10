@@ -37,9 +37,33 @@ func (s *Server) startSyncScheduler(ctx context.Context, schedule string) (*cron
 	if err != nil {
 		return nil, err
 	}
+	// Materialize and deliver notification outbox independently of GitHub sync.
+	// Delivery is best-effort and persisted retries are picked up on the next tick.
+	if _, err := scheduler.AddFunc("@every 30s", func() { s.processNotificationOutbox(ctx) }); err != nil {
+		return nil, err
+	}
 	scheduler.Start()
 	log.Print("Background sync scheduler started (5 minute cadence)")
 	return scheduler, nil
+}
+
+func (s *Server) processNotificationOutbox(ctx context.Context) {
+	var settings []FollowUpSettings
+	if err := s.db.WithContext(ctx).Find(&settings).Error; err != nil {
+		return
+	}
+	now := time.Now().UTC()
+	for _, item := range settings {
+		if err := s.queueAccountNotifications(ctx, item.SessionID, now); err != nil {
+			continue
+		}
+		for i := 0; i < 100; i++ {
+			claimed, err := s.deliverOneNotification(ctx, now, sendTelegramNotification)
+			if err != nil || !claimed {
+				break
+			}
+		}
+	}
 }
 
 func (s *Server) syncDueSessions(ctx context.Context) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nikoksr/notify/service/telegram"
 	"sort"
 	"strings"
 	"time"
@@ -39,6 +40,28 @@ type NotificationDelivery struct {
 }
 
 type notificationSender func(context.Context, NotificationDestination, NotificationDelivery) error
+
+// sendTelegramNotification is the production adapter for nikoksr/notify. The
+// encrypted destination config is JSON: {"token":"...","chat_id":123}.
+func sendTelegramNotification(ctx context.Context, destination NotificationDestination, delivery NotificationDelivery) error {
+	var config struct {
+		Token  string `json:"token"`
+		ChatID int64  `json:"chat_id"`
+	}
+	plain, err := decrypt(destination.ConfigCipher)
+	if err != nil {
+		return fmt.Errorf("decrypt telegram destination: %w", err)
+	}
+	if err := json.Unmarshal([]byte(plain), &config); err != nil || config.Token == "" || config.ChatID == 0 {
+		return errors.New("invalid telegram destination configuration")
+	}
+	service, err := telegram.New(config.Token)
+	if err != nil {
+		return err
+	}
+	service.AddReceivers(config.ChatID)
+	return service.Send(ctx, "PR Desk", delivery.Body)
+}
 
 func digestDue(settings FollowUpSettings, now time.Time) (string, bool) {
 	location, err := time.LoadLocation(settings.Timezone)
