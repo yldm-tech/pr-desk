@@ -235,15 +235,12 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   );
   const distribution = useMemo(() => {
     const colors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
-    const slices = data.repositories.slice(0, 5).map((repo, index) => ({ label: repo.repo, href: `https://github.com/${repo.repo}`, value: repo.total, share: percentage(repo.total), color: colors[index] }));
-    const other = s.total - slices.reduce((sum, item) => sum + item.value, 0);
-    if (other > 0) slices.push({ label: t("otherRepositories"), href: "", value: other, share: percentage(other), color: "var(--chart-other)" });
-    return slices;
+    return data.repositories.map((repo, index) => ({ label: repo.repo, href: `https://github.com/${repo.repo}`, value: repo.total, share: percentage(repo.total), color: colors[index] ?? `hsl(${(255 + index * 137.508) % 360} 50% 60%)` }));
   }, [data.repositories, s.total, t, i18n.resolvedLanguage]);
   const repoChart = useMemo(
     () =>
       defineChart({
-        marks: [polar({ inset: 3, marks: [radialArc(pie(distribution, { value: "value", gapAngle: 0.025 }), { innerRadius: ({ radius }) => radius * 0.78, cornerRadius: 3, fill: (d) => d.color, key: "label" })], scales: { angle: null, radius: null } })],
+        marks: [polar({ inset: 3, marks: [radialArc(pie(distribution, { value: "value", gapAngle: 0 }), { innerRadius: ({ radius }) => radius * 0.78, cornerRadius: 0, fill: (d) => d.color, key: "label" })], scales: { angle: null, radius: null } })],
         scales: { x: null, y: null },
         tooltip: {
           use: tooltip,
@@ -451,19 +448,13 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                   <span>PRs</span>
                 </div>
               </div>
-              <ul className="distribution-legend">
+              <ul className="distribution-legend" tabIndex={0} aria-label={t("contributionDistribution")}>
                 {distribution.map((item) => (
                   <li key={item.label}>
                     <span className="legend-dot" style={{ backgroundColor: item.color }} />
-                    {item.href ? (
-                      <a href={item.href} title={item.label} target="_blank" rel="noopener noreferrer">
-                        {item.label}
-                      </a>
-                    ) : (
-                      <button className="other-repositories" onClick={() => document.getElementById("repository-breakdown")?.focus()}>
-                        {item.label}
-                      </button>
-                    )}
+                    <a href={item.href} title={item.label} target="_blank" rel="noopener noreferrer">
+                      {item.label}
+                    </a>
                     <strong>{percentage(item.value)}</strong>
                   </li>
                 ))}
