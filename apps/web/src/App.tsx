@@ -238,7 +238,7 @@ export default function App() {
         </a>
         <nav
           aria-label={t("mainNavigation")}
-          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button]:text-[11px]"
+          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button>span]:max-w-full max-[480px]:[&>button>span]:wrap-anywhere max-[480px]:[&>button]:text-[11px]"
         >
           <button className={filter === "Overview" ? "active" : ""} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
             <LayoutDashboard size={17} aria-hidden="true" />
