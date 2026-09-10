@@ -14,9 +14,7 @@ import (
 // Share a conservative search budget across sessions; avoid bursts between partitions.
 var historySearchLimiter = rate.NewLimiter(rate.Every(3*time.Second), 1)
 
-// GitHub caps each search at 1000 results. Split creation-time intervals until
-// each query fits, then paginate it completely. Intervals are inclusive seconds
-// with no overlap. The SDK handles rate-limit waits and context cancellation.
+// GitHub caps each search at 1000 results. Split creation-time intervals until each query fits, then paginate it completely. Intervals are inclusive seconds with no overlap. The SDK handles rate-limit waits and context cancellation.
 func fetchHistory(ctx context.Context, gh *github.Client, query string, from, through time.Time) ([]*github.Issue, error) {
 	ctx = context.WithValue(ctx, github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
 	from = from.UTC().Truncate(time.Second)
@@ -95,8 +93,7 @@ func fetchHistory(ctx context.Context, gh *github.Client, query string, from, th
 	return items, nil
 }
 
-// Secondary limits are distinct from permission errors. Retry the same page,
-// preserving completed partitions; never retry ordinary authorization failures.
+// Secondary limits are distinct from permission errors. Retry the same page, preserving completed partitions; never retry ordinary authorization failures.
 func searchHistoryPage(ctx context.Context, gh *github.Client, query string, options *github.SearchOptions) (*github.IssuesSearchResult, error) {
 	attempt := 0
 	return backoff.Retry(ctx, func() (*github.IssuesSearchResult, error) {
@@ -123,8 +120,7 @@ func searchHistoryPage(ctx context.Context, gh *github.Client, query string, opt
 	}, backoff.WithMaxTries(3), backoff.WithMaxElapsedTime(0))
 }
 
-// Re-read a day around the checkpoint for delayed search indexing. Open PRs
-// are refreshed independently because check runs need not update issue dates.
+// Re-read a day around the checkpoint for delayed search indexing. Open PRs are refreshed independently because check runs need not update issue dates.
 func fetchSyncHistory(ctx context.Context, gh *github.Client, query string, from, through time.Time, since *time.Time) ([]*github.Issue, error) {
 	if since == nil {
 		return fetchHistory(ctx, gh, query, from, through)

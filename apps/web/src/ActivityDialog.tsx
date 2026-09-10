@@ -1,15 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, type ReactNode } from "react";
 
-export function ActivityDialog({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
+export function ActivityDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const { t } = useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose);
@@ -20,8 +12,7 @@ export function ActivityDialog({
     element.showModal();
     return () => {
       element.close();
-      if (previous instanceof HTMLElement && previous.isConnected)
-        previous.focus();
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, []);
   return (
@@ -38,15 +29,13 @@ export function ActivityDialog({
       }}
     >
       <section className="drawer">
-        <header className="drawer-heading"><h2 id="activity-title">{title}</h2><button
-          className="drawerclose"
-          aria-label={t("close")}
-          autoFocus
-          onClick={onClose}
-        >
-          ×
-        </button>
-        </header><div className="drawer-content">{children}</div>
+        <header className="drawer-heading">
+          <h2 id="activity-title">{title}</h2>
+          <button className="drawerclose" aria-label={t("close")} autoFocus onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <div className="drawer-content">{children}</div>
       </section>
     </dialog>
   );

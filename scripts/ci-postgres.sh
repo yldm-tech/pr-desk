@@ -12,9 +12,7 @@ start)
       sleep $((attempt * 5))
     done
   fi
-  docker run -d --name "$CONTAINER" \
-    -e POSTGRES_USER=prdesk_test -e POSTGRES_PASSWORD=prdesk_test -e POSTGRES_DB=prdesk_test \
-    -p 127.0.0.1::5432 "$image"
+  docker run -d --name "$CONTAINER" -e POSTGRES_USER=prdesk_test -e POSTGRES_PASSWORD=prdesk_test -e POSTGRES_DB=prdesk_test -p 127.0.0.1::5432 "$image"
   port=$(docker port "$CONTAINER" 5432/tcp | sed -n 's/^127\.0\.0\.1://p')
   [ -n "$port" ]
   echo "TEST_DATABASE_URL=postgres://prdesk_test:prdesk_test@127.0.0.1:${port}/prdesk_test?sslmode=disable" >> "${GITHUB_ENV:?}"

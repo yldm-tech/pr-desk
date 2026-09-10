@@ -24,8 +24,7 @@ type overviewMonth struct {
 	Merged int64  `json:"merged"`
 }
 
-// The current-year view includes the same month last year through this month.
-// Historical years keep their January–December boundaries.
+// The current-year view includes the same month last year through this month. Historical years keep their January–December boundaries.
 func overviewPeriod(year int, now time.Time) (time.Time, time.Time) {
 	now = now.UTC()
 	if year == now.Year() {

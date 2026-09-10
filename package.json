@@ -7,12 +7,24 @@
     "build": "bun run --cwd apps/web build",
     "test": "make test",
     "test:web": "bun run --cwd apps/web test",
-    "typecheck": "bun run --cwd apps/web typecheck"
+    "typecheck": "bun run --cwd apps/web typecheck",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
+    "check": "vp check"
   },
   "workspaces": [
     "apps/web"
   ],
   "engines": {
     "bun": ">=1.3.4"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
+    "vitest": "4.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "24",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
+    "vite-plus": "0.3.1"
   }
 }

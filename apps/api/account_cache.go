@@ -7,8 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Restore a fresh login's cache only after GitHub confirms that both tokens
-// represent the same account. A matching display name alone is not sufficient.
+// Restore a fresh login's cache only after GitHub confirms that both tokens represent the same account. A matching display name alone is not sufficient.
 func restoreAccountCache(ctx context.Context, db *gorm.DB, current OAuthToken, accountID int64) error {
 	var count int64
 	if err := db.Model(&PullRequest{}).Where("session_id = ?", current.SessionID).Count(&count).Error; err != nil {

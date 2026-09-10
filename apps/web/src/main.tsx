@@ -9,6 +9,10 @@ import "./workspace.css";
 const client = new QueryClient();
 createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={client}>
-    <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)"><HashRouter><App /></HashRouter></SkeletonTheme>
+    <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)">
+      <HashRouter>
+        <App />
+      </HashRouter>
+    </SkeletonTheme>
   </QueryClientProvider>,
 );

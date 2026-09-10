@@ -79,8 +79,7 @@ jvm-opts)
 	split_url "$https"
 	# Java wants the exclusion list pipe-separated; the environment gives it comma-separated.
 	nonproxy=$(printf '%s' "${skip:-localhost,127.0.0.1}" | tr ',' '|')
-	printf -- '-Dhttp.proxyHost=%s -Dhttp.proxyPort=%s -Dhttps.proxyHost=%s -Dhttps.proxyPort=%s -Dhttp.nonProxyHosts=%s\n' \
-		"$local_http_host" "$local_http_port" "$host" "$port" "$nonproxy"
+	printf -- '-Dhttp.proxyHost=%s -Dhttp.proxyPort=%s -Dhttps.proxyHost=%s -Dhttps.proxyPort=%s -Dhttp.nonProxyHosts=%s\n' "$local_http_host" "$local_http_port" "$host" "$port" "$nonproxy"
 	;;
 driver-opts)
 	# buildx's docker-container driver starts buildkitd as its own process with an empty environment; these are how anything reaches it.

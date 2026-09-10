@@ -11,8 +11,7 @@ type githubReview struct {
 	} `json:"user"`
 }
 
-// A later approval replaces that reviewer's earlier change request. Comments
-// and unsubmitted drafts do not replace a submitted review decision.
+// A later approval replaces that reviewer's earlier change request. Comments and unsubmitted drafts do not replace a submitted review decision.
 func latestReviewStatus(reviews []githubReview) string {
 	latest := map[string]githubReview{}
 	for _, r := range reviews {

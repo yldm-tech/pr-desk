@@ -17,9 +17,7 @@ func registerWeb(r *gin.Engine, files fs.FS) {
 	server := http.FileServer(http.FS(files))
 	r.NoRoute(func(c *gin.Context) {
 		urlPath := c.Request.URL.Path
-		if (c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) ||
-			urlPath == "/api" || strings.HasPrefix(urlPath, "/api/") ||
-			urlPath == "/swagger" || strings.HasPrefix(urlPath, "/swagger/") {
+		if (c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead) || urlPath == "/api" || strings.HasPrefix(urlPath, "/api/") || urlPath == "/swagger" || strings.HasPrefix(urlPath, "/swagger/") {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
