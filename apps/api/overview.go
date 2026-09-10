@@ -42,7 +42,7 @@ func (s *Server) overview(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid visibility"})
 		return
 	}
-	if c.Query("visibility") != "" {
+	if visibility == "public" || visibility == "private" {
 		if err := s.ensureRepositoryVisibility(c); err != nil {
 			c.JSON(502, gin.H{"error": "Unable to verify repository visibility; retry"})
 			return

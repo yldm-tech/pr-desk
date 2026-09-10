@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	github "github.com/google/go-github/v68/github"
@@ -148,8 +147,10 @@ func main() {
 	r.Use(cors.New(cors.Config{AllowOrigins: []string{webOrigin()}, AllowCredentials: true, AllowHeaders: []string{"Content-Type", "Authorization"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}}))
 	r.Use(requireMutationOrigin)
 	r.GET("/health", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
 		sqlDB, err := db.DB()
-		if err != nil || sqlDB.Ping() != nil {
+		if err != nil || sqlDB.PingContext(ctx) != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "degraded", "database": "unavailable"})
 			return
 		}
@@ -205,7 +206,10 @@ func main() {
 func (s *Server) logout(c *gin.Context) {
 	sid := requestSessionID(c)
 	if sid != "" {
-		s.db.Where("session_id = ?", sid).Delete(&OAuthToken{})
+		if err := s.db.WithContext(c.Request.Context()).Where("session_id = ?", sid).Delete(&OAuthToken{}).Error; err != nil {
+			c.JSON(503, gin.H{"error": "Unable to disconnect; please retry"})
+			return
+		}
 	}
 	c.SetCookie("pr_connected", "", -1, "/", "", secureCookies(c), true)
 	c.SetCookie("pr_session", "", -1, "/", "", secureCookies(c), true)
@@ -477,68 +481,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	progress.set("details", 0, openTotal)
 	group := new(errgroup.Group)
 	group.SetLimit(4)
-	enrich := func(x *github.Issue) error {
-		if x.GetState() != "open" {
-			return nil
-		}
-		var err error
-
-		// Create the session-scoped row before importing child comments.
-		var pr PullRequest
-		repoName := strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/")
-		if err := s.db.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Assign(map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": repoName, "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time}).
-			FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
-			return fmt.Errorf("Unable to save pull request; sync incomplete")
-		}
-		// Enrich each result with GitHub's mergeability and review metadata when available.
-		parts := strings.Split(strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/"), "/")
-		var detail struct {
-			Mergeable      *bool      `json:"mergeable"`
-			MergedAt       *time.Time `json:"merged_at"`
-			Comments       int        `json:"comments"`
-			ReviewComments int        `json:"review_comments"`
-			Head           struct {
-				SHA string `json:"sha"`
-			} `json:"head"`
-		}
-		var reviews []githubReview
-		checksStatus := "unknown"
-		if len(parts) >= 2 {
-			if err := githubJSON(ctx, token, "GET", fmt.Sprintf("/repos/%s/%s/pulls/%d", parts[0], parts[1], x.GetNumber()), nil, &detail); err != nil {
-				return fmt.Errorf("Unable to load PR details; sync incomplete: %w", err)
-			}
-			reviews, err = fetchPages[githubReview](ctx, token, fmt.Sprintf("/repos/%s/%s/pulls/%d/reviews", parts[0], parts[1], x.GetNumber()))
-			if err != nil {
-				return fmt.Errorf("Unable to load reviews; sync incomplete: %w", err)
-			}
-			if detail.Head.SHA != "" {
-				if status, _, e := gh.Repositories.GetCombinedStatus(ctx, parts[0], parts[1], detail.Head.SHA, nil); e == nil {
-					checksStatus = status.GetState()
-				}
-			}
-			inline, e := fetchPages[activityComment](ctx, token, fmt.Sprintf("/repos/%s/%s/pulls/%d/comments", parts[0], parts[1], x.GetNumber()))
-			if e != nil {
-				return fmt.Errorf("Unable to load review comments; sync incomplete: %w", e)
-			}
-			for _, cc := range inline {
-				s.db.Where("session_id = ? AND git_hub_id = ?", sid, cc.ID).FirstOrCreate(&ReviewComment{GitHubID: cc.ID, SessionID: sid, PullRequestID: pr.ID, Author: cc.User.Login, Body: cc.Body, URL: cc.URL, CreatedAt: cc.CreatedAt, CommentType: "review"})
-			}
-		}
-		conflict := detail.Mergeable != nil && !*detail.Mergeable
-		s.db.Model(&PullRequest{}).Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Updates(map[string]interface{}{"has_conflicts": conflict, "comments_count": detail.Comments + detail.ReviewComments, "merged_at": detail.MergedAt})
-		reviewStatus := latestReviewStatus(reviews)
-		s.db.Model(&PullRequest{}).Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Updates(map[string]interface{}{"review_status": reviewStatus, "checks_status": checksStatus})
-		if len(parts) >= 2 {
-			comments, e := fetchPages[activityComment](ctx, token, fmt.Sprintf("/repos/%s/%s/issues/%d/comments", parts[0], parts[1], x.GetNumber()))
-			if e != nil {
-				return fmt.Errorf("Unable to load comments; sync incomplete: %w", e)
-			}
-			for _, cc := range comments {
-				s.db.Where("session_id = ? AND git_hub_id = ?", sid, cc.ID).FirstOrCreate(&ReviewComment{GitHubID: cc.ID, SessionID: sid, PullRequestID: pr.ID, Author: cc.User.Login, Body: cc.Body, URL: cc.URL, CreatedAt: cc.CreatedAt})
-			}
-		}
-		return nil
-	}
+	enrich := func(x *github.Issue) error { return s.syncPRDetails(ctx, token, sid, x) }
 	for _, item := range items {
 		item := item
 		if item.GetState() != "open" {
@@ -548,6 +491,9 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	}
 	if err := group.Wait(); err != nil {
 		progress.recordFailure(err)
+		if errors.Is(err, errDetailStorage) {
+			return syncResult{500, gin.H{"error": "Unable to save PR details; retry sync"}}
+		}
 		return syncResult{502, gin.H{"error": "Some PR details could not be loaded; list data has been saved"}}
 	}
 

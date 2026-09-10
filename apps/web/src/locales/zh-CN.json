@@ -1,4 +1,6 @@
 {
+  "allContributions": "全部贡献",
+  "showingAllContributions": "显示当前时间范围内的全部贡献，包括尚未确定公开或私有状态的仓库。",
   "language": "语言",
   "overview": "概览",
   "attention": "需要我处理",

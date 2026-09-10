@@ -1,4 +1,6 @@
 {
+  "allContributions": "すべての貢献",
+  "showingAllContributions": "公開・非公開の分類が未確認のリポジトリを含む、この期間のすべての貢献を表示しています。",
   "language": "言語",
   "overview": "概要",
   "attention": "要対応",

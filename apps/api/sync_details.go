@@ -1,0 +1,108 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	github "github.com/google/go-github/v68/github"
+	"gorm.io/gorm"
+)
+
+var errDetailStorage = errors.New("unable to save PR details")
+
+// Fetch a complete detail snapshot before replacing cached metadata. A failed
+// upstream call or database write must not turn a partial sync into success.
+func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *github.Issue) error {
+	if issue.GetState() != "open" {
+		return nil
+	}
+	repo := strings.TrimPrefix(issue.GetRepositoryURL(), "https://api.github.com/repos/")
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid repository")
+	}
+	base := "/repos/" + repo
+	endpoint := fmt.Sprintf("%s/pulls/%d", base, issue.GetNumber())
+	var detail struct {
+		Mergeable          *bool                    `json:"mergeable"`
+		MergedAt           *time.Time               `json:"merged_at"`
+		State              string                   `json:"state"`
+		Comments           int                      `json:"comments"`
+		ReviewComments     int                      `json:"review_comments"`
+		RequestedReviewers []struct{ Login string } `json:"requested_reviewers"`
+		RequestedTeams     []struct{ Slug string }  `json:"requested_teams"`
+		Head               struct{ SHA string }     `json:"head"`
+	}
+	if err := githubJSON(ctx, token, "GET", endpoint, nil, &detail); err != nil {
+		return err
+	}
+	reviews, err := fetchPages[githubReview](ctx, token, endpoint+"/reviews")
+	if err != nil {
+		return err
+	}
+	checksStatus := "unknown"
+	if detail.Head.SHA != "" {
+		combined, _, err := githubClient(token).Repositories.GetCombinedStatus(ctx, parts[0], parts[1], detail.Head.SHA, nil)
+		if err != nil {
+			return &githubRequestError{cause: err}
+		}
+		runs, err := fetchChecks(ctx, token, base, detail.Head.SHA)
+		if err != nil {
+			return err
+		}
+		state := combined.GetState()
+		// GitHub returns pending when no legacy statuses exist. It must not
+		// override successful Actions checks on a checks-only repository.
+		if combined.GetTotalCount() == 0 && len(combined.Statuses) == 0 {
+			state = ""
+		}
+		checksStatus = checkSummary(runs, state)
+	}
+	inline, err := fetchPages[activityComment](ctx, token, endpoint+"/comments")
+	if err != nil {
+		return err
+	}
+	conversation, err := fetchPages[activityComment](ctx, token, fmt.Sprintf("%s/issues/%d/comments", base, issue.GetNumber()))
+	if err != nil {
+		return err
+	}
+	reviewStatus := latestReviewStatus(reviews)
+	if reviewStatus != "changes_requested" && len(detail.RequestedReviewers)+len(detail.RequestedTeams) > 0 {
+		reviewStatus = "review_requested"
+	}
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var pr PullRequest
+		if err := tx.Where("session_id = ? AND number = ? AND url = ?", sid, issue.GetNumber(), issue.GetHTMLURL()).First(&pr).Error; err != nil {
+			return err
+		}
+		// UpdatedAt is GitHub activity time, not the time our poll ran.
+		updates := map[string]any{"comments_count": detail.Comments + detail.ReviewComments, "merged_at": detail.MergedAt, "review_status": reviewStatus, "checks_status": checksStatus, "updated_at": pr.UpdatedAt}
+		if detail.Mergeable != nil {
+			updates["has_conflicts"] = !*detail.Mergeable
+		}
+		if detail.State != "" {
+			updates["state"] = detail.State
+		}
+		if err := tx.Model(&pr).Updates(updates).Error; err != nil {
+			return err
+		}
+		for kind, comments := range map[string][]activityComment{"review": inline, "": conversation} {
+			for _, comment := range comments {
+				// Issue and review comment IDs are different GitHub namespaces.
+				key := ReviewComment{SessionID: sid, PullRequestID: pr.ID, GitHubID: comment.ID, CommentType: kind}
+				if err := tx.Where("session_id = ? AND pull_request_id = ? AND git_hub_id = ? AND comment_type = ?", sid, pr.ID, comment.ID, kind).
+					Assign(map[string]any{"author": comment.User.Login, "body": comment.Body, "url": comment.URL, "created_at": comment.CreatedAt}).FirstOrCreate(&key).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Join(errDetailStorage, err)
+	}
+	return nil
+}
