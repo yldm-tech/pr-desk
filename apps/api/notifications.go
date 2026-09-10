@@ -108,13 +108,17 @@ func notificationParts(body string) []string {
 	return parts
 }
 
-func followUpNotification(pr PullRequest, follow FollowUp, reasons []string, now time.Time) string {
+func followUpNotification(pr PullRequest, follow FollowUp, reasons []string, now time.Time, language ...string) string {
 	facts := follow.facts()
 	labels := map[string]string{"human_feedback": "New human feedback", "review_requested": "Review requested", "author_updated": "Author updated the PR", "approval_revoked": "Approval dismissed", "conflict": "Merge conflict", "checks_failed": "Checks failed", "overdue": "Waiting over the follow-up period", "snooze_due": "Reminder due"}
 	parts := []string{fmt.Sprintf("%s #%d · %s", pr.Repo, pr.Number, pr.Title)}
+	zh := len(language) > 0 && language[0] == "zh-CN"
 	for _, reason := range reasons {
 		label := labels[reason]
 		if label != "" {
+			if zh {
+				label = map[string]string{"human_feedback": "新的人工反馈", "review_requested": "请求你审核", "author_updated": "作者更新了 PR", "approval_revoked": "批准已撤回", "conflict": "存在合并冲突", "checks_failed": "检查失败", "overdue": "等待超过设定期限", "snooze_due": "提醒已到期"}[reason]
+			}
 			parts = append(parts, label)
 		}
 	}
@@ -250,7 +254,7 @@ func (s *Server) queueAccountNotifications(ctx context.Context, sid string, now 
 					reasons = append(reasons, reason)
 				}
 				sort.Strings(reasons)
-				if err := queueMessage(tx, destinations, fmt.Sprintf("event:%d:%d", follow.ID, batch[0].ID), followUpNotification(pr, follow, reasons, now), now); err != nil {
+				if err := queueMessage(tx, destinations, fmt.Sprintf("event:%d:%d", follow.ID, batch[0].ID), followUpNotification(pr, follow, reasons, now, settings.Language), now); err != nil {
 					return err
 				}
 			}
@@ -268,7 +272,7 @@ func (s *Server) queueAccountNotifications(ctx context.Context, sid string, now 
 				pr := byID[follow.PullRequestID]
 				state, reasons := follow.presentation(now, settings.waitDays(pr.Repo))
 				if state == "follow_up" {
-					lines = append(lines, followUpNotification(pr, follow, reasons, now))
+					lines = append(lines, followUpNotification(pr, follow, reasons, now, settings.Language))
 				}
 				if state == "archived" && follow.ArchivedAt != nil && follow.ArchivedAt.After(since) && !follow.facts().Draft {
 					outcome := "Closed"

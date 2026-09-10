@@ -5,7 +5,7 @@ import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 
-const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
+const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
 function SettingsForm({ settings }: { settings: Settings }) {
   const { t } = useTranslation();
@@ -13,6 +13,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const [timezone, setTimezone] = useState(settings.timezone);
   const [time, setTime] = useState(settings.digest_time);
   const [days, setDays] = useState(settings.wait_days);
+  const [language, setLanguage] = useState(settings.language);
   const [selected, setSelected] = useState(settings.teams || []);
   const [overrides, setOverrides] = useState(
     Object.entries(settings.repository_days || {})
@@ -44,7 +45,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
         if (!match) throw new Error("Invalid repository override");
         repository_days[match[1]] = Number(match[2]);
       }
-      return ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", json: { timezone, digest_time: time, wait_days: days, teams: selected, repository_days } });
+      return ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", json: { timezone, digest_time: time, wait_days: days, language, teams: selected, repository_days } });
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["follow-up-settings"] });
@@ -60,6 +61,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
       }}
     >
       <div className="followup-setting-fields">
+        <label>Notification language<select value={language} onChange={e=>setLanguage(e.target.value as "en"|"zh-CN")}><option value="en">English</option><option value="zh-CN">简体中文</option></select></label>
         <label>
           {t("followup.timezone")}
           <input value={timezone} onChange={(e) => setTimezone(e.target.value)} required placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone} />

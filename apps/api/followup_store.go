@@ -17,6 +17,7 @@ type FollowUpSettings struct {
 	Timezone           string     `json:"timezone"`
 	DigestTime         string     `json:"digest_time"`
 	WaitDays           int        `json:"wait_days"`
+	Language           string     `json:"language"`
 	TeamsJSON          string     `json:"-"`
 	RepositoryDaysJSON string     `json:"-"`
 	InventoryAt        *time.Time `json:"inventory_at"`
@@ -37,7 +38,7 @@ type FollowUpEvent struct {
 }
 
 func loadFollowUpSettings(db *gorm.DB, sid string) (FollowUpSettings, error) {
-	settings := FollowUpSettings{SessionID: sid, Timezone: "UTC", DigestTime: "09:00", WaitDays: 7, TeamsJSON: "[]", RepositoryDaysJSON: "{}"}
+	settings := FollowUpSettings{SessionID: sid, Timezone: "UTC", DigestTime: "09:00", WaitDays: 7, Language: "en", TeamsJSON: "[]", RepositoryDaysJSON: "{}"}
 	err := db.Where("session_id = ?", sid).First(&settings).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return settings, nil

@@ -14,6 +14,7 @@ type settingsInput struct {
 	Timezone       string         `json:"timezone"`
 	DigestTime     string         `json:"digest_time"`
 	WaitDays       int            `json:"wait_days"`
+	Language       string         `json:"language"`
 	Teams          []string       `json:"teams"`
 	RepositoryDays map[string]int `json:"repository_days"`
 }
@@ -41,7 +42,7 @@ func (s *Server) getFollowUpSettings(c *gin.Context) {
 	_ = json.Unmarshal([]byte(settings.TeamsJSON), &teams)
 	var overrides map[string]int
 	_ = json.Unmarshal([]byte(settings.RepositoryDaysJSON), &overrides)
-	c.JSON(200, settingsInput{Timezone: settings.Timezone, DigestTime: settings.DigestTime, WaitDays: settings.WaitDays, Teams: teams, RepositoryDays: overrides})
+	c.JSON(200, settingsInput{Timezone: settings.Timezone, DigestTime: settings.DigestTime, WaitDays: settings.WaitDays, Language: settings.Language, Teams: teams, RepositoryDays: overrides})
 }
 
 var repositoryNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
@@ -60,7 +61,7 @@ func (s *Server) saveFollowUpSettings(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Choose an IANA timezone"})
 		return
 	}
-	if _, err := time.Parse("15:04", input.DigestTime); err != nil || len(input.DigestTime) != 5 || input.WaitDays < 1 || input.WaitDays > 365 || len(input.Teams) > 50 || len(input.RepositoryDays) > 200 {
+	if _, err := time.Parse("15:04", input.DigestTime); err != nil || len(input.DigestTime) != 5 || input.WaitDays < 1 || input.WaitDays > 365 || len(input.Teams) > 50 || len(input.RepositoryDays) > 200 || (input.Language != "en" && input.Language != "zh-CN") {
 		c.JSON(400, gin.H{"error": "Invalid schedule"})
 		return
 	}
@@ -78,8 +79,8 @@ func (s *Server) saveFollowUpSettings(c *gin.Context) {
 	}
 	teams, _ := json.Marshal(input.Teams)
 	overrides, _ := json.Marshal(input.RepositoryDays)
-	settings := FollowUpSettings{SessionID: account.SessionID, Timezone: input.Timezone, DigestTime: input.DigestTime, WaitDays: input.WaitDays, TeamsJSON: string(teams), RepositoryDaysJSON: string(overrides)}
-	if err := s.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "session_id"}}, DoUpdates: clause.AssignmentColumns([]string{"timezone", "digest_time", "wait_days", "teams_json", "repository_days_json"})}).Create(&settings).Error; err != nil {
+	settings := FollowUpSettings{SessionID: account.SessionID, Timezone: input.Timezone, DigestTime: input.DigestTime, WaitDays: input.WaitDays, Language: input.Language, TeamsJSON: string(teams), RepositoryDaysJSON: string(overrides)}
+	if err := s.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "session_id"}}, DoUpdates: clause.AssignmentColumns([]string{"timezone", "digest_time", "wait_days", "language", "teams_json", "repository_days_json"})}).Create(&settings).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Unable to save preferences"})
 		return
 	}
