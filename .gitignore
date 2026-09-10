@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules/
+dist/
+*.local
+*.dump
+*.sql
+.DS_Store
+.playwright-cli/
+output/

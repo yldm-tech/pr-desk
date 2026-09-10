@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+**/dist
+.env
+.env.*
+.git
+.playwright-cli
+output
+*.dump
+*.pem
+apps
