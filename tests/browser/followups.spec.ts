@@ -124,6 +124,8 @@ test("settings save timezone and selected review teams", async ({ page }) => {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   expect((await saved).postDataJSON()).toMatchObject({ timezone: "Europe/Madrid", digest_time: "09:00", teams: ["fixture/reviewers"] });
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await page.getByLabel("Follow up after (days)", { exact: true }).fill("9");
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toHaveCount(0);
 });
 
 test("repository waiting periods report the offending line instead of failing the save", async ({ page }) => {

@@ -96,6 +96,9 @@ function SettingsForm({ settings }: { settings: Settings }) {
   return (
     <form
       className="followup-settings"
+      onChange={() => {
+        if (mutation.isSuccess || mutation.isError) mutation.reset();
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         const parsed = parseOverrides(overrides);
@@ -249,6 +252,9 @@ function NotificationDestinations() {
         </div>
         <form
           className="followup-destination-form"
+          onChange={() => {
+            if (addDestination.isError) addDestination.reset();
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             const next = { name: !telegram.name.trim(), token: !telegram.token.trim(), chat_id: !/^-?\d+$/.test(telegram.chat_id.trim()) };
