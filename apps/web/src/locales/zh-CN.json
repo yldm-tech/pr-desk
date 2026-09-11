@@ -204,6 +204,7 @@
   "viewActivity": "查看活动",
   "viewPRActivity": "查看 PR #{{number}} 的活动",
   "pending": "等待中",
+  "inconclusive": "未决定",
   "searchShortcut": "按 / 快速搜索",
   "updatingResults": "更新中…",
   "refreshFailedKeepData": "更新失败，已保留上次加载的数据。",

@@ -45,6 +45,7 @@ type PullRequest struct {
 	ReviewStatus  string     `json:"review_status"`
 	CommentsCount int        `json:"comments_count"`
 	ChecksStatus  string     `json:"checks_status"`
+	ChecksJSON    string     `json:"-" gorm:"column:checks_detail"`
 	PRCreatedAt   *time.Time `json:"created_at,omitempty"`
 	MergedAt      *time.Time `json:"merged_at,omitempty"`
 	URL           string     `json:"url"`

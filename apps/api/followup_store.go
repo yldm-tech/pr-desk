@@ -203,7 +203,7 @@ func (s *Server) updateFollowUp(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid action"})
 		return
 	}
-	if input.Action != "read" && input.Action != "handled" && input.Action != "followed_up" && input.Action != "snooze" {
+	if input.Action != "read" && input.Action != "handled" && input.Action != "followed_up" && input.Action != "snooze" && input.Action != "unsnooze" {
 		c.JSON(400, gin.H{"error": "Unknown action"})
 		return
 	}
@@ -252,6 +252,10 @@ func (s *Server) applyFollowUpAction(id, action string, version uint64, until *t
 			row.SnoozedUntil = nil
 		case "snooze":
 			row.SnoozedUntil = input.Until
+		case "unsnooze":
+			// Only the reminder is cancelled. Read and handled state stay as
+			// they were, so this is not a back door to marking work away.
+			row.SnoozedUntil = nil
 		}
 		return tx.Save(&row).Error
 	})

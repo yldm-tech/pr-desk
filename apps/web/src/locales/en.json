@@ -204,6 +204,7 @@
   "viewActivity": "View activity",
   "viewPRActivity": "View activity for PR #{{number}}",
   "pending": "Pending",
+  "inconclusive": "Inconclusive",
   "searchShortcut": "Press / to search",
   "updatingResults": "Updating…",
   "refreshFailedKeepData": "Update failed. Showing previously loaded data.",

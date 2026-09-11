@@ -204,6 +204,7 @@
   "viewActivity": "Ver actividad",
   "viewPRActivity": "Ver actividad del PR #{{number}}",
   "pending": "Pendiente",
+  "inconclusive": "No concluyente",
   "searchShortcut": "Pulsa / para buscar",
   "updatingResults": "Actualizando…",
   "refreshFailedKeepData": "No se pudo actualizar. Se muestran los datos anteriores.",

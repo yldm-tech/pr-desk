@@ -204,6 +204,7 @@
   "viewActivity": "アクティビティを表示",
   "viewPRActivity": "PR #{{number}} のアクティビティ",
   "pending": "待機中",
+  "inconclusive": "判定なし",
   "searchShortcut": "/ キーで検索",
   "updatingResults": "更新中…",
   "refreshFailedKeepData": "更新できませんでした。前回のデータを表示しています。",

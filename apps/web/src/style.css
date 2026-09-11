@@ -482,6 +482,9 @@
   .checks.pending {
     color: var(--warning);
   }
+  .checks.inconclusive {
+    color: var(--muted);
+  }
   button,
   .connectbtn {
     font-family: inherit;
