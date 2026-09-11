@@ -16,8 +16,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// Reported to MCP clients during initialization.
-const mcpServerVersion = "1"
+// Reported to MCP clients during initialization, which is the only place a
+// client learns which deployment it reached. Set by the release build; a binary
+// built from a checkout answers "dev".
+var appVersion = "dev"
 
 // The MCP surface is deliberately narrower than the HTTP API: it reads the
 // follow-up workspace and changes local handling state, and it never touches
@@ -623,7 +625,7 @@ func (s *Server) followUpAction(action string) mcp.ToolHandlerFor[followUpAction
 }
 
 func (s *Server) newMCPServer() *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: mcpServerVersion, Title: "PR Desk"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: appVersion, Title: "PR Desk"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days, and sort by longest wait.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up", Description: "Read one follow-up in full, including the stored comment thread rather than the truncated excerpt the listing carries.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpGetFollowUp)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpFollowUpSummary)

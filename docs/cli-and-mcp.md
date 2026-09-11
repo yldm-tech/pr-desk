@@ -111,7 +111,18 @@ The script resolves the latest release, downloads the binary for the detected pl
 
 `prdesk version` reports which release a binary came from, or `dev` for one built from a checkout.
 
-From a checkout, `make cli` produces `dist/prdesk` and `make install-cli` additionally copies it to `~/.local/bin`. Both report `dev`, since no release produced them.
+### Staying current
+
+```
+prdesk update            # replace this binary with the latest release
+prdesk update --check    # report whether a newer one exists, change nothing
+```
+
+`update` verifies the download against the release's `SHA256SUMS` exactly as the installer does, and refuses to replace anything on a mismatch. The replacement is staged beside the binary and renamed over it, which is atomic within the file system and safe while prdesk is running. Installing into a directory you cannot write to fails with the command to use instead rather than a bare permission error. `PRDESK_REPO` and `PRDESK_RELEASE_BASE` redirect where the release is fetched from; the checksum is verified whatever they point at.
+
+You do not have to remember to check. Every command that reaches the server compares its own release against the deployment's and, when they differ, prints a note **to standard error** — so `--json` stays a clean document for `jq`. Nothing is printed when the two agree, when either side is a development build, or when the server is old enough not to report its release at all.
+
+From a checkout, `make cli` produces `dist/prdesk` and `make install-cli` additionally copies it to `~/.local/bin`. Both report `dev`, since no release produced them, and a `dev` binary neither reports skew nor is nagged about it.
 
 ```
 prdesk login --host https://prdesk.example.com   # add --write to allow state changes

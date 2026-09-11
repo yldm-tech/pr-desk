@@ -34,6 +34,11 @@ func callTool(stored credentials, name string, arguments map[string]any) ([]byte
 		return nil, errors.New("cannot reach " + stored.Host + ": " + err.Error())
 	}
 	defer session.Close()
+	// Initialization is the only place the server names its release, so the skew
+	// check rides along with work the caller already asked for.
+	if initialized := session.InitializeResult(); initialized != nil && initialized.ServerInfo != nil {
+		noticeServerVersion(initialized.ServerInfo.Version)
+	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
 	if err != nil {
 		return nil, err
