@@ -166,18 +166,16 @@ func runLogin(args []string) error {
 			return
 		}
 		if problem := r.URL.Query().Get("error"); problem != "" {
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_, _ = w.Write([]byte("Authorization was declined. You can close this tab."))
+			writeResultPage(w, http.StatusOK, declinedView)
 			results <- result{err: errors.New("authorization was declined: " + problem)}
 			return
 		}
 		if r.URL.Query().Get("state") != state {
-			http.Error(w, "unexpected state", http.StatusBadRequest)
+			writeResultPage(w, http.StatusBadRequest, mismatchView)
 			results <- result{err: errors.New("the redirect did not carry the expected state; the login was abandoned")}
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("PR Desk is now authorized. You can close this tab."))
+		writeResultPage(w, http.StatusOK, authorizedView)
 		results <- result{code: r.URL.Query().Get("code")}
 	})}
 	go func() { _ = server.Serve(listener) }()
