@@ -20,11 +20,20 @@ function SettingsForm({ settings }: { settings: Settings }) {
       .map(([repo, value]) => `${repo}=${value}`)
       .join("\n"),
   );
-  const destinations = useQuery({queryKey:["notification-destinations"], queryFn:()=>ky.get(apiURL+"/api/v1/notification-destinations",{credentials:"include"}).json<{data:{id:number;name:string;enabled:boolean}[]}>(), retry:false});
-  const [telegram, setTelegram] = useState({name:"",token:"",chat_id:""});
-  const addDestination = useMutation({mutationFn:()=>ky.post(apiURL+"/api/v1/notification-destinations",{credentials:"include",json:{name:telegram.name,token:telegram.token,chat_id:Number(telegram.chat_id)}}),onSuccess:()=>{setTelegram({name:"",token:"",chat_id:""});void client.invalidateQueries({queryKey:["notification-destinations"]});}});
-  const updateDestination = useMutation({mutationFn:(d:{id:number;name:string;enabled:boolean})=>ky.put(apiURL+`/api/v1/notification-destinations/${d.id}`,{credentials:"include",json:{name:d.name,enabled:!d.enabled}}),onSuccess:()=>void client.invalidateQueries({queryKey:["notification-destinations"]})});
-  const deleteDestination = useMutation({mutationFn:(id:number)=>ky.delete(apiURL+`/api/v1/notification-destinations/${id}`,{credentials:"include"}),onSuccess:()=>void client.invalidateQueries({queryKey:["notification-destinations"]})});
+  const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: () => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include" }).json<{ data: { id: number; name: string; enabled: boolean }[] }>(), retry: false });
+  const [telegram, setTelegram] = useState({ name: "", token: "", chat_id: "" });
+  const addDestination = useMutation({
+    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: { name: telegram.name, token: telegram.token, chat_id: Number(telegram.chat_id) } }),
+    onSuccess: () => {
+      setTelegram({ name: "", token: "", chat_id: "" });
+      void client.invalidateQueries({ queryKey: ["notification-destinations"] });
+    },
+  });
+  const updateDestination = useMutation({
+    mutationFn: (d: { id: number; name: string; enabled: boolean }) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", json: { name: d.name, enabled: !d.enabled } }),
+    onSuccess: () => void client.invalidateQueries({ queryKey: ["notification-destinations"] }),
+  });
+  const deleteDestination = useMutation({ mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include" }), onSuccess: () => void client.invalidateQueries({ queryKey: ["notification-destinations"] }) });
   const teams = useQuery({
     queryKey: ["review-teams"],
     queryFn: ({ signal }) =>
@@ -61,7 +70,13 @@ function SettingsForm({ settings }: { settings: Settings }) {
       }}
     >
       <div className="followup-setting-fields">
-        <label>Notification language<select value={language} onChange={e=>setLanguage(e.target.value as "en"|"zh-CN")}><option value="en">English</option><option value="zh-CN">简体中文</option></select></label>
+        <label>
+          Notification language
+          <select value={language} onChange={(e) => setLanguage(e.target.value as "en" | "zh-CN")}>
+            <option value="en">English</option>
+            <option value="zh-CN">简体中文</option>
+          </select>
+        </label>
         <label>
           {t("followup.timezone")}
           <input value={timezone} onChange={(e) => setTimezone(e.target.value)} required placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone} />
@@ -104,7 +119,28 @@ function SettingsForm({ settings }: { settings: Settings }) {
       <button className="secondary-action" type="submit" disabled={mutation.isPending}>
         {t("followup.save")}
       </button>
-      <fieldset><legend>Telegram notifications</legend><div className="followup-setting-fields"><input aria-label="Telegram name" placeholder="Name" value={telegram.name} onChange={e=>setTelegram({...telegram,name:e.target.value})}/><input aria-label="Telegram bot token" placeholder="Bot token" value={telegram.token} onChange={e=>setTelegram({...telegram,token:e.target.value})}/><input aria-label="Telegram chat ID" placeholder="Chat ID" value={telegram.chat_id} onChange={e=>setTelegram({...telegram,chat_id:e.target.value})}/><button type="button" onClick={()=>addDestination.mutate()} disabled={addDestination.isPending}>Add</button></div>{destinations.data?.data.map(d=><div key={d.id}>{d.name} · {d.enabled?"enabled":"disabled"} <button type="button" onClick={()=>updateDestination.mutate(d)}>{d.enabled?"Disable":"Enable"}</button> <button type="button" onClick={()=>deleteDestination.mutate(d.id)}>Delete</button></div>)}</fieldset>
+      <fieldset>
+        <legend>Telegram notifications</legend>
+        <div className="followup-setting-fields">
+          <input aria-label="Telegram name" placeholder="Name" value={telegram.name} onChange={(e) => setTelegram({ ...telegram, name: e.target.value })} />
+          <input aria-label="Telegram bot token" placeholder="Bot token" value={telegram.token} onChange={(e) => setTelegram({ ...telegram, token: e.target.value })} />
+          <input aria-label="Telegram chat ID" placeholder="Chat ID" value={telegram.chat_id} onChange={(e) => setTelegram({ ...telegram, chat_id: e.target.value })} />
+          <button type="button" onClick={() => addDestination.mutate()} disabled={addDestination.isPending}>
+            Add
+          </button>
+        </div>
+        {destinations.data?.data.map((d) => (
+          <div key={d.id}>
+            {d.name} · {d.enabled ? "enabled" : "disabled"}{" "}
+            <button type="button" onClick={() => updateDestination.mutate(d)}>
+              {d.enabled ? "Disable" : "Enable"}
+            </button>{" "}
+            <button type="button" onClick={() => deleteDestination.mutate(d.id)}>
+              Delete
+            </button>
+          </div>
+        ))}
+      </fieldset>
     </form>
   );
 }

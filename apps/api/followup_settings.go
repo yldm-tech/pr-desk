@@ -61,6 +61,11 @@ func (s *Server) saveFollowUpSettings(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Choose an IANA timezone"})
 		return
 	}
+	// Existing clients predate the notification-language field. Keep their
+	// settings writes valid and use the same default as newly created accounts.
+	if input.Language == "" {
+		input.Language = "en"
+	}
 	if _, err := time.Parse("15:04", input.DigestTime); err != nil || len(input.DigestTime) != 5 || input.WaitDays < 1 || input.WaitDays > 365 || len(input.Teams) > 50 || len(input.RepositoryDays) > 200 || (input.Language != "en" && input.Language != "zh-CN") {
 		c.JSON(400, gin.H{"error": "Invalid schedule"})
 		return
