@@ -3,8 +3,10 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -73,5 +75,36 @@ func TestOAuthCookieSecurityBehindProxy(t *testing.T) {
 				t.Fatalf("unexpected OAuth cookie flags: %v", cookies)
 			}
 		})
+	}
+}
+
+// The destination controls call PUT and DELETE. A preflight that omits them
+// disables enabling, disabling and removing a destination from any origin that
+// is not the API's own.
+func TestCORSPreflightCoversEveryRoutedMethod(t *testing.T) {
+	t.Setenv("WEB_ORIGIN", "https://desk.example.com")
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(cors.New(corsPolicy()))
+	preflight := func(origin, method string) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(http.MethodOptions, "/api/v1/notification-destinations/1", nil)
+		request.Header.Set("Origin", origin)
+		request.Header.Set("Access-Control-Request-Method", method)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, request)
+		return w
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
+		w := preflight("https://desk.example.com", method)
+		allowed := w.Header().Get("Access-Control-Allow-Methods")
+		if !strings.Contains(allowed, method) {
+			t.Fatalf("%s refused by preflight, allowed: %q", method, allowed)
+		}
+		if w.Header().Get("Access-Control-Allow-Credentials") != "true" {
+			t.Fatalf("%s preflight does not carry credentials", method)
+		}
+	}
+	if w := preflight("https://attacker.example.com", http.MethodPut); w.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("a foreign origin was granted access", w.Header())
 	}
 }

@@ -160,7 +160,7 @@ func main() {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 		c.Next()
 	})
-	r.Use(cors.New(cors.Config{AllowOrigins: []string{webOrigin()}, AllowCredentials: true, AllowHeaders: []string{"Content-Type", "Authorization"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}}))
+	r.Use(cors.New(corsPolicy()))
 	r.Use(requireMutationOrigin)
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
