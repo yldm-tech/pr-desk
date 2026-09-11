@@ -300,6 +300,8 @@ func printSyncStatus(body []byte) error {
 		Phase          string `json:"phase"`
 		Completed      int    `json:"completed"`
 		Total          int    `json:"total"`
+		ReportedAt     string `json:"reported_at"`
+		ReportedAgeMin int    `json:"reported_age_minutes"`
 		LastSyncedAt   string `json:"last_synced_at"`
 		StaleMinutes   int    `json:"stale_minutes"`
 		NextAutoSyncAt string `json:"next_auto_sync_at"`
@@ -310,7 +312,11 @@ func printSyncStatus(body []byte) error {
 		return err
 	}
 	table := newTable()
-	fmt.Fprintf(table, "Status\t%s\n", payload.Status)
+	status := payload.Status
+	if payload.ReportedAt != "" {
+		status += fmt.Sprintf("  (reported %s ago)", humanMinutes(payload.ReportedAgeMin))
+	}
+	fmt.Fprintf(table, "Status\t%s\n", status)
 	if payload.Total > 0 {
 		fmt.Fprintf(table, "Progress\t%s %d/%d\n", payload.Phase, payload.Completed, payload.Total)
 	}

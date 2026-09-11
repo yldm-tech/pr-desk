@@ -27,4 +27,12 @@ Configure application secrets in the deployment environment, never in build argu
 
 The production frontend uses same-origin `/api` requests, so the image works at different hostnames without rebuilding. There is no separate web image or Nginx service. `VITE_API_URL` can override this for custom builds; local Vite development defaults to `http://localhost:8081`. `make production` runs this architecture locally.
 
-This pipeline publishes deployable images; it does not modify a deployment repository or deploy to a cluster. Operators can consume explicit image versions through their own deployment process.
+## Deployment
+
+Nothing in this repository deploys. The images it publishes are nonetheless picked up automatically, so merging to main ships to production without anyone acting.
+
+`argocd-image-updater` watches `ghcr.io/yldm-tech/pr-desk` and commits the new version to `yldm-tech/yldm-platform` under `infra/k8s/applications/app/pr-desk`. Argo CD serves that path as the `app-pr-desk` application with automated sync, self-heal and prune, so the commit rolls the `app/app-pr-desk` deployment without anyone acting. Observed end to end, a release published at 17:29:47Z reached a running pod at 17:30:51Z — about one minute.
+
+The deployment carries `reloader.stakater.com/auto`, so a configuration change restarts it as well.
+
+That path is owned by the platform repository and can change without a change here. Confirm what is actually running rather than inferring it from a release: `kubectl get pod -n app -l app=pr-desk -o jsonpath='{.items[*].spec.containers[*].image}'`. Rolling back means pinning the previous version in the platform repository, not reverting here.

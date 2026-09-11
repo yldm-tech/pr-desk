@@ -449,6 +449,8 @@ type syncStatusOutput struct {
 	Phase          string `json:"phase,omitempty"`
 	Completed      int    `json:"completed"`
 	Total          int    `json:"total"`
+	ReportedAt     string `json:"reported_at,omitempty" jsonschema:"When this status was written. A failure survives a restart, so an old timestamp means the failure belongs to a run that is already over"`
+	ReportedAgeMin int    `json:"reported_age_minutes" jsonschema:"Age of the status itself in minutes, which is not the age of the data"`
 	LastSyncedAt   string `json:"last_synced_at,omitempty" jsonschema:"When the last full synchronization finished; absent until the first one completes"`
 	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive"`
 	NextAutoSyncAt string `json:"next_auto_sync_at,omitempty"`
@@ -486,6 +488,16 @@ func (s *Server) mcpSyncStatus(ctx context.Context, _ *mcp.CallToolRequest, _ st
 	out := syncStatusOutput{
 		Status: progress.Status, Phase: progress.Phase, Completed: progress.Completed, Total: progress.Total,
 		Baseline: settings.BaselineAt != nil, ErrorCode: progress.ErrorCode,
+	}
+	// The progress record outlives the process that wrote it, so a failure from a
+	// run that ended before the last restart reads exactly like one happening
+	// now. Without this timestamp the only way to tell them apart is the browser
+	// API, which a bearer client cannot reach.
+	if !progress.UpdatedAt.IsZero() {
+		out.ReportedAt = progress.UpdatedAt.UTC().Format(time.RFC3339)
+		if minutes := int(now.Sub(progress.UpdatedAt).Minutes()); minutes > 0 {
+			out.ReportedAgeMin = minutes
+		}
 	}
 	if token.HistorySyncedAt != nil {
 		out.LastSyncedAt = token.HistorySyncedAt.UTC().Format(time.RFC3339)

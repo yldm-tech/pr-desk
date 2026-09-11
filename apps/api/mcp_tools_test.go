@@ -292,6 +292,72 @@ func TestSyncStatusReportsFreshness(t *testing.T) {
 	}
 }
 
+// The progress record outlives the process that wrote it, so a failure keeps
+// being reported after the run that caused it is gone. Without the timestamp a
+// caller cannot tell that from a failure happening right now, and the only
+// other source is the browser API a bearer client cannot reach.
+func TestSyncStatusDatesTheVerdictSeparatelyFromTheData(t *testing.T) {
+	s, session, _ := mcpFixture(t, "mcp-reported")
+	// Data synced an hour ago; the failure verdict written three hours ago, so
+	// it predates the successful sync and belongs to a run that is over.
+	synced := time.Now().UTC().Add(-60 * time.Minute)
+	reported := time.Now().UTC().Add(-180 * time.Minute)
+	progress, err := json.Marshal(syncProgress{Status: "failed", Phase: "details", Completed: 56, Total: 56, ErrorCode: "storage", UpdatedAt: reported})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-reported").Updates(map[string]any{"history_synced_at": synced, "sync_progress": string(progress)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Status         string `json:"status"`
+		ErrorCode      string `json:"error_code"`
+		ReportedAt     string `json:"reported_at"`
+		ReportedAgeMin int    `json:"reported_age_minutes"`
+		StaleMinutes   int    `json:"stale_minutes"`
+	}
+	callStructured(t, session, "get_sync_status", map[string]any{}, &status)
+	if status.Status != "failed" || status.ErrorCode != "storage" {
+		t.Fatalf("the stored verdict was not reported: %+v", status)
+	}
+	if status.ReportedAt == "" {
+		t.Fatal("the verdict has no timestamp, so a stale failure reads as a current one")
+	}
+	if status.ReportedAgeMin < 175 || status.ReportedAgeMin > 185 {
+		t.Fatalf("the verdict age is wrong: %d minutes", status.ReportedAgeMin)
+	}
+	// The two clocks answer different questions and must not collapse into one.
+	if status.StaleMinutes < 55 || status.StaleMinutes > 65 {
+		t.Fatalf("the data age is wrong: %d minutes", status.StaleMinutes)
+	}
+	if status.ReportedAgeMin <= status.StaleMinutes {
+		t.Fatal("the verdict is reported as newer than the data it supposedly describes")
+	}
+}
+
+// A run still reporting is not stale, and its verdict is current.
+func TestSyncStatusReportsARunningSyncAsCurrent(t *testing.T) {
+	s, session, _ := mcpFixture(t, "mcp-running")
+	progress, err := json.Marshal(syncProgress{Status: "running", Phase: "details", Completed: 4, Total: 10, UpdatedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-running").Update("sync_progress", string(progress)).Error; err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Status         string `json:"status"`
+		ReportedAgeMin int    `json:"reported_age_minutes"`
+	}
+	callStructured(t, session, "get_sync_status", map[string]any{}, &status)
+	if status.Status != "running" {
+		t.Fatalf("a live run was not reported as running: %+v", status)
+	}
+	if status.ReportedAgeMin != 0 {
+		t.Fatalf("a verdict written now is not current: %d minutes", status.ReportedAgeMin)
+	}
+}
+
 func TestListPullRequestsFiltersByStateAndRole(t *testing.T) {
 	_, session, _ := mcpFixture(t, "mcp-prs")
 	var open struct {

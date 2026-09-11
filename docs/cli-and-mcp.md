@@ -40,7 +40,7 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 | `list_follow_ups` | read | Filter by state, role, repository, reason, unread or minimum waiting days; sort by longest wait |
 | `get_follow_up` | read | One follow-up with its stored comment thread rather than the truncated excerpt |
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
-| `get_sync_status` | read | How old the data is, so an empty result can be judged |
+| `get_sync_status` | read | How old the data is and how old that verdict is, so an empty result can be judged |
 | `list_pull_requests` | read | Search synchronized pull requests by repository, title, state or role |
 | `list_repositories` | read | Per-repository open, attention and conflict counts |
 | `mark_follow_up_read` | write | Does not mark the work handled |
@@ -55,6 +55,14 @@ Every write tool takes the `version` returned by the listing. If new activity ar
 `checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names the runs behind anything that is not green, failures first.
 
 `inconclusive` means every run that did not pass was cancelled or marked stale — superseded by a newer push, stopped by a concurrency group, or otherwise abandoned. GitHub renders those as a red cross and its own API reports them next to real failures, but they decided nothing about the code, so they do not raise a `checks_failed` follow-up. A genuine failure, a timeout, a startup failure or a run awaiting manual action all still count as `failure`.
+
+### Reading the sync status
+
+Two clocks answer different questions, and confusing them has already cost an investigation.
+
+`stale_minutes` is the age of the **data**: how long ago the last full synchronization finished. `reported_age_minutes` is the age of the **verdict**: how long ago that status was written.
+
+The progress record is stored on the account and outlives the process that wrote it. A failure therefore survives a restart or a redeploy, and keeps being reported until the next run overwrites it. A `failed` status whose `reported_at` predates the current deployment belongs to a run that is already over; the next scheduled sync will replace it. Only a failure reported after the last restart is a live problem.
 
 ## Waiting time
 
