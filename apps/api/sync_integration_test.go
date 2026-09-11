@@ -61,12 +61,27 @@ func TestSyncFailedDetailsPreserveStoredState(t *testing.T) {
 	}
 }
 
+// TEST_DATABASE_URL is a URL in CI and a keyword string on a developer machine,
+// and the two take an extra parameter differently. Appending the keyword form
+// to a URL swallows it into the preceding value, which reads as an invalid
+// sslmode rather than as a malformed parameter.
+func withSearchPath(dsn, schema string) string {
+	if !strings.Contains(dsn, "://") {
+		return dsn + " search_path=" + schema
+	}
+	if strings.Contains(dsn, "?") {
+		return dsn + "&search_path=" + schema
+	}
+	return dsn + "?search_path=" + schema
+}
+
 // integrationDB hands back a transaction, which is one connection. Anything
 // that runs concurrent database work — the details phase starts four goroutines
 // — deadlocks or errors on that single connection, so those tests need a real
 // pool instead. Isolation moves from the rolled-back transaction to a schema
 // dropped on cleanup; search_path reaches every pooled connection because pgx
-// sends an unrecognized DSN keyword as a startup runtime parameter.
+// turns an unrecognized parameter of either form into a startup runtime
+// parameter.
 func integrationPoolDB(t *testing.T) *gorm.DB {
 	unthrottledHistory(t)
 	t.Helper()
@@ -87,7 +102,7 @@ func integrationPoolDB(t *testing.T) *gorm.DB {
 	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
 		t.Fatal(err)
 	}
-	db, err := gorm.Open(postgres.Open(dsn+" search_path="+schema), silent)
+	db, err := gorm.Open(postgres.Open(withSearchPath(dsn, schema)), silent)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,4 +154,21 @@ func integrationDB(t *testing.T) *gorm.DB {
 	}
 
 	return tx
+}
+
+// The fixture built its connection string by concatenation and only ever saw
+// the keyword form locally, so the URL form CI passes went unnoticed until it
+// failed there.
+func TestWithSearchPathHandlesBothDSNForms(t *testing.T) {
+	for _, tc := range []struct{ name, dsn, want string }{
+		{"keyword", "host=127.0.0.1 user=x sslmode=disable", "host=127.0.0.1 user=x sslmode=disable search_path=s"},
+		{"url with query", "postgres://x@127.0.0.1:5432/db?sslmode=disable", "postgres://x@127.0.0.1:5432/db?sslmode=disable&search_path=s"},
+		{"url without query", "postgres://x@127.0.0.1:5432/db", "postgres://x@127.0.0.1:5432/db?search_path=s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := withSearchPath(tc.dsn, "s"); got != tc.want {
+				t.Fatalf("got %q, wanted %q", got, tc.want)
+			}
+		})
+	}
 }
