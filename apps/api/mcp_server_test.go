@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -188,4 +189,42 @@ func toolText(result *mcp.CallToolResult) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// A client resolves the metadata URL by appending the resource's path to the
+// well-known prefix (RFC 9728). Serving only the bare prefix let that request
+// fall through to the single-page app, so the client parsed HTML as JSON and
+// reported an authentication failure with nothing to act on.
+func TestMetadataIsServedAtThePathFormClientsDerive(t *testing.T) {
+	t.Setenv("WEB_ORIGIN", "https://prdesk.example.com")
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	s := &Server{}
+	r.GET("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
+	r.GET("/.well-known/oauth-protected-resource/*resource", s.protectedResourceMetadata)
+	r.GET("/.well-known/oauth-authorization-server", s.authorizationServerMetadata)
+	r.GET("/.well-known/oauth-authorization-server/*resource", s.authorizationServerMetadata)
+
+	for _, path := range []string{
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-protected-resource/api/v1/mcp",
+		"/.well-known/oauth-authorization-server",
+		"/.well-known/oauth-authorization-server/api/v1/mcp",
+	} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s answered %d", path, w.Code)
+		}
+		if !strings.Contains(w.Header().Get("Content-Type"), "application/json") {
+			t.Fatalf("%s is not JSON: %s", path, w.Header().Get("Content-Type"))
+		}
+		var document map[string]any
+		if json.Unmarshal(w.Body.Bytes(), &document) != nil {
+			t.Fatalf("%s did not return a JSON document: %s", path, w.Body.String())
+		}
+		if document["resource"] == nil && document["issuer"] == nil {
+			t.Fatalf("%s carries neither a resource nor an issuer: %s", path, w.Body.String())
+		}
+	}
 }

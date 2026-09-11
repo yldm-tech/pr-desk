@@ -297,3 +297,32 @@ func TestRevokingATokenStopsItImmediately(t *testing.T) {
 		t.Fatal("a revoked token still verifies")
 	}
 }
+
+// Claude Code and most other clients register http://localhost:PORT/callback.
+// Refusing it made dynamic registration fail before the user ever saw a consent
+// page, which surfaced only as "auth failed" in the client.
+func TestRegistrationAcceptsTheLoopbackNamesClientsActuallyUse(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	db := integrationDB(t)
+	s := &Server{db: db}
+	r := oauthRouter(s)
+	register := func(redirect string) int {
+		body := `{"client_name":"Client","redirect_uris":["` + redirect + `"]}`
+		request := httptest.NewRequest(http.MethodPost, "/oauth/register", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, request)
+		return w.Code
+	}
+	for _, redirect := range []string{"http://localhost:53123/callback", "http://127.0.0.1:53123/callback", "http://[::1]:53123/callback"} {
+		if code := register(redirect); code != http.StatusCreated {
+			t.Errorf("%s was refused (%d)", redirect, code)
+		}
+	}
+	// Still not a general-purpose open redirect.
+	for _, redirect := range []string{"http://evil.example.com/callback", "http://localhost.evil.example.com/cb"} {
+		if code := register(redirect); code != http.StatusBadRequest {
+			t.Errorf("%s was accepted (%d)", redirect, code)
+		}
+	}
+}
