@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
     },
     { id: 2, version: 1, role: "reviewer", state: "action", reasons: ["review_requested"], unread: true, excerpt: "", waiting_since: "2026-09-01T00:00:00Z", archived_at: null, pr: { id: 2, repo: "fixture/reviewer", number: 24, title: "Review storage migration", url: "https://github.com/fixture/reviewer/pull/24" } },
   ];
-  const destinations: { id: number; name: string; enabled: boolean }[] = [];
+  const destinations: { id: number; name: string; kind: string; enabled: boolean }[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     let data: unknown = {};
@@ -71,7 +71,7 @@ test.beforeEach(async ({ page }) => {
       case "notification-destinations":
         if (route.request().method() === "POST") {
           const body = route.request().postDataJSON();
-          destinations.push({ id: destinations.length + 1, name: body.name, enabled: true });
+          destinations.push({ id: destinations.length + 1, name: body.name, kind: body.kind || "telegram", enabled: true });
           data = destinations[destinations.length - 1];
         } else data = { data: destinations };
         break;
@@ -165,4 +165,35 @@ test("telegram destination validates the chat ID before calling the API", async 
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.locator(".followup-destination")).toContainText("Team channel");
   await page.screenshot({ path: testInfo.outputPath("followup-settings.png"), fullPage: true });
+});
+
+test("channel selection swaps the destination fields and posts the channel", async ({ page }, testInfo) => {
+  await page.goto("/#/settings");
+  const channel = page.getByLabel("Channel", { exact: true });
+  await channel.selectOption("lark");
+  await expect(page.getByLabel("Bot token", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Name", { exact: true }).fill("Feishu group");
+  await page.getByLabel("Webhook URL", { exact: true }).fill("https://10.0.0.9/hook");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "private network" })).toBeVisible();
+  await page.getByLabel("Webhook URL", { exact: true }).fill("https://open.feishu.cn/open-apis/bot/v2/hook/abc");
+  await page.getByLabel("Signing secret", { exact: true }).fill("sign");
+  const posted = page.waitForRequest((request) => request.url().endsWith("/notification-destinations") && request.method() === "POST");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await posted).postDataJSON()).toMatchObject({ kind: "lark", name: "Feishu group", url: "https://open.feishu.cn/open-apis/bot/v2/hook/abc", secret: "sign" });
+  await expect(page.locator(".followup-destination")).toContainText("Lark / Feishu");
+
+  await channel.selectOption("email");
+  await expect(page.getByLabel("Webhook URL", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Name", { exact: true }).fill("Inbox");
+  await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
+  await page.getByLabel("From address", { exact: true }).fill("desk@example.com");
+  await page.getByLabel("Recipients", { exact: true }).fill("me@example.com, broken-address");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "valid email address" })).toBeVisible();
+  await page.getByLabel("Recipients", { exact: true }).fill("me@example.com, team@example.com");
+  const mailed = page.waitForRequest((request) => request.url().endsWith("/notification-destinations") && request.method() === "POST");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await mailed).postDataJSON()).toMatchObject({ kind: "email", host: "smtp.example.com", port: 587, from: "desk@example.com", to: ["me@example.com", "team@example.com"] });
+  await page.screenshot({ path: testInfo.outputPath("followup-channels.png"), fullPage: true });
 });

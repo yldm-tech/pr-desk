@@ -1,6 +1,6 @@
 # Follow-up workspace: development operations
 
-Account storage, follow-up state, browser settings, Telegram destination management and the production notification worker are implemented on this branch. The checklist in [follow-up-plan.md](follow-up-plan.md) remains the completion authority. Configure at least one destination before expecting delivery.
+Account storage, follow-up state, browser settings, destination management for Telegram, Lark, email and webhooks, and the production notification worker are implemented on this branch. The checklist in [follow-up-plan.md](follow-up-plan.md) remains the completion authority. Configure at least one destination before expecting delivery.
 
 ## Account upgrade
 
@@ -32,4 +32,23 @@ IANA timezone data is embedded into the Go executable with `time/tzdata`, so tim
 
 ## Notification delivery
 
-The outbox implements five-minute event aggregation, per-destination delivery records/retries, a single initial inventory, daily local-time summaries and long-message splitting. Telegram credentials are encrypted at rest and sent through `github.com/nikoksr/notify`; sending never marks tasks read or handled. The worker runs on the background scheduler and retries failures with backoff. Do not send a live test message without explicit authorization.
+The outbox implements five-minute event aggregation, per-destination delivery records/retries, a single initial inventory, daily local-time summaries and long-message splitting. Credentials are encrypted at rest with `TOKEN_ENCRYPTION_KEY`; sending never marks tasks read or handled. The worker runs on the background scheduler and retries failures with backoff. Do not send a live test message without explicit authorization.
+
+## Notification channels
+
+Each destination carries a channel that is fixed when it is created; rebuild the destination to move it to another provider. Destinations stored before channels existed have no channel recorded and are delivered as Telegram.
+
+| Channel | Stored configuration | Notes |
+|---------|----------------------|-------|
+| Telegram | Bot token, numeric chat ID | Delivered through `github.com/nikoksr/notify`. The bot has to be a member of the chat. |
+| Lark / Feishu | Custom bot webhook URL, optional signing secret | Posted directly so that signature verification is supported; the secret signs an empty message with `timestamp\nsecret` as the key. Rejections arrive as an error code inside an HTTP 200 body and are treated as failures. |
+| Email | SMTP host, port, optional user and password, sender, up to twenty recipients | Spoken over SMTP directly. Port 465 uses implicit TLS, every other port upgrades with STARTTLS when the server offers it. Credentials are only presented over an encrypted connection, so a server without TLS has to accept unauthenticated submission. The first line of the notification becomes the subject. |
+| Webhook | URL, optional signing secret | Receives `{destination, subject, text, sent_at}` as JSON. With a secret the request carries `X-PR-Desk-Signature: sha256=<hex>`, an HMAC-SHA256 of the exact body. |
+
+Credentials are write-only. A field left empty when updating a destination keeps the stored value, which is how renaming, enabling and disabling avoid resending secrets.
+
+### Outbound address policy
+
+Destination URLs and SMTP hosts are dialled by the server, so they are restricted to public addresses: loopback, private, carrier-grade NAT, link-local and multicast ranges are refused, and webhook URLs have to use https. The check runs on the address the connection actually reaches, so a hostname that later resolves into the private network or a redirect towards it is refused as well; redirects are not followed.
+
+Set `NOTIFY_ALLOW_PRIVATE_HOSTS=true` to reach an internal receiver. It also permits plain http, since internal endpoints rarely carry certificates. Enable it only when every account holder on the deployment is trusted to choose an outbound address: it allows anyone who can sign in to make the server issue requests inside your network.

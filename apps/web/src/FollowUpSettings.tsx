@@ -8,7 +8,66 @@ import { apiURL } from "./api-url";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
-type Destination = { id: number; name: string; enabled: boolean };
+const channels = ["telegram", "lark", "email", "webhook"] as const;
+type Channel = (typeof channels)[number];
+type Destination = { id: number; name: string; kind: Channel; enabled: boolean };
+const emptyDraft = { kind: "telegram" as Channel, name: "", token: "", chat_id: "", url: "", secret: "", host: "", port: "587", username: "", password: "", from: "", to: "" };
+type Draft = typeof emptyDraft;
+const channelLabel = (kind: string) => `followup.channel${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const recipientList = (value: string) =>
+  value
+    .split(/[,\n;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+// The server refuses to dial private addresses, so the same families are
+// reported in the form instead of after a failed delivery attempt.
+function isPrivateHost(value: string) {
+  let host = value.trim().toLowerCase();
+  try {
+    host = new URL(host).hostname;
+  } catch {
+    /* A bare host name is checked as typed. */
+  }
+  host = host.replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host === "::1") return true;
+  const parts = host.split(".");
+  if (parts.length !== 4 || parts.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const [first, second] = parts.map(Number);
+  return first === 0 || first === 10 || first === 127 || (first === 100 && second >= 64 && second <= 127) || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+}
+
+function draftErrors(draft: Draft): Record<string, string> {
+  const found: Record<string, string> = {};
+  if (!draft.name.trim()) found.name = "followup.required";
+  if (draft.kind === "telegram") {
+    if (!draft.token.trim()) found.token = "followup.required";
+    if (!/^-?\d+$/.test(draft.chat_id.trim())) found.chat_id = "followup.chatIdInvalid";
+  }
+  if (draft.kind === "lark" || draft.kind === "webhook") {
+    const url = draft.url.trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) found.url = "followup.invalidUrl";
+    else if (isPrivateHost(url)) found.url = "followup.privateUrl";
+  }
+  if (draft.kind === "email") {
+    if (!draft.host.trim()) found.host = "followup.required";
+    else if (isPrivateHost(draft.host)) found.host = "followup.privateUrl";
+    const port = Number(draft.port.trim());
+    if (draft.port.trim() && !(Number.isInteger(port) && port >= 1 && port <= 65535)) found.port = "followup.invalidPort";
+    if (!emailPattern.test(draft.from.trim())) found.from = "followup.invalidEmail";
+    const recipients = recipientList(draft.to);
+    if (!recipients.length || recipients.some((entry) => !emailPattern.test(entry))) found.to = "followup.invalidEmail";
+  }
+  return found;
+}
+
+function destinationPayload(draft: Draft) {
+  const base = { kind: draft.kind, name: draft.name.trim() };
+  if (draft.kind === "telegram") return { ...base, token: draft.token.trim(), chat_id: Number(draft.chat_id.trim()) };
+  if (draft.kind === "email") return { ...base, host: draft.host.trim(), port: Number(draft.port.trim()) || 587, username: draft.username.trim(), password: draft.password, from: draft.from.trim(), to: recipientList(draft.to) };
+  return { ...base, url: draft.url.trim(), secret: draft.secret.trim() };
+}
 type ControlProps = { id: string; "aria-describedby": string | undefined; "aria-invalid": true | undefined };
 
 // The zone list keeps the free-text IANA field autocompletable; older engines simply get no suggestions.
@@ -222,16 +281,23 @@ function SettingsForm({ settings }: { settings: Settings }) {
 function NotificationDestinations() {
   const { t } = useTranslation();
   const client = useQueryClient();
-  const [telegram, setTelegram] = useState({ name: "", token: "", chat_id: "" });
-  const [errors, setErrors] = useState({ name: false, token: false, chat_id: false });
+  const [draft, setDraft] = useState(emptyDraft);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(0);
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
   const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[] }>(), retry: false });
   const addDestination = useMutation({
-    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: { name: telegram.name.trim(), token: telegram.token.trim(), chat_id: Number(telegram.chat_id.trim()) } }),
+    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: destinationPayload(draft) }),
     onSuccess: () => {
-      setTelegram({ name: "", token: "", chat_id: "" });
+      setDraft({ ...emptyDraft, kind: draft.kind });
       invalidate();
+    },
+  });
+  const field = (key: keyof Draft) => ({
+    value: draft[key],
+    onChange: (event: { target: { value: string } }) => {
+      setDraft({ ...draft, [key]: event.target.value });
+      if (errors[key]) setErrors({ ...errors, [key]: "" });
     },
   });
   const updateDestination = useMutation({ mutationFn: (d: Destination) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", json: { name: d.name, enabled: !d.enabled } }), onSuccess: invalidate });
@@ -247,8 +313,8 @@ function NotificationDestinations() {
     <section className="followup-settings" aria-labelledby="notification-destinations-heading">
       <div className="followup-settings-group">
         <div className="followup-settings-heading">
-          <h2 id="notification-destinations-heading">{t("followup.telegram")}</h2>
-          <p>{t("followup.telegramHelp")}</p>
+          <h2 id="notification-destinations-heading">{t("followup.notifications")}</h2>
+          <p>{t("followup.notificationsHelp")}</p>
         </div>
         <form
           className="followup-destination-form"
@@ -257,51 +323,74 @@ function NotificationDestinations() {
           }}
           onSubmit={(event) => {
             event.preventDefault();
-            const next = { name: !telegram.name.trim(), token: !telegram.token.trim(), chat_id: !/^-?\d+$/.test(telegram.chat_id.trim()) };
-            setErrors(next);
-            if (next.name || next.token || next.chat_id) return;
+            const found = draftErrors(draft);
+            setErrors(found);
+            if (Object.values(found).some(Boolean)) return;
             addDestination.mutate();
           }}
         >
-          <Field label={t("followup.destinationName")} hint={t("followup.destinationNameHelp")} error={errors.name ? t("followup.required") : undefined}>
+          <Field label={t("followup.channel")}>
             {(props) => (
-              <input
+              <select
                 {...props}
-                value={telegram.name}
+                value={draft.kind}
                 onChange={(e) => {
-                  setTelegram({ ...telegram, name: e.target.value });
-                  setErrors({ ...errors, name: false });
+                  setDraft({ ...emptyDraft, name: draft.name, kind: e.target.value as Channel });
+                  setErrors({});
                 }}
-              />
+              >
+                {channels.map((channel) => (
+                  <option key={channel} value={channel}>
+                    {t(channelLabel(channel))}
+                  </option>
+                ))}
+              </select>
             )}
           </Field>
-          <Field label={t("followup.chatId")} hint={t("followup.chatIdHelp")} error={errors.chat_id ? t("followup.chatIdInvalid") : undefined}>
-            {(props) => (
-              <input
-                {...props}
-                inputMode="numeric"
-                value={telegram.chat_id}
-                onChange={(e) => {
-                  setTelegram({ ...telegram, chat_id: e.target.value });
-                  setErrors({ ...errors, chat_id: false });
-                }}
-              />
-            )}
+          <Field label={t("followup.destinationName")} hint={t("followup.destinationNameHelp")} error={errors.name ? t(errors.name) : undefined}>
+            {(props) => <input {...props} {...field("name")} />}
           </Field>
-          <Field label={t("followup.botToken")} hint={t("followup.botTokenHelp")} error={errors.token ? t("followup.required") : undefined} wide>
-            {(props) => (
-              <input
-                {...props}
-                type="password"
-                autoComplete="off"
-                value={telegram.token}
-                onChange={(e) => {
-                  setTelegram({ ...telegram, token: e.target.value });
-                  setErrors({ ...errors, token: false });
-                }}
-              />
-            )}
-          </Field>
+          <p className="followup-settings-note followup-field-wide">{t(`followup.${draft.kind}Help`)}</p>
+          {draft.kind === "telegram" && (
+            <>
+              <Field label={t("followup.chatId")} hint={t("followup.chatIdHelp")} error={errors.chat_id ? t(errors.chat_id) : undefined}>
+                {(props) => <input {...props} {...field("chat_id")} inputMode="numeric" />}
+              </Field>
+              <Field label={t("followup.botToken")} hint={t("followup.botTokenHelp")} error={errors.token ? t(errors.token) : undefined}>
+                {(props) => <input {...props} {...field("token")} type="password" autoComplete="off" />}
+              </Field>
+            </>
+          )}
+          {(draft.kind === "lark" || draft.kind === "webhook") && (
+            <>
+              <Field label={t("followup.webhookUrl")} hint={t("followup.webhookUrlHelp")} error={errors.url ? t(errors.url) : undefined} wide>
+                {(props) => <input {...props} {...field("url")} inputMode="url" placeholder="https://" />}
+              </Field>
+              <Field label={t("followup.signingSecret")} hint={t("followup.signingSecretHelp")} wide>
+                {(props) => <input {...props} {...field("secret")} type="password" autoComplete="off" />}
+              </Field>
+            </>
+          )}
+          {draft.kind === "email" && (
+            <>
+              <Field label={t("followup.smtpHost")} error={errors.host ? t(errors.host) : undefined}>
+                {(props) => <input {...props} {...field("host")} placeholder="smtp.example.com" />}
+              </Field>
+              <Field label={t("followup.smtpPort")} hint={t("followup.smtpPortHelp")} error={errors.port ? t(errors.port) : undefined}>
+                {(props) => <input {...props} {...field("port")} inputMode="numeric" />}
+              </Field>
+              <Field label={t("followup.smtpUsername")} hint={t("followup.smtpUsernameHelp")}>
+                {(props) => <input {...props} {...field("username")} autoComplete="off" />}
+              </Field>
+              <Field label={t("followup.smtpPassword")}>{(props) => <input {...props} {...field("password")} type="password" autoComplete="off" />}</Field>
+              <Field label={t("followup.emailFrom")} error={errors.from ? t(errors.from) : undefined}>
+                {(props) => <input {...props} {...field("from")} inputMode="email" />}
+              </Field>
+              <Field label={t("followup.emailTo")} hint={t("followup.emailToHelp")} error={errors.to ? t(errors.to) : undefined}>
+                {(props) => <input {...props} {...field("to")} inputMode="email" />}
+              </Field>
+            </>
+          )}
           <div className="followup-destination-actions">
             <button className="secondary-action" type="submit" disabled={addDestination.isPending}>
               <Plus size={15} aria-hidden="true" />
@@ -328,6 +417,7 @@ function NotificationDestinations() {
             {rows.map((destination) => (
               <li key={destination.id} className="followup-destination">
                 <strong>{destination.name}</strong>
+                <span className="followup-destination-kind">{t(channelLabel(destination.kind || "telegram"))}</span>
                 {confirming === destination.id ? (
                   <>
                     <span className="followup-destination-confirm">{t("followup.confirmRemove")}</span>

@@ -58,7 +58,7 @@ func (s *Server) processNotificationOutbox(ctx context.Context) {
 			continue
 		}
 		for i := 0; i < 100; i++ {
-			claimed, err := s.deliverOneNotification(ctx, now, sendTelegramNotification)
+			claimed, err := s.deliverOneNotification(ctx, now, sendNotification)
 			if err != nil || !claimed {
 				break
 			}
