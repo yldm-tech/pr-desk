@@ -65,6 +65,9 @@ test.beforeEach(async ({ page }) => {
       case "follow-up-settings":
         data = route.request().method() === "POST" ? { saved: true } : { timezone: "Asia/Tokyo", digest_time: "09:00", wait_days: 7, teams: [], repository_days: {} };
         break;
+      case "api-tokens":
+        data = { data: [{ id: 1, name: "PR Desk CLI", client_id: "prdesk", scopes: ["followups:read", "followups:write"], created_at: "2026-09-01T00:00:00Z", expires_at: "2026-12-01T00:00:00Z", last_used_at: "2026-09-10T00:00:00Z" }] };
+        break;
       case "review-teams":
         data = { data: [{ id: "fixture/reviewers", name: "Reviewers" }] };
         break;
@@ -287,4 +290,23 @@ test("a saved review team stays listed when GitHub no longer returns it", async 
   const saved = page.waitForRequest((request) => request.url().endsWith("/follow-up-settings") && request.method() === "POST");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   expect((await saved).postDataJSON()).toMatchObject({ teams: [] });
+});
+
+test("the settings page documents MCP and CLI access", async ({ page }, testInfo) => {
+  await page.goto("/#/settings");
+  const endpoint = page.getByRole("group", { name: "Server URL" });
+  // An absolute URL for this deployment, not a placeholder a user has to edit.
+  const shown = ((await endpoint.locator("code").textContent()) || "").trim();
+  expect(shown).toMatch(/^https?:\/\/\S+\/api\/v1\/mcp$/);
+  await expect(page.getByRole("group", { name: "Client configuration" })).toContainText('"mcpServers"');
+  await expect(page.getByRole("group", { name: "Sign in" })).toContainText("prdesk login --host");
+
+  // An authorized client can be revoked without leaving the page.
+  const token = page.locator(".access-token").filter({ hasText: "PR Desk CLI" });
+  await expect(token).toContainText("Read and write");
+  const revoked = page.waitForRequest((request) => request.url().includes("/api-tokens/1") && request.method() === "DELETE");
+  await token.getByRole("button", { name: "Revoke" }).click();
+  await token.getByRole("button", { name: "Revoke" }).click();
+  await revoked;
+  await page.screenshot({ path: testInfo.outputPath("access-settings.png"), fullPage: true });
 });

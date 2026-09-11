@@ -5,6 +5,7 @@ import { Check, Plus } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
+import { AccessSettings } from "./AccessSettings";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
@@ -494,6 +495,7 @@ export function FollowUpSettings() {
     <div className="followup-settings-page">
       <SettingsForm settings={query.data} />
       <NotificationDestinations />
+      <AccessSettings />
     </div>
   );
 }
