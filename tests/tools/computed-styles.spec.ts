@@ -4,14 +4,13 @@
 // against the state before it:
 //
 //   git worktree add ../base HEAD --detach
-//   (in ../base)  SNAPSHOT_OUT=/tmp/before.json bunx playwright test tests/tools/computed-styles.spec.ts
-//   (in the branch) SNAPSHOT_OUT=/tmp/after.json bunx playwright test tests/tools/computed-styles.spec.ts
+//   bunx playwright test tests/tools/computed-styles.spec.ts | sed -n 's/^SNAPSHOT //p' > before.json
+//   (repeat on the branch, then diff the two files)
 //
 // Two differences are expected and harmless: Tailwind's shadow utility adds
 // transparent ring layers to box-shadow, and outline width and colour keep
 // whatever the user agent had when outline-style is none.
 import { test } from "@playwright/test";
-import { writeFileSync } from "node:fs";
 
 const PROPS = [
   "display",
@@ -86,6 +85,7 @@ test("capture computed styles", async ({ page }) => {
   await page.goto("/#/attention");
   await grab("repository-select", "[aria-label='Filter by repository']");
 
-  writeFileSync(process.env.SNAPSHOT_OUT || "/tmp/styles.json", JSON.stringify(snapshot, null, 1));
-  console.log("captured keys:", Object.keys(snapshot).join(", "));
+  // Printed rather than written: this directory is type-checked without node
+  // types, and a marker line is easy for a shell to pick out of the reporter.
+  console.log("SNAPSHOT " + JSON.stringify(snapshot));
 });
