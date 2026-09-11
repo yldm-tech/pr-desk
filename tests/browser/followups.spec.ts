@@ -190,7 +190,7 @@ test("settings fit a narrow viewport", async ({ page }, testInfo) => {
 });
 
 test("telegram destination validates the chat ID before calling the API", async ({ page }, testInfo) => {
-  await page.goto("/#/settings");
+  await page.goto("/#/settings?tab=notifications");
   await expect(page.getByText("No destinations yet. Reminders stay inside the app.")).toBeVisible();
   let posted = false;
   page.on("request", (request) => {
@@ -209,7 +209,7 @@ test("telegram destination validates the chat ID before calling the API", async 
 });
 
 test("channel selection swaps the destination fields and posts the channel", async ({ page }, testInfo) => {
-  await page.goto("/#/settings");
+  await page.goto("/#/settings?tab=notifications");
   const channel = page.getByLabel("Channel", { exact: true });
   await channel.selectOption("lark");
   await expect(page.getByLabel("Bot token", { exact: true })).toHaveCount(0);
@@ -240,7 +240,7 @@ test("channel selection swaps the destination fields and posts the channel", asy
 });
 
 test("a display name is accepted in email addresses", async ({ page }) => {
-  await page.goto("/#/settings");
+  await page.goto("/#/settings?tab=notifications");
   await page.getByLabel("Channel", { exact: true }).selectOption("email");
   await page.getByLabel("Name", { exact: true }).fill("Inbox");
   await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
@@ -256,7 +256,7 @@ test("private webhook addresses are allowed when the server opts in", async ({ p
     if (route.request().method() === "GET") return route.fulfill({ json: { data: [], allow_private_hosts: true } });
     return route.fulfill({ json: { id: 1, name: "internal", kind: "webhook", enabled: true } });
   });
-  await page.goto("/#/settings");
+  await page.goto("/#/settings?tab=notifications");
   await page.getByLabel("Channel", { exact: true }).selectOption("webhook");
   await page.getByLabel("Name", { exact: true }).fill("internal");
   await page.getByLabel("Webhook URL", { exact: true }).fill("http://10.0.0.9/hooks/pr-desk");
@@ -293,7 +293,7 @@ test("a saved review team stays listed when GitHub no longer returns it", async 
 });
 
 test("the settings page documents MCP and CLI access", async ({ page }, testInfo) => {
-  await page.goto("/#/settings");
+  await page.goto("/#/settings?tab=access");
   const endpoint = page.getByRole("group", { name: "Server URL" });
   // An absolute URL for this deployment, not a placeholder a user has to edit.
   const shown = ((await endpoint.locator("code").textContent()) || "").trim();
@@ -309,6 +309,30 @@ test("the settings page documents MCP and CLI access", async ({ page }, testInfo
   await token.getByRole("button", { name: "Revoke" }).click();
   await revoked;
   await page.screenshot({ path: testInfo.outputPath("access-settings.png"), fullPage: true });
+});
+
+test("the settings tabs are addressable and only render the open one", async ({ page }) => {
+  await page.goto("/#/settings");
+  // The first tab is the default and says so without a parameter of its own.
+  await expect(page.getByRole("tab", { name: "Reminders" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Agent access" }).click();
+  await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toHaveCount(0);
+  // Opening a tab has to survive a reload and be worth linking to.
+  expect(new URL(page.url()).hash).toContain("tab=access");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toBeVisible();
+
+  // A closed panel must not keep occupying space in the open one's layout.
+  const gap = await page.evaluate(() => {
+    const strip = document.querySelector('[role="tablist"]')!.getBoundingClientRect();
+    const open = document.querySelector('[role="tabpanel"]:not([hidden])')!.getBoundingClientRect();
+    return Math.round(open.top - strip.bottom);
+  });
+  expect(gap).toBeLessThanOrEqual(24);
 });
 
 test("a card action is announced and does not strand the focus", async ({ page }) => {
