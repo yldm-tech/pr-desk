@@ -616,8 +616,7 @@
 }
 
 @layer components {
-  .account-trigger,
-  .language-trigger {
+  .account-trigger {
     border-radius: 9px;
     min-height: 38px;
   }
@@ -764,10 +763,6 @@
   }
   .header-actions {
     gap: 6px;
-  }
-  .language-trigger {
-    padding: 6px 8px;
-    gap: 5px;
   }
   nav button {
     position: relative;
@@ -1113,40 +1108,6 @@
   }
   .repository-mobile-label {
     display: none;
-  }
-  .repository-select {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    height: 40px;
-    width: 280px;
-    max-width: 100%;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0 12px;
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    font-size: 13px;
-  }
-  .repository-select > span:first-of-type {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    flex: 1;
-    text-align: left;
-  }
-  .repository-select-menu {
-    width: max(var(--radix-select-trigger-width), 300px);
-    max-width: calc(100vw - 24px);
-  }
-  .repository-select-menu [data-radix-select-viewport] {
-    max-height: min(400px, var(--radix-select-content-available-height));
-  }
-  .repository-select-menu .language-option {
-    gap: 12px;
-    white-space: normal;
-    overflow-wrap: anywhere;
   }
   @container dashboard (max-width: 760px) {
     .repository-summary-item {

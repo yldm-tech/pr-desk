@@ -1823,73 +1823,12 @@
     gap: 10px;
     min-width: 0;
   }
-  .language-trigger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    min-height: 40px;
-    padding: 8px 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 22px;
-    color: var(--foreground);
-    font: inherit;
-    font-size: var(--text-body);
-    white-space: nowrap;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .language-trigger:hover,
-  .language-trigger[data-state="open"] {
-    background: var(--surface-muted);
-    border-color: var(--accent-border);
-  }
-  .language-trigger:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
-  }
-  .language-menu {
-    z-index: 100;
-    min-width: 180px;
-    max-height: var(--radix-select-content-available-height);
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
-    color: var(--foreground);
-    box-shadow: 0 12px 36px var(--shadow);
-    font-family: var(--font-ui);
-    font-size: var(--text-body);
-  }
-  .language-option {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    padding: 10px 12px;
-    border-radius: 7px;
-    cursor: pointer;
-    outline: none;
-    user-select: none;
-  }
-  .language-option[data-highlighted] {
-    background: var(--surface-muted);
-  }
-  .language-option[data-state="checked"] {
-    color: var(--accent-text);
-    background: var(--accent-soft);
-    font-weight: 600;
-  }
   @media (max-width: 800px) {
     .page-header .account-bar {
       gap: 10px;
     }
     .header-actions {
       gap: 8px;
-    }
-    .language-trigger {
-      padding: 8px 10px;
     }
     .account-trigger {
       max-width: 180px;
@@ -1904,11 +1843,6 @@
     }
     .header-actions {
       margin-left: auto;
-    }
-    .language-trigger {
-      min-height: 36px;
-      font-size: 12px;
-      gap: 6px;
     }
     .account-trigger {
       max-width: 150px;
@@ -1954,17 +1888,6 @@
   .trend-repo-trigger:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
-  }
-  .trend-repo-menu {
-    min-width: var(--radix-select-trigger-width);
-    max-width: calc(100vw - 24px);
-  }
-  .trend-repo-menu [data-radix-select-viewport] {
-    max-height: 280px;
-  }
-  .trend-repo-menu .language-option {
-    font-size: 12px;
-    overflow-wrap: anywhere;
   }
   .trend-summary-row {
     display: flex;
