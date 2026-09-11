@@ -5,6 +5,8 @@ import { FollowUpSummary, FollowUpWorkspace, useFollowUps } from "./FollowUps";
 import { FollowUpSettings } from "./FollowUpSettings";
 import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
+import { linkAction } from "./action-styles";
+import { syncStatusError } from "./status-styles";
 import { SyncProgress } from "./SyncProgress";
 import { UserMenu } from "./UserMenu";
 import Skeleton from "react-loading-skeleton";
@@ -358,7 +360,7 @@ export default function App() {
         </header>
         <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} hidden={filter === "About" || filter === "Settings"} />
         {auth?.sync_paused && filter !== "About" && (
-          <p className="sync-status-error" role="status">
+          <p className={syncStatusError} role="status">
             {t("followup.paused")} <a href={apiURL + "/api/v1/auth/github"}>{t("followup.reconnect")}</a>
           </p>
         )}
@@ -398,9 +400,9 @@ export default function App() {
         ) : (
           <>
             {summaryError && (
-              <div className="sync-status-error" role="status">
+              <div className={syncStatusError} role="status">
                 <span>{t("summaryUnavailable")}</span>
-                <button className="access-recheck" onClick={() => retrySummary()}>
+                <button className={linkAction} onClick={() => retrySummary()}>
                   {t("retry")}
                 </button>
               </div>
@@ -478,9 +480,9 @@ export default function App() {
                   }
                 </div>
                 {isError && data && (
-                  <div className="sync-status-error" role="status">
+                  <div className={syncStatusError} role="status">
                     <span>{t("refreshFailedKeepData")}</span>
-                    <button className="access-recheck" onClick={() => refetch()}>
+                    <button className={linkAction} onClick={() => refetch()}>
                       {t("retry")}
                     </button>
                   </div>

@@ -1,4 +1,5 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import { autoSyncNote } from "./status-styles";
 import "react-loading-skeleton/dist/skeleton.css";
 import { useTranslation } from "react-i18next";
 
@@ -313,7 +314,7 @@ export function PageSkeleton({ page }: { page: string }) {
 
 export function SyncStatusSkeleton() {
   return (
-    <LoadingFrame className="auto-sync-note">
+    <LoadingFrame className={autoSyncNote}>
       <Skeleton width="100%" height={12} containerClassName="skeleton-sync-note" />
     </LoadingFrame>
   );

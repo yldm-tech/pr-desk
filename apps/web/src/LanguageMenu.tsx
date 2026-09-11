@@ -9,7 +9,7 @@ export function LanguageMenu() {
   return (
     <Select.Root value={i18n.resolvedLanguage || "en"} onValueChange={(value) => void i18n.changeLanguage(value)}>
       <Select.Trigger
-        className="flex min-h-[38px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[length:var(--text-body)] whitespace-nowrap text-[var(--foreground)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-muted)] data-[state=open]:border-[var(--accent-border)] data-[state=open]:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)] [@media(max-width:800px)_and_(min-width:481px)]:px-2.5 [@media(max-width:640px)_and_(min-width:481px)]:gap-1.5 [@media(max-width:640px)]:text-xs [@media(max-width:480px)]:gap-[5px] [@media(max-width:480px)]:px-2 [@media(max-width:480px)]:py-1.5"
+        className="flex min-h-[38px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[length:var(--text-body)] whitespace-nowrap text-[var(--foreground)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-muted)] data-[state=open]:border-[var(--accent-border)] data-[state=open]:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)] [@media(max-width:800px)_and_(min-width:481px)]:px-2.5 [@media(max-width:640px)_and_(min-width:481px)]:gap-1.5 [@media(max-width:640px)]:text-[12px] [@media(max-width:480px)]:gap-[5px] [@media(max-width:480px)]:px-2 [@media(max-width:480px)]:py-1.5"
         aria-label={t("language")}
       >
         <Languages size={16} aria-hidden="true" />

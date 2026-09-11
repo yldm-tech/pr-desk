@@ -1,4 +1,6 @@
 import { apiURL } from "./api-url";
+import { linkAction } from "./action-styles";
+import { autoSyncNote, syncStatusError } from "./status-styles";
 import { SyncStatusSkeleton } from "./LoadingSkeleton";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef } from "react";
@@ -60,9 +62,9 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
   if (connected && query.isPending && !pending) return <SyncStatusSkeleton />;
   if (connected && query.isError && !pending && !running && !failed)
     return (
-      <div className="sync-status-error" role="status">
+      <div className={syncStatusError} role="status">
         <span>{t("syncNetworkError")}</span>
-        <button className="access-recheck" onClick={() => query.refetch()}>
+        <button className={linkAction} onClick={() => query.refetch()}>
           {t("retry")}
         </button>
       </div>
@@ -71,7 +73,7 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
     if (!connected) return null;
     const lastSynced = Date.parse(query.data?.last_synced_at ?? "");
     return (
-      <div className="auto-sync-note" role="status">
+      <div className={autoSyncNote} role="status">
         <p>{query.data?.status === "idle" && !Number.isFinite(lastSynced) ? t("firstSyncQueued") : t("autoSyncSchedule")}</p>
         {Number.isFinite(lastSynced) && <p>{t("lastSynced", { time: new Date(lastSynced).toLocaleString() })}</p>}
       </div>
@@ -90,30 +92,38 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
   const steps = ["syncCollectStep", "syncSaveStep", "syncDetailsStep"];
   const countKey = activePhase === "details" ? "syncDetailCount" : activePhase === "saving" ? "syncSaveCount" : activePhase === "open" ? "syncOpenCount" : "syncFetchCount";
   return (
-    <section className="sync-progress-panel" data-paused={failed || phase === "waiting" ? "true" : "false"} aria-label={t("syncProgress")}>
+    <section
+      className="mx-0 mt-0 mb-5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[13px] data-[paused=true]:border-[var(--warning-border)] [&>p[role=alert]]:rounded-md [&>p[role=alert]]:bg-[var(--warning-soft)] [&>p[role=alert]]:px-3 [&>p[role=alert]]:py-2.5 [&>p[role=alert]]:leading-[1.7] [&>p[role=alert]]:text-[var(--warning)]"
+      data-paused={failed || phase === "waiting" ? "true" : "false"}
+      aria-label={t("syncProgress")}
+    >
       {!failed && data?.mode !== "incremental" && <p>{t("firstSyncHelp")}</p>}
-      <div className="sync-progress-heading">
+      <div className="flex flex-wrap justify-between gap-3 [&>span]:text-[var(--muted)]">
         <strong>{t(data?.mode === "incremental" ? "incrementalSync" : "syncProgress")}</strong>
         <span>{phaseLabel}</span>
       </div>
-      <ol className="sync-steps" aria-label={t("syncProgress")}>
+      <ol className="mx-0 my-3 grid list-none grid-cols-3 gap-3 p-0 text-[12px] text-[var(--muted)] [&>li[data-state=active]]:text-[var(--accent-text)] [&>li[data-state=complete]]:text-[var(--accent-text)]" aria-label={t("syncProgress")}>
         {steps.map((key, index) => (
-          <li key={key} data-state={index < stage ? "complete" : index === stage ? "active" : "pending"} aria-current={index === stage ? "step" : undefined}>
+          <li className="group/step" key={key} data-state={index < stage ? "complete" : index === stage ? "active" : "pending"} aria-current={index === stage ? "step" : undefined}>
             <span>
               {index < stage ? "✓" : index + 1} · {t(key)}
             </span>
-            <motion.div className="sync-step-line" animate={{ opacity: index === stage && !failed && phase !== "waiting" && !reducedMotion ? [0.45, 1, 0.45] : 1 }} transition={{ duration: 1.5, repeat: Infinity }} />
+            <motion.div
+              className="mt-2 h-[5px] rounded-[5px] bg-[var(--border)] group-data-[state=active]/step:bg-[var(--accent)] group-data-[state=complete]/step:bg-[var(--accent)]"
+              animate={{ opacity: index === stage && !failed && phase !== "waiting" && !reducedMotion ? [0.45, 1, 0.45] : 1 }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
           </li>
         ))}
       </ol>
       {data?.history_count !== undefined && (
-        <p className="sync-collected">
+        <p className="mx-0 my-2 text-[12px] text-[var(--muted)]">
           {t("syncCollected", { count: data.history_count })}
           {data.open_count !== undefined ? " · " + t("syncOpenSummary", { count: data.open_count }) : ""}
         </p>
       )}
       {failed && <p role="alert">{errorLabel}</p>}
-      <div className="sync-progress-detail" role="status">
+      <div className="flex flex-wrap justify-between gap-3 text-[var(--muted)]" role="status">
         <span>{total > 0 ? t(countKey, { completed: completed.toLocaleString(), total: total.toLocaleString() }) : t(failed ? "syncStoppedBeforeCount" : "syncDiscovering")}</span>
         {failed && Number.isFinite(retryTime) ? <span>{t("syncNextRetry", { time: new Date(retryTime).toLocaleTimeString() })}</span> : phase === "waiting" && data?.retry_at ? <span>{t("syncResumeAt", { time: new Date(data.retry_at * 1000).toLocaleTimeString() })}</span> : null}
       </div>

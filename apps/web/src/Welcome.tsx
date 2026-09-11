@@ -18,12 +18,12 @@ export function Welcome() {
   return (
     <section className={`mx-auto mt-12 mb-0 grid max-w-[1100px] grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-12 ${at800}mt-[22px] ${at800}grid-cols-1 ${at800}gap-[30px]`}>
       <div>
-        <span className="inline-flex items-center gap-2 text-xs font-medium text-[var(--accent-text)]">
+        <span className="inline-flex items-center gap-2 text-[12px] font-medium text-[var(--accent-text)]">
           <GitPullRequest size={15} aria-hidden="true" />
           {t("welcomeEyebrow")}
         </span>
         <h2 className={`mx-0 mt-[22px] mb-5 text-[clamp(30px,3.3vw,46px)] leading-[1.22] font-[650] tracking-[-1.5px] text-balance whitespace-pre-line ${between}text-[36px] ${between}tracking-[-1px] ${at480}text-[31px] ${at480}tracking-[-1px]`}>{t("welcomeHeadline")}</h2>
-        <p className={`m-0 max-w-[470px] text-[15px] leading-[1.85] text-[var(--muted)] ${at800}max-w-none ${at480}text-sm`}>{t("welcomeDescription")}</p>
+        <p className={`m-0 max-w-[470px] text-[15px] leading-[1.85] text-[var(--muted)] ${at800}max-w-none ${at480}text-[14px]`}>{t("welcomeDescription")}</p>
         <div className={`mx-0 mt-7 mb-[17px] flex flex-wrap items-center gap-[22px] ${at480}gap-4`}>
           <a className={primaryAction} href={apiURL + "/api/v1/auth/github"}>
             <GitPullRequest size={18} aria-hidden="true" />
@@ -52,7 +52,7 @@ export function Welcome() {
               <Inbox size={20} aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <strong className="text-xs font-semibold">{t("navAttention")}</strong>
+              <strong className="text-[12px] font-semibold">{t("navAttention")}</strong>
               <p className="mx-0 mt-1 mb-0 text-[11px] leading-[1.5] text-[var(--muted)]">{t("welcomeAttentionHint")}</p>
             </div>
             <span className="h-[7px] w-[7px] rounded-full bg-[var(--accent)]" aria-hidden="true" />
@@ -62,13 +62,13 @@ export function Welcome() {
               <GitPullRequest size={20} aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <strong className="text-xs font-semibold">{t("navRepositories")}</strong>
+              <strong className="text-[12px] font-semibold">{t("navRepositories")}</strong>
               <p className="mx-0 mt-1 mb-0 text-[11px] leading-[1.5] text-[var(--muted)]">{t("welcomeRepositoryHint")}</p>
             </div>
             <Check size={17} className="text-[var(--muted)]" aria-hidden="true" />
           </div>
           <div className="pt-[18px]">
-            <div className="flex flex-wrap items-center gap-[7px] text-xs">
+            <div className="flex flex-wrap items-center gap-[7px] text-[12px]">
               <LayoutDashboard size={17} aria-hidden="true" />
               <strong>{t("navOverview")}</strong>
               <span className="ml-auto text-[10px] text-[var(--muted)]">{t("welcomeContributionHint")}</span>
@@ -90,7 +90,7 @@ export function Welcome() {
           <div key={title} className="grid grid-cols-[20px_1fr] content-start gap-[9px]">
             <Icon size={18} className="text-[var(--muted)]" aria-hidden="true" />
             <strong className="text-[13px] font-semibold">{t(title)}</strong>
-            <p className="col-start-2 m-0 text-xs leading-[1.75] text-[var(--muted)]">{t(description)}</p>
+            <p className="col-start-2 m-0 text-[12px] leading-[1.75] text-[var(--muted)]">{t(description)}</p>
           </div>
         ))}
       </div>

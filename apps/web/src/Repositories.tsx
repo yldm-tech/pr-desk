@@ -1,4 +1,6 @@
 import { AlertTriangle, ArrowUpRight, Check, FolderGit2, GitPullRequest, Inbox, Search, X } from "lucide-react";
+import { linkAction } from "./action-styles";
+import { syncStatusError } from "./status-styles";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -101,9 +103,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
             )}
           </div>
           {error && repositories && (
-            <div className="sync-status-error" role="status">
+            <div className={syncStatusError} role="status">
               <span>{t("refreshFailedKeepData")}</span>
-              <button className="access-recheck" onClick={retry}>
+              <button className={linkAction} onClick={retry}>
                 {t("retry")}
               </button>
             </div>

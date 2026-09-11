@@ -87,21 +87,6 @@
   .header-date {
     font-size: 12px;
   }
-  .auto-sync-note {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin: 0 0 20px;
-    font-size: 12px;
-  }
-  .auto-sync-note:before {
-    content: "";
-    height: 5px;
-    width: 5px;
-    border-radius: 50%;
-    background: var(--success);
-    flex-shrink: 0;
-  }
   .stats {
     margin: 0 0 28px;
     gap: 14px;
@@ -465,17 +450,6 @@
     flex: 1;
     min-width: 130px;
   }
-  .sync-progress-panel {
-    border-color: var(--border);
-    padding: 12px 16px;
-    margin: 0 0 20px;
-  }
-  .sync-steps {
-    margin: 12px 0;
-  }
-  .sync-collected {
-    margin: 8px 0;
-  }
   .comment {
     padding: 18px 0;
   }
@@ -544,9 +518,6 @@
     display: block;
     width: 260px;
     max-width: 70vw;
-  }
-  .auto-sync-note:has(.skeleton-sync-note):before {
-    display: none;
   }
   .pr-list-skeleton .row:hover {
     background: var(--surface);
@@ -650,16 +621,6 @@
     background: var(--surface);
     z-index: 2;
   }
-  .sync-progress-panel[data-paused="true"] {
-    border-color: var(--warning-border);
-  }
-  .sync-progress-panel > p[role="alert"] {
-    padding: 10px 12px;
-    border-radius: 6px;
-    background: var(--warning-soft);
-    color: var(--warning);
-    line-height: 1.7;
-  }
   .filters button,
   .visibility-tabs button,
   .overview-year-tab {
@@ -717,10 +678,6 @@
     min-width: 16px;
     padding: 0 4px;
   }
-  .auto-sync-note {
-    font-size: 11px;
-    line-height: 1.6;
-  }
   .activity-footer .secondary-action {
     font-size: 12px;
     padding: 9px 12px;
@@ -732,19 +689,6 @@
 }
 
 @layer components {
-  .sync-status-error {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border: 1px solid var(--warning-border);
-    border-radius: 8px;
-    background: var(--warning-soft);
-    color: var(--warning);
-    margin: 0 0 20px;
-    font-size: 12px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .spinning {

@@ -5,6 +5,8 @@ import { useMemo, useEffect, useRef } from "react";
 import Skeleton from "react-loading-skeleton";
 import * as Select from "@radix-ui/react-select";
 import { selectContent, selectOption } from "./select-styles";
+import { linkAction } from "./action-styles";
+import { syncStatusError } from "./status-styles";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -92,9 +94,9 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
   return (
     <Tabs.Root value={String(year)} onValueChange={(value) => changeScope("year", value)}>
       {query.isError && query.data && (
-        <div className="sync-status-error" role="status">
+        <div className={syncStatusError} role="status">
           <span>{t("refreshFailedKeepData")}</span>
-          <button className="access-recheck" onClick={() => query.refetch()}>
+          <button className={linkAction} onClick={() => query.refetch()}>
             {t("retry")}
           </button>
         </div>
@@ -126,7 +128,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
               {t("installGitHubApp")}
             </a>
             {" · "}
-            <button className="access-recheck" onClick={() => access.refetch()} disabled={access.isFetching}>
+            <button className={linkAction} onClick={() => access.refetch()} disabled={access.isFetching}>
               {t("recheckAccess")}
             </button>
           </>
@@ -137,7 +139,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
         ) : access.isError ? (
           <>
             {t("accessCheckFailed")}{" "}
-            <button className="access-recheck" onClick={() => access.refetch()}>
+            <button className={linkAction} onClick={() => access.refetch()}>
               {t("retry")}
             </button>
           </>
@@ -358,14 +360,14 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 <Select.Portal>
                   <Select.Content className={`${selectContent} min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)] [&_[data-radix-select-viewport]]:max-h-[280px]`} position="popper" align="end" sideOffset={8} collisionPadding={12}>
                     <Select.Viewport>
-                      <Select.Item className={`${selectOption} gap-6 text-xs [overflow-wrap:anywhere]`} value="all">
+                      <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value="all">
                         <Select.ItemText>{t("allTrendRepositories")}</Select.ItemText>
                         <Select.ItemIndicator>
                           <Check size={15} />
                         </Select.ItemIndicator>
                       </Select.Item>
                       {data.repositories.map((item) => (
-                        <Select.Item className={`${selectOption} gap-6 text-xs [overflow-wrap:anywhere]`} value={item.repo} key={item.repo}>
+                        <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value={item.repo} key={item.repo}>
                           <Select.ItemText>{item.repo}</Select.ItemText>
                           <Select.ItemIndicator>
                             <Check size={15} />
@@ -395,7 +397,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
             ) : trendError ? (
               <div role="alert" className="trend-empty">
                 <p>{t("overviewError")}</p>
-                <button className="access-recheck" onClick={() => trendQuery.refetch()}>
+                <button className={linkAction} onClick={() => trendQuery.refetch()}>
                   {t("retry")}
                 </button>
               </div>

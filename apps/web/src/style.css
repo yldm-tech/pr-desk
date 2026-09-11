@@ -1627,22 +1627,10 @@
   .profile-stats {
     font-variant-numeric: tabular-nums;
   }
-  .visibility-feedback a,
-  .access-recheck {
+  .visibility-feedback a {
     color: var(--accent-text);
     text-decoration: underline;
     text-underline-offset: 3px;
-  }
-  .access-recheck {
-    border: 0;
-    background: none;
-    padding: 0;
-    font: inherit;
-    cursor: pointer;
-  }
-  .access-recheck:disabled {
-    opacity: 0.5;
-    cursor: wait;
   }
   .authorized-accounts {
     display: flex;
@@ -1696,60 +1684,6 @@
     border-color: var(--accent-border);
     font-weight: 500;
   }
-
-  .auto-sync-note {
-    font-size: 12px;
-    color: var(--muted);
-    margin: 0 0 18px;
-  }
-  .sync-progress-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin: 12px 0 20px;
-    font-size: 13px;
-  }
-  .sync-progress-heading,
-  .sync-progress-detail {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .sync-progress-heading span,
-  .sync-progress-detail {
-    color: var(--muted);
-  }
-  .sync-steps {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    padding: 0;
-    margin: 16px 0;
-    list-style: none;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .sync-step-line {
-    height: 5px;
-    border-radius: 5px;
-    background: var(--border);
-    margin-top: 8px;
-  }
-  .sync-steps li[data-state="complete"],
-  .sync-steps li[data-state="active"] {
-    color: var(--accent-text);
-  }
-  .sync-steps li[data-state="complete"] .sync-step-line,
-  .sync-steps li[data-state="active"] .sync-step-line {
-    background: var(--accent);
-  }
-  .sync-collected {
-    font-size: 12px;
-    color: var(--muted);
-    margin: 12px 0;
-  }
   @keyframes sync-flow {
     from {
       background-position: 0 0;
@@ -1765,9 +1699,6 @@
     100% {
       transform: translateX(290%);
     }
-  }
-  .sync-progress-panel[data-paused="true"] .sync-progress-fill {
-    animation-play-state: paused;
   }
 
   .header-actions {
