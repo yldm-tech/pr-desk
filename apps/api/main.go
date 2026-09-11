@@ -58,6 +58,7 @@ type OAuthToken struct {
 	SyncProgress       string     `json:"-"`
 	GitHubCreatedAt    *time.Time
 	HistorySyncedAt    *time.Time
+	HistoryCursor      *time.Time `json:"-"`
 	HistoryTotal       int
 	ID                 uint   `gorm:"primaryKey"`
 	SessionID          string `gorm:"index;not null"`
@@ -558,8 +559,21 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	if incremental {
 		since = t.HistorySyncedAt
 	}
+	// A full walk that was interrupted resumes where it stopped. Everything
+	// before the cursor is already stored, so re-reading it would only spend
+	// search quota to arrive at the same rows.
+	historyFrom := from
+	if !incremental && t.HistoryCursor != nil && t.HistoryCursor.After(from) && t.HistoryCursor.Before(syncStarted) {
+		historyFrom = t.HistoryCursor.Add(time.Second)
+		log.Printf("Resuming interrupted history sync from %s", historyFrom.Format(time.RFC3339))
+	}
 	ctx = context.WithValue(ctx, historyPageSinkKey{}, historyPageSink(func(items []*github.Issue) error { return s.saveHistoryPage(ctx, sid, items) }))
-	items, err := fetchSyncHistory(ctx, gh, query, from, syncStarted, since)
+	if !incremental {
+		ctx = context.WithValue(ctx, historyCursorKey{}, historyCursor(func(completedThrough time.Time) error {
+			return s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).UpdateColumn("history_cursor", completedThrough).Error
+		}))
+	}
+	items, err := fetchSyncHistory(ctx, gh, query, historyFrom, syncStarted, since)
 	if err != nil {
 		progress.recordFailure(err)
 		status := 502
@@ -573,6 +587,14 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 			return syncResult{http.StatusTooManyRequests, gin.H{"error": "GitHub rate limit reached; retry sync later"}}
 		}
 		return syncResult{status, gin.H{"error": "Unable to complete GitHub history sync; retry to refresh"}}
+	}
+	// The walk is done and stored. Clearing both here rather than at the very
+	// end means a failure in the later stages costs a retry of those stages,
+	// not another hundred search requests.
+	if !incremental {
+		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"full_sync_pending": false, "history_cursor": nil}).Error; err != nil {
+			return syncResult{500, gin.H{"error": "Unable to save sync checkpoint"}}
+		}
 	}
 	progress.set("saving", len(items), len(items))
 	openTotal := 0
