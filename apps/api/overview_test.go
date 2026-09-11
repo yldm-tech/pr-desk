@@ -333,3 +333,61 @@ func TestTrendRepositoryFilterKeepsSummaryAndVisibility(t *testing.T) {
 		}
 	}
 }
+
+// The repositories table reported conflicts but left a red branch to be counted
+// by hand, which is the one number it shares with the MCP tool. Its scope stays
+// deliberately narrower than that tool: pull requests this account authored.
+func TestRepositorySummaryCountsFailingChecks(t *testing.T) {
+	db := integrationDB(t)
+	if err := db.Create(&OAuthToken{SessionID: "repo-checks"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	rows := []PullRequest{
+		{SessionID: "repo-checks", Repo: "org/a", State: "open", Role: "authored", ChecksStatus: "failure"},
+		// GitHub's own wording for the same thing, stored before checkSummary
+		// folded it into failure.
+		{SessionID: "repo-checks", Repo: "org/a", State: "open", Role: "authored", ChecksStatus: "error"},
+		{SessionID: "repo-checks", Repo: "org/a", State: "open", Role: "authored", ChecksStatus: "success"},
+		// Red, but somebody else's: out of scope for this endpoint by design.
+		{SessionID: "repo-checks", Repo: "org/a", State: "open", Role: "reviewer", ChecksStatus: "failure"},
+		{SessionID: "repo-checks", Repo: "org/b", State: "open", Role: "authored", ChecksStatus: "inconclusive"},
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	r := gin.New()
+	r.GET("/repositories", (&Server{db: db}).repositories)
+	req := httptest.NewRequest("GET", "/repositories", nil)
+	req.AddCookie(&http.Cookie{Name: "pr_session", Value: "repo-checks"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
+	}
+	var result struct {
+		Data []struct {
+			Repo          string `json:"repo"`
+			Open          int    `json:"open"`
+			ChecksFailing int    `json:"checks_failing"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	byRepo := map[string]int{}
+	open := map[string]int{}
+	for _, row := range result.Data {
+		byRepo[row.Repo] = row.ChecksFailing
+		open[row.Repo] = row.Open
+	}
+	if byRepo["org/a"] != 2 {
+		t.Fatalf("org/a reports %d failing, wanted the failure and the error: %+v", byRepo["org/a"], result.Data)
+	}
+	if open["org/a"] != 3 {
+		t.Fatalf("org/a counts %d open, so the authored-only scope moved: %+v", open["org/a"], result.Data)
+	}
+	// inconclusive means nothing is known to be broken and must not be counted.
+	if byRepo["org/b"] != 0 {
+		t.Fatalf("a cancelled run was counted as a failure: %+v", result.Data)
+	}
+}

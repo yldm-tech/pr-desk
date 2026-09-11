@@ -14,6 +14,7 @@
   "open": "开放 PR",
   "needsReview": "需要评审",
   "conflicts": "冲突",
+  "checksFailing": "检查失败",
   "mergedMonth": "本月已合并",
   "yourPRs": "我的请求",
   "previous": "上一页",

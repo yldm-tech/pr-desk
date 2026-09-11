@@ -64,6 +64,8 @@ The `checks_failed` and `conflict` reasons are raised only on pull requests you 
 
 To ask the other question — which branches are failing, whoever owns them — filter on the state instead. `checks` and `conflict` are accepted by both `list_follow_ups` and `list_pull_requests` and apply whatever your role is, and `list_repositories` reports `checks_failing` next to `needs_attention` for the same reason: one count is the work, the other is the weather.
 
+The browser's own repositories table reports `checks_failing` too, and it is the only column the two surfaces agree on. Everything else there is deliberately narrower: its scope is the pull requests you authored, and its attention count is a query over stored columns, where the tool's is the follow-up state that read, handled and snooze all move. The page answers "how does my own work stand"; the tool answers "what is the follow-up workspace holding".
+
 ```
 prdesk prs --state open --checks failure --url    # every red branch, whoever owns it
 prdesk followups --reason checks_failed           # only the ones that are yours to fix

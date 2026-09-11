@@ -61,6 +61,51 @@ func TestSyncFailedDetailsPreserveStoredState(t *testing.T) {
 	}
 }
 
+// integrationDB hands back a transaction, which is one connection. Anything
+// that runs concurrent database work — the details phase starts four goroutines
+// — deadlocks or errors on that single connection, so those tests need a real
+// pool instead. Isolation moves from the rolled-back transaction to a schema
+// dropped on cleanup; search_path reaches every pooled connection because pgx
+// sends an unrecognized DSN keyword as a startup runtime parameter.
+func integrationPoolDB(t *testing.T) *gorm.DB {
+	unthrottledHistory(t)
+	t.Helper()
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set TEST_DATABASE_URL to exercise PostgreSQL integration")
+	}
+	silent := &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)}
+	admin, err := gorm.Open(postgres.Open(dsn), silent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminDB, err := admin.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := fmt.Sprintf("prdesk_pool_%d", time.Now().UnixNano())
+	if err := admin.Exec("CREATE SCHEMA " + schema).Error; err != nil {
+		t.Fatal(err)
+	}
+	db, err := gorm.Open(postgres.Open(dsn+" search_path="+schema), silent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		sqlDB.Close()
+		admin.Exec("DROP SCHEMA IF EXISTS " + schema + " CASCADE")
+		adminDB.Close()
+	})
+	if err := migrateDatabase(db); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
 func integrationDB(t *testing.T) *gorm.DB {
 	unthrottledHistory(t)
 	t.Helper()

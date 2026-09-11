@@ -142,8 +142,7 @@ func TestFailedDetailDoesNotCountAsCompleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Only the second pull request is open, so the details phase runs a single
-	// item: the integration transaction is one connection and cannot serve the
-	// concurrent goroutines a wider phase would start.
+	// item. The mixed case needs a connection pool and has its own test.
 	items := make([]*github.Issue, 2)
 	for i := range items {
 		state := "closed"
@@ -189,6 +188,72 @@ func TestFailedDetailDoesNotCountAsCompleted(t *testing.T) {
 	}
 	if progress.Completed != 0 {
 		t.Fatalf("completed is %d, but the only item of the phase failed: %#v", progress.Completed, progress)
+	}
+}
+
+// The counter has to survive the phase running four goroutines at once: what an
+// operator reads is the shortfall, so two saved out of three has to report 2/3
+// rather than collapsing to all-or-nothing.
+func TestPartlyFailedDetailPhaseCountsOnlyWhatSaved(t *testing.T) {
+	db := integrationPoolDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	encrypted, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := OAuthToken{SessionID: "detail-partial", Token: encrypted}
+	if err := db.Create(&token).Error; err != nil {
+		t.Fatal(err)
+	}
+	items := make([]*github.Issue, 3)
+	for i := range items {
+		items[i] = &github.Issue{
+			Number: github.Ptr(i + 1), HTMLURL: github.Ptr(fmt.Sprintf("https://github.com/test/repo/pull/%d", i+1)),
+			RepositoryURL: github.Ptr("https://api.github.com/repos/test/repo"), State: github.Ptr("open"), Title: github.Ptr("an open pull request"),
+		}
+	}
+	search, _ := json.Marshal(map[string]any{"total_count": len(items), "items": items})
+	old := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = old })
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		respond := func(status int, body string) (*http.Response, error) {
+			return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+		}
+		switch {
+		case strings.HasPrefix(req.URL.Path, "/search/issues"):
+			return respond(200, string(search))
+		// Exactly one of the three cannot be read. The other two have to save,
+		// so the shortfall is one rather than everything.
+		case req.URL.Path == "/repos/test/repo/pulls/2":
+			return respond(500, `{"message":"server error"}`)
+		case strings.HasSuffix(req.URL.Path, "/pulls/1"), strings.HasSuffix(req.URL.Path, "/pulls/3"):
+			return respond(200, `{"state":"open","title":"an open pull request"}`)
+		}
+		return respond(200, `[]`)
+	})}
+	if result := (&Server{db: db}).syncSession(context.Background(), token.SessionID, false, false); result.status == 200 {
+		t.Fatal("a partly failed details phase reported success")
+	}
+	var stored OAuthToken
+	if err := db.First(&stored, token.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	var progress syncProgress
+	if err := json.Unmarshal([]byte(stored.SyncProgress), &progress); err != nil {
+		t.Fatal(err)
+	}
+	if progress.Status != "failed" || progress.Phase != "details" || progress.Total != 3 {
+		t.Fatalf("the failure was attributed to the wrong phase: %#v", progress)
+	}
+	if progress.Completed != 2 {
+		t.Fatalf("completed is %d, wanted the two that saved: %#v", progress.Completed, progress)
+	}
+	// The two that saved really did save: the shortfall is a count an operator
+	// can trust, not an artefact of where the errgroup happened to stop.
+	var saved int64
+	db.Model(&PullRequest{}).Where("session_id = ? AND checks_status <> ''", token.SessionID).Count(&saved)
+	if saved != 2 {
+		t.Fatalf("%d pull requests carry detail state, wanted the two that succeeded", saved)
 	}
 }
 

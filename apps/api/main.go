@@ -344,6 +344,13 @@ func (s *Server) stats(c *gin.Context) {
 	c.JSON(200, result)
 }
 
+// This summary is deliberately narrower than the MCP list_repositories tool and
+// will not agree with it. Here the scope is the pull requests you authored and
+// attention is a query over stored columns; there it is every tracked pull
+// request whatever the role, and attention is the follow-up state, which read,
+// handled and snooze all move. One answers "how does my own work stand", the
+// other "what is the follow-up workspace holding". Only checks_failing means
+// the same thing on both, which is why it is worth reporting in both.
 func (s *Server) repositories(c *gin.Context) {
 	type repositorySummary struct {
 		Repo           string `json:"repo"`
@@ -351,10 +358,12 @@ func (s *Server) repositories(c *gin.Context) {
 		Open           int64  `json:"open"`
 		Conflicts      int64  `json:"conflicts"`
 		NeedsAttention int64  `json:"needs_attention"`
+		ChecksFailing  int64  `json:"checks_failing"`
 	}
 	var rows []repositorySummary
 	rows = make([]repositorySummary, 0)
-	q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Where("state = ? AND merged_at IS NULL", "open").Model(&PullRequest{}).Select(`repo, COUNT(*) AS total, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL) AS open, COUNT(*) FILTER (WHERE has_conflicts = true) AS conflicts, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL AND (has_conflicts = true OR review_status = 'changes_requested' OR checks_status IN ('failure','error'))) AS needs_attention`).Group("repo").Order("repo ASC")
+	q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Where("state = ? AND merged_at IS NULL", "open").Model(&PullRequest{}).Select(`repo, COUNT(*) AS total, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL) AS open, COUNT(*) FILTER (WHERE has_conflicts = true) AS conflicts, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL AND (has_conflicts = true OR review_status = 'changes_requested' OR checks_status IN ('failure','error'))) AS needs_attention,
+		COUNT(*) FILTER (WHERE checks_status IN ('failure','error')) AS checks_failing`).Group("repo").Order("repo ASC")
 	if err := q.Scan(&rows).Error; err != nil {
 		c.JSON(500, gin.H{"error": "unable to load repositories"})
 		return

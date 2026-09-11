@@ -136,6 +136,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                 <span>{t("open")}</span>
                 <span>{t("navAttention")}</span>
                 <span>{t("conflicts")}</span>
+                <span>{t("checksFailing")}</span>
                 <span />
               </div>
               <ul className="repository-rows">
@@ -176,6 +177,10 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                       <div className="repository-number">
                         <span className="repository-mobile-label">{t("conflicts")}</span>
                         <span className={repo.conflicts ? "repository-conflicts" : "repository-zero"}>{repo.conflicts.toLocaleString()}</span>
+                      </div>
+                      <div className="repository-number">
+                        <span className="repository-mobile-label">{t("checksFailing")}</span>
+                        <span className={repo.checks_failing ? "repository-conflicts" : "repository-zero"}>{repo.checks_failing.toLocaleString()}</span>
                       </div>
                       <Link className="repository-action" to={prURL}>
                         {repo.needs_attention === 0 && <Check size={14} className="repository-clear" aria-hidden="true" />}
