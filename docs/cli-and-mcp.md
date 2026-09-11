@@ -93,6 +93,8 @@ The progress record is stored on the account and outlives the process that wrote
 
 `completed` counts the items of the phase that actually landed, not the ones attempted, so on a failed run the shortfall against `total` is how much of that phase was lost. The bounded `error_code` names the layer; for a storage failure the server log additionally names the cause, which is where a constraint violation is told apart from a dropped connection.
 
+`interrupted` is a status of its own and not a failure: the server stopped while the run was in flight, which a deployment does every time it rolls a pod. It carries no cooldown, so the next scheduled sync simply carries on. A failed run does cool down for fifteen minutes, because the point of that pause is to stop hammering an upstream that is refusing — and a restart tells you nothing about the upstream.
+
 ## Waiting time
 
 `waiting_days` is the age of the waiting clock, which only human progress moves: a comment, a review, or a revision while you are waiting on an author. It is not the age of the pull request and not the time since PR Desk last polled. A `0` therefore means somebody acted today, not that the row just arrived.

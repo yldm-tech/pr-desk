@@ -175,6 +175,15 @@ func TestPrintSyncStatusDatesTheVerdict(t *testing.T) {
 	}
 }
 
+// "interrupted" on its own still reads as something being wrong. It is not.
+func TestPrintSyncStatusExplainsAnInterruptedRun(t *testing.T) {
+	body := []byte(`{"status":"interrupted","error_code":"interrupted","reported_at":"2026-09-11T18:39:03Z","reported_age_minutes":2,"last_synced_at":"2026-09-11T18:27:07Z","stale_minutes":14,"baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if !strings.Contains(out, "restarted") || !strings.Contains(out, "no cooldown") {
+		t.Fatalf("an interrupted run was not explained:\n%s", out)
+	}
+}
+
 // A status with no timestamp must not render an age of zero, which would read
 // as "decided just now".
 func TestPrintSyncStatusOmitsTheAgeWhenItIsUnknown(t *testing.T) {

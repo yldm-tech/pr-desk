@@ -340,6 +340,9 @@ func printSyncStatus(body []byte) error {
 	if payload.ErrorCode == "reconnect" {
 		fmt.Println("\nThe GitHub authorization lapsed; nothing will refresh until the account reconnects in the browser.")
 	}
+	if payload.ErrorCode == "interrupted" {
+		fmt.Println("\nThe server restarted while this run was in flight. Nothing is wrong with it and no cooldown applies; the next scheduled sync carries on.")
+	}
 	if !payload.Baseline {
 		fmt.Println("\nThe first inventory is still importing, so an empty list is not conclusive yet.")
 	}

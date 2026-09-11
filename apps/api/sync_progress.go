@@ -70,6 +70,12 @@ func (p *syncTracker) finish(success bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.value.Status = "failed"
+	// Shutting down mid-run is not a failure of the run. Reporting it as one
+	// puts a red "sync failed" in front of someone whose only crime was
+	// deploying, and buries a real failure among restarts.
+	if !success && p.value.ErrorCode == "interrupted" {
+		p.value.Status = "interrupted"
+	}
 	if !success && p.value.ErrorCode == "reconnect" {
 		p.db.Model(&OAuthToken{}).Where("session_id = ? AND git_hub_id > 0", p.sid).Update("authorization_error", "reconnect")
 	}
