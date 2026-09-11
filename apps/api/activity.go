@@ -267,14 +267,28 @@ func (pr PullRequest) checks() []checkRunSummary {
 
 type checkRunSummary struct {
 	Name       string `json:"name"`
-	Conclusion string `json:"conclusion" jsonschema:"The GitHub conclusion: failure, cancelled, stale, timed_out, action_required or pending while still running"`
+	Conclusion string `json:"conclusion" jsonschema:"failure, error, cancelled, stale, timed_out, action_required, or pending while still running"`
 	URL        string `json:"url,omitempty"`
 }
 
-// unhealthyChecks names the runs behind a non-green summary, failures first, so
-// a caller can tell a broken test from a superseded run without asking GitHub
-// again. Passing and skipped runs are left out: they are not why anyone looked.
-func unhealthyChecks(runs []checkRun) []checkRunSummary {
+// A commit status is the older reporting API, still what Vercel, Netlify and
+// most non-Actions integrations use. It carries no conclusion, only a state.
+type commitStatus struct {
+	Context string
+	State   string
+	URL     string
+}
+
+// unhealthyChecks names whatever is behind a non-green summary, failures first,
+// so a caller can tell a broken test from a superseded run without asking
+// GitHub again. Passing and skipped entries are left out: they are not why
+// anyone looked.
+//
+// Both reporting APIs have to be read. A repository whose only failure is a
+// commit status — a Vercel preview deployment, typically — summarises as
+// "failure" through the combined state while contributing no check run at all,
+// so walking runs alone leaves the caller with a red mark and no name.
+func unhealthyChecks(runs []checkRun, statuses []commitStatus) []checkRunSummary {
 	failures, others := []checkRunSummary{}, []checkRunSummary{}
 	for _, r := range runs {
 		summary := checkRunSummary{Name: r.Name, Conclusion: r.Conclusion, URL: r.URL}
@@ -285,6 +299,15 @@ func unhealthyChecks(runs []checkRun) []checkRunSummary {
 		case failingCheck(r.Conclusion):
 			failures = append(failures, summary)
 		case inconclusiveCheck(r.Conclusion):
+			others = append(others, summary)
+		}
+	}
+	for _, status := range statuses {
+		summary := checkRunSummary{Name: status.Context, Conclusion: status.State, URL: status.URL}
+		switch status.State {
+		case "failure", "error":
+			failures = append(failures, summary)
+		case "pending":
 			others = append(others, summary)
 		}
 	}

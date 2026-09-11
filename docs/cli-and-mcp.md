@@ -52,7 +52,9 @@ Every write tool takes the `version` returned by the listing. If new activity ar
 
 ### Reading the check state
 
-`checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names the runs behind anything that is not green, failures first.
+`checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names whatever is behind anything that is not green, failures first.
+
+GitHub reports through two APIs and both are read. Check runs are what GitHub Actions produces; commit statuses are the older mechanism still used by Vercel, Netlify, CircleCI and most external integrations. A pull request whose only failure is a commit status summarises as `failure` while contributing no check run at all, so a caller reading only check runs would see a red mark with nothing named behind it. Conclusions therefore come from either vocabulary: `failure`, `cancelled`, `stale`, `timed_out` and `action_required` from check runs, `failure`, `error` and `pending` from statuses.
 
 `inconclusive` means every run that did not pass was cancelled or marked stale — superseded by a newer push, stopped by a concurrency group, or otherwise abandoned. GitHub renders those as a red cross and its own API reports them next to real failures, but they decided nothing about the code, so they do not raise a `checks_failed` follow-up. A genuine failure, a timeout, a startup failure or a run awaiting manual action all still count as `failure`.
 
