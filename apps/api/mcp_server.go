@@ -191,6 +191,11 @@ type pullRequestListOutput struct {
 	Total        int                 `json:"total"`
 }
 
+// A literal underscore or percent in a search term must not act as a wildcard.
+var likeEscaper = strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_")
+
+func escapeLike(value string) string { return likeEscaper.Replace(value) }
+
 func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest, in pullRequestInput) (*mcp.CallToolResult, pullRequestListOutput, error) {
 	session, err := sessionFromContext(ctx)
 	if err != nil {
@@ -205,10 +210,10 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	}
 	query := s.db.WithContext(ctx).Model(&PullRequest{}).Where("session_id = ?", session.sessionID)
 	if in.Repository != "" {
-		query = query.Where("repo = ?", in.Repository)
+		query = query.Where("LOWER(repo) = LOWER(?)", in.Repository)
 	}
 	if in.Query != "" {
-		query = query.Where("title ILIKE ?", "%"+in.Query+"%")
+		query = query.Where("title ILIKE ? ESCAPE '\\'", "%"+escapeLike(in.Query)+"%")
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {

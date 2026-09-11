@@ -44,7 +44,11 @@ func (s *Server) startSyncScheduler(ctx context.Context, schedule string) (*cron
 	}
 	// Abandoned authorization flows leave a short-lived row behind; an hourly
 	// sweep keeps the table from growing without bound.
-	if _, err := scheduler.AddFunc("@every 1h", func() { s.purgeExpiredOAuthCodes(time.Now().UTC()) }); err != nil {
+	if _, err := scheduler.AddFunc("@every 1h", func() {
+		now := time.Now().UTC()
+		s.purgeExpiredOAuthCodes(now)
+		s.purgeUnusedOAuthClients(now)
+	}); err != nil {
 		return nil, err
 	}
 	scheduler.Start()

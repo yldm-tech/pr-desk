@@ -207,6 +207,8 @@ func main() {
 	api.POST("/oauth/authorize", s.authorizeEndpoint)
 	api.POST("/oauth/token", s.tokenEndpoint)
 	api.POST("/oauth/register", s.registerOAuthClient)
+	api.GET("/api-tokens", s.listAPITokens)
+	api.DELETE("/api-tokens/:id", s.revokeAPIToken)
 	api.Any("/mcp", s.mcpHandler())
 	api.GET("/notification-destinations", s.listNotificationDestinations)
 	api.POST("/notification-destinations", s.saveNotificationDestination)
@@ -344,6 +346,18 @@ func githubOAuthConfig() *oauth2.Config {
 	}
 }
 
+// safeReturnPath keeps the sign-in from being turned into an open redirector:
+// only an absolute path on this server is ever echoed back.
+func safeReturnPath(candidate string) string {
+	if !strings.HasPrefix(candidate, "/") || strings.HasPrefix(candidate, "//") || strings.Contains(candidate, "\\") {
+		return ""
+	}
+	if !strings.HasPrefix(candidate, "/api/v1/oauth/authorize") {
+		return ""
+	}
+	return candidate
+}
+
 func githubAuth(c *gin.Context) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
@@ -352,6 +366,10 @@ func githubAuth(c *gin.Context) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(b)
 	c.SetCookie("oauth_state", state, 600, "/", "", secureCookies(c), true)
+	// An authorization that interrupted itself to sign in resumes where it left off.
+	if back := safeReturnPath(c.Query("return")); back != "" {
+		c.SetCookie("oauth_return", back, 600, "/", "", secureCookies(c), true)
+	}
 	oauthCfg := githubOAuthConfig()
 	c.Redirect(http.StatusFound, oauthCfg.AuthCodeURL(state))
 }
@@ -423,6 +441,11 @@ func githubCallback(c *gin.Context) {
 	redirect := os.Getenv("WEB_ORIGIN")
 	if redirect == "" {
 		redirect = "http://localhost:5173"
+	}
+	if back, err := c.Cookie("oauth_return"); err == nil && safeReturnPath(back) != "" {
+		c.SetCookie("oauth_return", "", -1, "/", "", secureCookies(c), true)
+		c.Redirect(http.StatusFound, safeReturnPath(back))
+		return
 	}
 	c.Redirect(http.StatusFound, redirect+"?connected=1")
 }

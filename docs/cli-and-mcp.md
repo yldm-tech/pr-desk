@@ -27,7 +27,7 @@ Tokens are stored as SHA-256 hashes with a 90 day lifetime. A token stops workin
 | Scope | Grants |
 |-------|--------|
 | `followups:read` | Read pull requests, follow-ups, repositories and counts |
-| `followups:write` | Mark follow-ups read or handled and snooze them |
+| `followups:write` | Mark follow-ups read or handled and snooze them. Implies `followups:read`, which the endpoint requires on every call |
 
 Settings, notification destinations and the GitHub connection itself are deliberately outside both scopes. An agent holding a write token can change local handling state; it cannot reroute your notifications, read your credentials or act on GitHub.
 
@@ -58,12 +58,12 @@ pr-desk-cli followups --json | jq '.follow_ups[] | select(.waiting_days > 14)'
 pr-desk-cli handled 41 7                              # id and version from the listing
 ```
 
-`login` opens a browser against the consent page and receives the code on a loopback port it opens for the occasion (RFC 8252). The token is written to `credentials.json` under the user configuration directory with mode `0600`; `PR_DESK_CONFIG_DIR` overrides the location. `logout` deletes the file — the server keeps listing the token until it expires, so revoke it there to end it early.
+`login` opens a browser against the consent page and receives the code on a loopback port it opens for the occasion (RFC 8252). The token is written to `credentials.json` under the user configuration directory with mode `0600`; `PR_DESK_CONFIG_DIR` overrides the location. `logout` deletes the local file, which does not end the grant. To stop a token that leaked, revoke it on the server: `GET /api/v1/api-tokens` lists the account's tokens and `DELETE /api/v1/api-tokens/{id}` revokes one, both with the browser session. A revoked token stops verifying on its next call. There is no UI for this yet.
 
 The CLI is itself an MCP client: every command is a tool call against the endpoint above. A command that works in the terminal works for an agent, and there is no second transport to keep in step.
 
 ## Operating notes
 
 - CORS is unchanged and still only names `WEB_ORIGIN`. The MCP endpoint is meant for a server-side or desktop client; a browser-based MCP client on another origin would need that list extended.
-- Authorization codes are pruned an hour after expiry.
+- Authorization codes are pruned an hour after expiry, and dynamically registered clients that never completed an authorization are pruned after a day. Registration itself is unauthenticated, as the MCP flow requires, and is not rate limited — put it behind your edge proxy's limits if the deployment is public.
 - Dynamic registration accepts `https` redirects and loopback addresses only, and issues no secret.

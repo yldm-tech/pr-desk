@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -44,6 +43,21 @@ var originExemptPaths = map[string]bool{
 	"/api/v1/oauth/register": true,
 }
 
+// sameOriginRequest compares the declared origin against the host the request
+// was actually addressed to. A cross-site form post carries the attacker's
+// origin and is refused; a form served by this server matches.
+func sameOriginRequest(c *gin.Context) bool {
+	origin := c.GetHeader("Origin")
+	if origin == "" {
+		return false
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return parsed.Host != "" && parsed.Host == c.Request.Host
+}
+
 func requireMutationOrigin(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
@@ -54,9 +68,11 @@ func requireMutationOrigin(c *gin.Context) {
 		c.Next()
 		return
 	}
-	// A browser never attaches an Authorization header by itself, so a bearer
-	// request cannot be forged from another site the way a cookie request can.
-	if strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ") {
+	// The consent page is served by the API itself, so its form submission
+	// carries the API's own origin rather than the UI's. Accepting a same-origin
+	// submission keeps the forgery protection — a cross-site origin is still
+	// refused — while letting the flow work when the UI has its own origin.
+	if c.Request.URL.Path == "/api/v1/oauth/authorize" && sameOriginRequest(c) {
 		c.Next()
 		return
 	}

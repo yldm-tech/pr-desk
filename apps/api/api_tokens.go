@@ -7,9 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -67,6 +70,12 @@ func parseScopes(raw string) ([]string, error) {
 			seen[scope] = true
 			scopes = append(scopes, scope)
 		}
+	}
+	// Writing implies reading. The MCP endpoint requires the read scope on every
+	// call, so a write-only grant would be refused on the very tools it was
+	// requested for.
+	if !seen[scopeFollowUpsRead] {
+		scopes = append([]string{scopeFollowUpsRead}, scopes...)
 	}
 	return scopes, nil
 }
@@ -141,4 +150,54 @@ func (record APIToken) allows(scope string) bool {
 // UI and must never fail a request that was otherwise authorized.
 func touchAPIToken(db *gorm.DB, id uint, now time.Time) {
 	_ = db.Model(&APIToken{}).Where("id = ?", id).UpdateColumn("last_used_at", now).Error
+}
+
+// Tokens outlive the machine they were issued to, so the account holder needs a
+// way to end one early. Without this, a leaked credentials.json is valid for
+// its full lifetime and the only remedy is disconnecting GitHub.
+func (s *Server) listAPITokens(c *gin.Context) {
+	account, ok := s.settingsAccount(c)
+	if !ok {
+		return
+	}
+	var rows []APIToken
+	if err := s.db.Where("session_id = ? AND revoked_at IS NULL", account.SessionID).Order("id").Find(&rows).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Unable to load tokens"})
+		return
+	}
+	out := make([]gin.H, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, gin.H{"id": row.ID, "name": row.Name, "client_id": row.ClientID, "scopes": row.scopeList(), "created_at": row.CreatedAt, "expires_at": row.ExpiresAt, "last_used_at": row.LastUsedAt})
+	}
+	c.JSON(200, gin.H{"data": out})
+}
+
+func (s *Server) revokeAPIToken(c *gin.Context) {
+	account, ok := s.settingsAccount(c)
+	if !ok {
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	now := time.Now().UTC()
+	result := s.db.Model(&APIToken{}).Where("id = ? AND session_id = ? AND revoked_at IS NULL", id, account.SessionID).UpdateColumn("revoked_at", now)
+	if result.Error != nil {
+		c.JSON(500, gin.H{"error": "Unable to revoke the token"})
+		return
+	}
+	if result.RowsAffected == 0 {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// A registration that never completed an authorization is abandoned. Pruning
+// them keeps an unauthenticated endpoint from growing the table without bound.
+func (s *Server) purgeUnusedOAuthClients(now time.Time) {
+	cutoff := now.Add(-24 * time.Hour)
+	_ = s.db.Where("created_at < ? AND client_id NOT IN (?) AND client_id NOT IN (?)",
+		cutoff,
+		s.db.Model(&APIToken{}).Select("client_id"),
+		s.db.Model(&OAuthCode{}).Select("client_id"),
+	).Delete(&OAuthClient{}).Error
 }

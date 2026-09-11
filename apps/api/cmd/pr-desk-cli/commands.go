@@ -39,10 +39,6 @@ func runList(command string, args []string) error {
 	if err != nil {
 		return err
 	}
-	stored, err := loadCredentials()
-	if err != nil {
-		return err
-	}
 	tool := map[string]string{"followups": "list_follow_ups", "prs": "list_pull_requests", "repos": "list_repositories", "summary": "get_follow_up_summary"}[command]
 	if command == "repos" || command == "summary" {
 		arguments = map[string]any{}
@@ -50,6 +46,15 @@ func runList(command string, args []string) error {
 	if command == "prs" {
 		delete(arguments, "state")
 		delete(arguments, "role")
+	} else if _, given := arguments["query"]; given {
+		// Only list_pull_requests accepts a title search, and the tool schema
+		// rejects unknown fields outright. Reported before authenticating, so a
+		// wrong flag does not look like a sign-in problem.
+		return errors.New("--query only applies to: pr-desk-cli prs")
+	}
+	stored, err := loadCredentials()
+	if err != nil {
+		return err
 	}
 	body, err := callTool(stored, tool, arguments)
 	if err != nil {
@@ -69,6 +74,14 @@ func runList(command string, args []string) error {
 	default:
 		return printSummary(body)
 	}
+}
+
+// The timestamp is RFC3339; the table only has room for the date.
+func dateOnly(timestamp string) string {
+	if date, _, found := strings.Cut(timestamp, "T"); found {
+		return date
+	}
+	return timestamp
 }
 
 func newTable() *tabwriter.Writer { return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0) }
@@ -153,7 +166,7 @@ func printPullRequests(body []byte) error {
 		if row.Conflict {
 			flags = append(flags, "conflict")
 		}
-		fmt.Fprintf(table, "%s\t#%d\t%s\t%s\t%s\t%s\t%s\n", row.Repository, row.Number, row.State, row.ReviewState, strings.Join(flags, ","), truncate(row.UpdatedAt, 10), truncate(row.Title, 48))
+		fmt.Fprintf(table, "%s\t#%d\t%s\t%s\t%s\t%s\t%s\n", row.Repository, row.Number, row.State, row.ReviewState, strings.Join(flags, ","), dateOnly(row.UpdatedAt), truncate(row.Title, 48))
 	}
 	if err := table.Flush(); err != nil {
 		return err

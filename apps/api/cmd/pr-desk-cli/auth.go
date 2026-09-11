@@ -93,7 +93,7 @@ func runLogout() error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	fmt.Println("Signed out. The server still lists the token until it expires; revoke it there to end it early.")
+	fmt.Println("Signed out on this machine. The grant itself lives until it expires or is revoked with DELETE /api/v1/api-tokens/{id}.")
 	return nil
 }
 

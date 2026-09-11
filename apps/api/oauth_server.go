@@ -159,26 +159,32 @@ type authorizeRequest struct {
 // than sent to an unvalidated address, otherwise the endpoint becomes an open
 // redirector.
 func (s *Server) parseAuthorizeRequest(c *gin.Context) (authorizeRequest, string) {
-	clientID := c.Query("client_id")
-	client, ok := s.oauthClient(clientID)
+	// The first request carries its parameters in the query string; the consent
+	// page submits them again as form fields. ParseForm merges both, so the same
+	// parsing serves the GET that renders the page and the POST that confirms it.
+	if err := c.Request.ParseForm(); err != nil {
+		return authorizeRequest{}, "The authorization request could not be read"
+	}
+	value := c.Request.Form.Get
+	client, ok := s.oauthClient(value("client_id"))
 	if !ok {
 		return authorizeRequest{}, "Unknown client"
 	}
-	redirect := c.Query("redirect_uri")
+	redirect := value("redirect_uri")
 	if !redirectAllowed(client, redirect) {
 		return authorizeRequest{}, "The redirect address is not registered for this client"
 	}
-	if c.Query("response_type") != "code" {
+	if value("response_type") != "code" {
 		return authorizeRequest{}, "Only the authorization code flow is supported"
 	}
-	if c.Query("code_challenge_method") != "S256" || c.Query("code_challenge") == "" {
+	if value("code_challenge_method") != "S256" || value("code_challenge") == "" {
 		return authorizeRequest{}, "This server requires PKCE with S256"
 	}
-	scopes, err := parseScopes(c.Query("scope"))
+	scopes, err := parseScopes(value("scope"))
 	if err != nil {
 		return authorizeRequest{}, err.Error()
 	}
-	return authorizeRequest{client: client, redirect: redirect, challenge: c.Query("code_challenge"), state: c.Query("state"), scopes: scopes, resource: c.Query("resource")}, ""
+	return authorizeRequest{client: client, redirect: redirect, challenge: value("code_challenge"), state: value("state"), scopes: scopes, resource: value("resource")}, ""
 }
 
 var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
@@ -206,16 +212,36 @@ var scopeDescriptions = map[string]string{
 	scopeFollowUpsWrite: "Mark follow-ups read or handled, snooze them, and start a sync",
 }
 
+// hasAccountSession reports whether the request carries a usable browser
+// session, without emitting the API-shaped 401 that settingsAccount writes.
+func (s *Server) hasAccountSession(c *gin.Context) bool {
+	if !c.GetBool("account_session") {
+		return false
+	}
+	var account OAuthToken
+	return s.db.Where("session_id = ? AND git_hub_id > 0", requestSessionID(c)).First(&account).Error == nil
+}
+
 func (s *Server) authorizeEndpoint(c *gin.Context) {
 	request, problem := s.parseAuthorizeRequest(c)
 	if problem != "" {
 		c.String(http.StatusBadRequest, problem)
 		return
 	}
+	// A browser arriving without a session is sent through the normal GitHub
+	// sign-in and returns to this exact authorization request. Answering the
+	// raw 401 here would show the account holder a JSON blob and leave the
+	// waiting client to time out.
+	if !s.hasAccountSession(c) {
+		if c.Request.Method == http.MethodGet {
+			c.Redirect(http.StatusFound, "/api/v1/auth/github?return="+url.QueryEscape(c.Request.URL.RequestURI()))
+			return
+		}
+		c.String(http.StatusUnauthorized, "Your session expired. Start the authorization again.")
+		return
+	}
 	account, ok := s.settingsAccount(c)
 	if !ok {
-		// settingsAccount already answered 401 for an API caller; a browser is
-		// sent through the normal GitHub sign-in and comes back here.
 		c.Abort()
 		return
 	}
@@ -232,13 +258,26 @@ func (s *Server) authorizeEndpoint(c *gin.Context) {
 		"code_challenge": request.challenge, "code_challenge_method": "S256", "state": request.state,
 		"scope": strings.Join(request.scopes, " "), "resource": request.resource,
 	}
-	cancel := request.redirect + "?error=access_denied"
-	if request.state != "" {
-		cancel += "&state=" + url.QueryEscape(request.state)
-	}
+	cancel := cancelURL(request)
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	_ = consentPage.Execute(c.Writer, map[string]any{"Client": request.client.Name, "Account": account.Username, "Scopes": descriptions, "Fields": fields, "Cancel": cancel})
+}
+
+// A registered redirect may already carry a query, so the refusal is added
+// through the URL parser rather than by concatenation.
+func cancelURL(request authorizeRequest) string {
+	target, err := url.Parse(request.redirect)
+	if err != nil {
+		return request.redirect
+	}
+	query := target.Query()
+	query.Set("error", "access_denied")
+	if request.state != "" {
+		query.Set("state", request.state)
+	}
+	target.RawQuery = query.Encode()
+	return target.String()
 }
 
 func (s *Server) completeAuthorization(c *gin.Context, request authorizeRequest, sessionID string) {
