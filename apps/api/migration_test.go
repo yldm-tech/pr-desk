@@ -15,6 +15,12 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	if err := db.Create(&pr).Error; err != nil {
 		t.Fatal(err)
 	}
+	// gorm stamps updated_at on create with nanosecond precision that the column
+	// truncates, so the row is pinned to an exact value before the comparison.
+	activity := time.Date(2021, 3, 4, 5, 6, 7, 0, time.UTC)
+	if err := db.Model(&PullRequest{}).Where("id = ?", pr.ID).UpdateColumn("updated_at", activity).Error; err != nil {
+		t.Fatal(err)
+	}
 	follow := FollowUp{SessionID: "migrate", PullRequestID: pr.ID, Version: 1, WaitingSince: now, LastActivityAt: now, FactsJSON: `{"role":"authored"}`}
 	if err := db.Create(&follow).Error; err != nil {
 		t.Fatal(err)
@@ -35,7 +41,7 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	if err := db.Where("id = ?", pr.ID).First(&survivor).Error; err != nil {
 		t.Fatal("an existing row did not survive the migration:", err)
 	}
-	if survivor.Title != "Existing row" || !survivor.UpdatedAt.UTC().Equal(pr.UpdatedAt.UTC()) {
+	if survivor.Title != "Existing row" || !survivor.UpdatedAt.UTC().Equal(activity) {
 		t.Fatal("the migration rewrote existing data", survivor.Title, survivor.UpdatedAt)
 	}
 	var follows int64
