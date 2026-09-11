@@ -37,12 +37,12 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 
 | Tool | Scope | Notes |
 |------|-------|-------|
-| `list_follow_ups` | read | Filter by state, role, repository, reason, unread or minimum waiting days; sort by longest wait |
+| `list_follow_ups` | read | Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days; sort by longest wait |
 | `get_follow_up` | read | One follow-up with its stored comment thread rather than the truncated excerpt |
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
 | `get_sync_status` | read | How old the data is and how old that verdict is, so an empty result can be judged |
-| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state or role |
-| `list_repositories` | read | Per-repository open, attention and conflict counts |
+| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state, role, check state or conflict |
+| `list_repositories` | read | Per-repository open, attention, conflict and failing-check counts |
 | `mark_follow_up_read` | write | Does not mark the work handled |
 | `mark_follow_up_handled` | write | Restarts the waiting clock |
 | `snooze_follow_up` | write | Suppresses reminders for 1–365 days |
@@ -58,6 +58,19 @@ GitHub reports through two APIs and both are read. Check runs are what GitHub Ac
 
 `inconclusive` means every run that did not pass was cancelled or marked stale — superseded by a newer push, stopped by a concurrency group, or otherwise abandoned. GitHub renders those as a red cross and its own API reports them next to real failures, but they decided nothing about the code, so they do not raise a `checks_failed` follow-up. A genuine failure, a timeout, a startup failure or a run awaiting manual action all still count as `failure`.
 
+### The reason and the state are not the same question
+
+The `checks_failed` and `conflict` reasons are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix and does not belong in your action queue. Filtering `list_follow_ups` by `reason` therefore answers "what is PR Desk asking me to do", and on an account that mostly reviews it can legitimately return nothing while plenty of branches are red.
+
+To ask the other question — which branches are failing, whoever owns them — filter on the state instead. `checks` and `conflict` are accepted by both `list_follow_ups` and `list_pull_requests` and apply whatever your role is, and `list_repositories` reports `checks_failing` next to `needs_attention` for the same reason: one count is the work, the other is the weather.
+
+The browser's own repositories table reports `checks_failing` too, and it is the only column the two surfaces agree on. Everything else there is deliberately narrower: its scope is the pull requests you authored, and its attention count is a query over stored columns, where the tool's is the follow-up state that read, handled and snooze all move. The page answers "how does my own work stand"; the tool answers "what is the follow-up workspace holding".
+
+```
+prdesk prs --state open --checks failure --url    # every red branch, whoever owns it
+prdesk followups --reason checks_failed           # only the ones that are yours to fix
+```
+
 ### Reading the sync status
 
 Two clocks answer different questions, and confusing them has already cost an investigation.
@@ -65,6 +78,8 @@ Two clocks answer different questions, and confusing them has already cost an in
 `stale_minutes` is the age of the **data**: how long ago the last full synchronization finished. `reported_age_minutes` is the age of the **verdict**: how long ago that status was written.
 
 The progress record is stored on the account and outlives the process that wrote it. A failure therefore survives a restart or a redeploy, and keeps being reported until the next run overwrites it. A `failed` status whose `reported_at` predates the current deployment belongs to a run that is already over; the next scheduled sync will replace it. Only a failure reported after the last restart is a live problem.
+
+`completed` counts the items of the phase that actually landed, not the ones attempted, so on a failed run the shortfall against `total` is how much of that phase was lost. The bounded `error_code` names the layer; for a storage failure the server log additionally names the cause, which is where a constraint violation is told apart from a dropped connection.
 
 ## Waiting time
 
@@ -79,6 +94,8 @@ prdesk login --host https://prdesk.example.com   # add --write to allow state ch
 prdesk followups --state action --sort waiting   # longest wait first
 prdesk followups --reason checks_failed --url    # everything red, with links
 prdesk followups --min-waiting 14 --unread       # stale and still unseen
+prdesk prs --state open --checks failure         # every red branch, whoever owns it
+prdesk repos                                     # per repository, including failing counts
 prdesk show 41                                   # one row in full, with its comments
 prdesk sync                                      # how old the answer is
 prdesk handled 41 7                              # id and version from the listing

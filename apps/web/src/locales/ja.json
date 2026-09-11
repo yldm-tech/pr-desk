@@ -14,6 +14,7 @@
   "open": "オープンPR",
   "needsReview": "レビュー待ち",
   "conflicts": "競合",
+  "checksFailing": "失敗",
   "mergedMonth": "今月マージ済み",
   "yourPRs": "あなたのPull Request",
   "previous": "前へ",

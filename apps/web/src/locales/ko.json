@@ -14,6 +14,7 @@
   "open": "열린 PR",
   "needsReview": "리뷰 필요",
   "conflicts": "충돌",
+  "checksFailing": "실패",
   "mergedMonth": "이번 달 병합",
   "yourPRs": "내 Pull Request",
   "previous": "이전",

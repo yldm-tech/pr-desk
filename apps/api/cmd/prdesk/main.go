@@ -30,6 +30,8 @@ Filters for followups:
   --role authored|reviewer
   --repo owner/name
   --reason checks_failed|conflict|human_feedback|review_requested|overdue|…
+  --checks success|failure|pending|inconclusive|unknown
+  --conflict          only rows whose branch conflicts with its base
   --unread            only rows with activity you have not read
   --min-waiting N     only rows waiting at least N days
   --sort waiting      longest wait first (default: by state, then activity)
@@ -40,6 +42,8 @@ Filters for prs:
   --role authored|reviewer
   --repo owner/name
   --query text
+  --checks success|failure|pending|inconclusive|unknown
+  --conflict          only rows whose branch conflicts with its base
   --limit N
 
 Global:
@@ -49,6 +53,11 @@ Global:
 
 A checks state of "inconclusive" means nothing failed: every run that did not
 pass was cancelled or superseded. Use show to see which runs those were.
+
+The checks_failed and conflict reasons are raised only on pull requests you
+authored, because a red branch on somebody else's pull request is not yours to
+fix. To see every failing branch whatever your role, filter on the state
+itself: prdesk prs --state open --checks failure.
 
 The identifier and version come from the listing; passing a stale version is
 refused so that nothing is marked away after new activity arrived.

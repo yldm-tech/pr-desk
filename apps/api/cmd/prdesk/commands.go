@@ -17,8 +17,8 @@ var listCommands = map[string]struct {
 	tool   string
 	accept map[string]bool
 }{
-	"followups": {"list_follow_ups", map[string]bool{"state": true, "role": true, "repository": true, "reason": true, "unread": true, "min_waiting_days": true, "sort": true, "limit": true}},
-	"prs":       {"list_pull_requests", map[string]bool{"state": true, "role": true, "repository": true, "query": true, "limit": true}},
+	"followups": {"list_follow_ups", map[string]bool{"state": true, "role": true, "repository": true, "reason": true, "checks": true, "conflict": true, "unread": true, "min_waiting_days": true, "sort": true, "limit": true}},
+	"prs":       {"list_pull_requests", map[string]bool{"state": true, "role": true, "repository": true, "query": true, "checks": true, "conflict": true, "limit": true}},
 	"repos":     {"list_repositories", map[string]bool{}},
 	"summary":   {"get_follow_up_summary", map[string]bool{}},
 	"sync":      {"get_sync_status", map[string]bool{}},
@@ -37,9 +37,11 @@ func listFlags(command string, args []string) (listOptions, error) {
 	repo := flags.String("repo", "", "owner/name")
 	query := flags.String("query", "", "match against the title")
 	reason := flags.String("reason", "", "checks_failed, conflict, human_feedback, review_requested, overdue, …")
+	checks := flags.String("checks", "", "success, failure, pending, inconclusive or unknown")
 	sortBy := flags.String("sort", "", "waiting for the longest wait first, or activity")
 	minWaiting := flags.Int("min-waiting", 0, "only rows waiting at least this many days")
 	limit := flags.Int("limit", 0, "maximum rows")
+	conflict := flags.Bool("conflict", false, "only rows whose branch conflicts with its base")
 	unread := flags.Bool("unread", false, "only rows with activity you have not read")
 	showURL := flags.Bool("url", false, "add a column with the pull request URL")
 	asJSON := flags.Bool("json", false, "print raw JSON")
@@ -47,7 +49,7 @@ func listFlags(command string, args []string) (listOptions, error) {
 		return listOptions{}, err
 	}
 	arguments := map[string]any{}
-	for key, value := range map[string]string{"state": *state, "role": *role, "repository": *repo, "query": *query, "reason": *reason, "sort": *sortBy} {
+	for key, value := range map[string]string{"state": *state, "role": *role, "repository": *repo, "query": *query, "reason": *reason, "checks": *checks, "sort": *sortBy} {
 		if value != "" {
 			arguments[key] = value
 		}
@@ -58,10 +60,13 @@ func listFlags(command string, args []string) (listOptions, error) {
 	if *minWaiting > 0 {
 		arguments["min_waiting_days"] = *minWaiting
 	}
+	if *conflict {
+		arguments["conflict"] = true
+	}
 	if *unread {
 		arguments["unread"] = true
 	}
-	flagNames := map[string]string{"state": "--state", "role": "--role", "repository": "--repo", "query": "--query", "reason": "--reason", "sort": "--sort", "min_waiting_days": "--min-waiting", "unread": "--unread", "limit": "--limit"}
+	flagNames := map[string]string{"state": "--state", "role": "--role", "repository": "--repo", "query": "--query", "reason": "--reason", "checks": "--checks", "conflict": "--conflict", "sort": "--sort", "min_waiting_days": "--min-waiting", "unread": "--unread", "limit": "--limit"}
 	accept := listCommands[command].accept
 	for key := range arguments {
 		if !accept[key] {
@@ -246,10 +251,11 @@ func printPullRequests(body []byte, showURL bool) error {
 func printRepositories(body []byte) error {
 	var payload struct {
 		Repositories []struct {
-			Repository string `json:"repository"`
-			Open       int    `json:"open"`
-			Attention  int    `json:"needs_attention"`
-			Conflicts  int    `json:"conflicts"`
+			Repository    string `json:"repository"`
+			Open          int    `json:"open"`
+			Attention     int    `json:"needs_attention"`
+			Conflicts     int    `json:"conflicts"`
+			ChecksFailing int    `json:"checks_failing"`
 		} `json:"repositories"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
@@ -260,9 +266,9 @@ func printRepositories(body []byte) error {
 		return nil
 	}
 	table := newTable()
-	fmt.Fprintln(table, "REPOSITORY\tOPEN\tATTENTION\tCONFLICTS")
+	fmt.Fprintln(table, "REPOSITORY\tOPEN\tATTENTION\tCONFLICTS\tFAILING")
 	for _, row := range payload.Repositories {
-		fmt.Fprintf(table, "%s\t%d\t%d\t%d\n", row.Repository, row.Open, row.Attention, row.Conflicts)
+		fmt.Fprintf(table, "%s\t%d\t%d\t%d\t%d\n", row.Repository, row.Open, row.Attention, row.Conflicts, row.ChecksFailing)
 	}
 	return table.Flush()
 }
