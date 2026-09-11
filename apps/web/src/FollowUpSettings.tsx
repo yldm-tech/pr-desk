@@ -504,10 +504,17 @@ export function FollowUpSettings() {
       </p>
     );
   return (
+    // Two explicit columns rather than letting the cards flow: the grid would
+    // align them into rows of equal height, and these sections differ too much
+    // in length for that to leave anything but gaps.
     <div className="followup-settings-page">
-      <SettingsForm settings={query.data} />
-      <NotificationDestinations />
-      <AccessSettings />
+      <div className="followup-settings-column">
+        <SettingsForm settings={query.data} />
+        <NotificationDestinations />
+      </div>
+      <div className="followup-settings-column">
+        <AccessSettings />
+      </div>
     </div>
   );
 }

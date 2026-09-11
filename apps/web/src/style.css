@@ -1901,6 +1901,14 @@
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
+  /* The settings view is reached from here rather than from the nav above, so
+     without this the sidebar shows nothing selected while it is open. */
+  .organization-access.active {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    border-color: var(--accent-border);
+    font-weight: 500;
+  }
 
   .auto-sync-note {
     font-size: 12px;

@@ -280,7 +280,7 @@ export default function App() {
         </nav>
         <div className="sidebottom max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs">
           {auth?.connected && (
-            <button className="organization-access" aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
+            <button className={filter === "Settings" ? "organization-access active" : "organization-access"} aria-current={filter === "Settings" ? "page" : undefined} aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
               <Settings2 size={16} aria-hidden="true" />
               <span className="max-[480px]:hidden">{t("followup.settings")}</span>
             </button>
