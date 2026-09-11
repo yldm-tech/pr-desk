@@ -213,23 +213,47 @@ func (s *Server) parseAuthorizeRequest(c *gin.Context) (authorizeRequest, string
 
 var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Authorize {{.Client}}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <style>
-body{background:#f7f7f9;color:#27272f;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center}
-main{background:#fff;border:1px solid #e2e2e9;border-radius:14px;padding:28px;max-width:420px;width:calc(100% - 32px)}
-h1{font-size:18px;margin:0 0 12px}p{font-size:14px;line-height:1.7;color:#6b6b78;margin:0 0 16px}
-ul{font-size:14px;padding-left:20px;margin:0 0 20px}li{margin:6px 0}
-button{font:inherit;font-size:14px;border-radius:8px;padding:10px 16px;border:1px solid #5d47bd;background:#5d47bd;color:#fff;cursor:pointer}
-a{display:inline-block;margin-left:12px;color:#6b6b78;font-size:14px}
-strong{color:#27272f}
+:root{color-scheme:light;--canvas:#f7f7f9;--surface:#fff;--surface-muted:#f2f2f5;--foreground:#27272f;--muted:#6b6b78;--border:#e2e2e9;--border-subtle:#eeeef2;--accent:#7260d9;--accent-text:#5d47bd;--accent-soft:#f0ecfb;--accent-border:#c3b8ed;--danger:#b83e4b;--danger-soft:#fceff0}
+*{box-sizing:border-box}
+body{background:var(--canvas);color:var(--foreground);font:400 13px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;min-height:100vh;margin:0;padding:24px;align-items:center;justify-content:center}
+main{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 2px #24202e0a,0 12px 32px #24202e0f;padding:24px;max-width:380px;width:100%}
+.brand{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.brand svg{width:22px;height:22px;border-radius:6px;flex:none}
+.brand span{font-size:12px;font-weight:600;letter-spacing:.01em;color:var(--muted)}
+h1{font-size:15px;font-weight:600;line-height:1.4;margin:0 0 6px;overflow-wrap:anywhere}
+.account{color:var(--muted);margin:0 0 16px}
+.account b{color:var(--foreground);font-weight:600}
+ul{list-style:none;margin:0 0 20px;padding:0;border:1px solid var(--border-subtle);border-radius:10px;background:var(--surface-muted);overflow:hidden}
+li{display:flex;gap:10px;align-items:flex-start;padding:11px 12px}
+li+li{border-top:1px solid var(--border-subtle)}
+li svg{width:15px;height:15px;flex:none;margin-top:1px;color:var(--accent-text)}
+.actions{display:flex;gap:8px;align-items:center}
+button,.cancel{font:inherit;font-weight:500;border-radius:8px;padding:8px 14px;cursor:pointer;transition:background .12s,border-color .12s}
+button{border:1px solid var(--accent-text);background:var(--accent-text);color:#fff;flex:1}
+button:hover:not(:disabled){background:#523ea6;border-color:#523ea6}
+button:disabled{opacity:.6;cursor:progress}
+.cancel{border:1px solid var(--border);background:var(--surface);color:var(--muted);text-decoration:none;display:inline-block}
+.cancel:hover{background:var(--surface-muted);color:var(--foreground)}
+button:focus-visible,.cancel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{margin:20px 0 0;padding-top:16px;border-top:1px solid var(--border-subtle);font-size:12px;line-height:1.6;color:var(--muted)}
+#problem{margin:12px 0 0;padding:8px 10px;border-radius:8px;background:var(--danger-soft);color:var(--danger);font-size:12px}
 </style></head><body><main>
+<div class="brand">
+<svg viewBox="0 0 128 128" fill="none" aria-hidden="true"><defs><linearGradient id="m" x1="16" y1="8" x2="112" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#7768EF"/><stop offset="1" stop-color="#5142BD"/></linearGradient></defs><rect width="128" height="128" rx="30" fill="url(#m)"/><path d="M40 44v40m47-4V59c0-14-9-23-24-23" stroke="#F8F7FF" stroke-width="8" stroke-linecap="round"/><path d="m70 26-11 10 11 10" stroke="#F8F7FF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="34" r="10" fill="#6C5DDE" stroke="#F8F7FF" stroke-width="7"/><circle cx="40" cy="94" r="10" fill="#594AC7" stroke="#F8F7FF" stroke-width="7"/><circle cx="87" cy="94" r="12" fill="#B6F3CD"/></svg>
+<span>PR Desk</span>
+</div>
 <h1>Authorize {{.Client}}</h1>
-<p><strong>{{.Client}}</strong> is asking to use your PR Desk account <strong>{{.Account}}</strong>.</p>
-<ul>{{range .Scopes}}<li>{{.}}</li>{{end}}</ul>
+<p class="account">Connecting to your account <b>{{.Account}}</b>.</p>
+<ul>{{range .Scopes}}<li><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 4.5 6 12 2.5 8.5"/></svg><span>{{.}}</span></li>{{end}}</ul>
 <form id="consent" method="post" action="/api/v1/oauth/authorize">
 {{range $key, $value := .Fields}}<input type="hidden" name="{{$key}}" value="{{$value}}">{{end}}
-<button type="submit">Authorize</button><a href="{{.Cancel}}">Cancel</a>
+<div class="actions"><button type="submit">Authorize</button><a class="cancel" href="{{.Cancel}}">Cancel</a></div>
 <p id="problem" hidden>Authorization could not be completed. Start again from your client.</p>
 </form>
+<p class="note">It cannot reach your settings or notification destinations, and never posts to GitHub. Revoke it any time from Settings.</p>
 <script>
 // Submitted with fetch rather than as a form post: a top-level POST navigation
 // is refused by the edge in front of this deployment before it reaches the
@@ -260,7 +284,7 @@ document.getElementById("consent").addEventListener("submit", async (event) => {
 
 var scopeDescriptions = map[string]string{
 	scopeFollowUpsRead:  "Read your pull requests, follow-ups and activity",
-	scopeFollowUpsWrite: "Mark follow-ups read or handled, snooze them, and start a sync",
+	scopeFollowUpsWrite: "Mark follow-ups read or handled, and snooze them",
 }
 
 // hasAccountSession reports whether the request carries a usable browser
