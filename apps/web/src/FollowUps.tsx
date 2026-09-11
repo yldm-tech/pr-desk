@@ -8,6 +8,12 @@ import { apiURL } from "./api-url";
 import { PRSchema } from "./pr-model";
 import { safeGitHubLink } from "./activity-model";
 
+// Reasons are grouped by what the reader has to do about them: a blocked PR
+// needs a fix, an action is waiting on the reader, and the timing reasons only
+// say that the clock ran out.
+const reasonTones: Record<string, string> = { conflict: "blocked", checks_failed: "blocked", review_requested: "action", human_feedback: "action", approval_revoked: "action", overdue: "waiting", snooze_due: "waiting" };
+const reasonTone = (reason: string) => reasonTones[reason] || "neutral";
+
 const followUpSchema = z.object({ id: z.number(), version: z.number(), role: z.string(), state: z.string(), reasons: z.array(z.string()), unread: z.boolean(), excerpt: z.string(), waiting_since: z.string(), archived_at: z.string().nullable(), pr: PRSchema });
 const responseSchema = z.object({ data: z.array(followUpSchema), counts: z.record(z.string(), z.number()), baseline_complete: z.boolean() });
 type FollowUp = z.infer<typeof followUpSchema>;
@@ -50,7 +56,9 @@ function FollowUpCard({ item }: { item: FollowUp }) {
       </h3>
       <div className="followup-reasons">
         {item.reasons.map((reason) => (
-          <span key={reason}>{t(`followup.${reason}`)}</span>
+          <span key={reason} className="followup-reason" data-tone={reasonTone(reason)}>
+            {t(`followup.${reason}`)}
+          </span>
         ))}
       </div>
       {item.excerpt && <p className="followup-excerpt">{item.excerpt}</p>}
@@ -127,7 +135,13 @@ export function FollowUpSummary() {
               <span>
                 {item.pr.repo} #{item.pr.number} · {item.pr.title}
               </span>
-              <small>{item.reasons.map((reason) => t(`followup.${reason}`)).join(" · ")}</small>
+              <small className="followup-priority-reasons">
+                {item.reasons.map((reason) => (
+                  <span key={reason} className="followup-reason" data-tone={reasonTone(reason)}>
+                    {t(`followup.${reason}`)}
+                  </span>
+                ))}
+              </small>
             </Link>
           </li>
         ))}

@@ -93,6 +93,44 @@ test("overview preserves global follow-ups when contribution year changes", asyn
   await expect(page.locator(".followup-card")).toHaveCount(2);
 });
 
+test("follow-up reasons are coloured by what they ask for", async ({ page }, testInfo) => {
+  const reasons = [["conflict", "checks_failed"], ["review_requested"], ["overdue"], ["author_updated"]];
+  await page.route("**/api/v1/follow-ups", (route) =>
+    route.fulfill({
+      json: {
+        baseline_complete: true,
+        counts: { authored: 4, reviewer: 0, follow_up: 2, recent_merged: 0 },
+        data: reasons.map((entries, index) => ({
+          id: index + 1,
+          version: 1,
+          role: "authored",
+          state: "action",
+          reasons: entries,
+          unread: false,
+          excerpt: "",
+          waiting_since: "2026-09-01T00:00:00Z",
+          archived_at: null,
+          pr: { id: index + 1, repo: "fixture/calendar", number: index + 1, title: `Reason sample ${index + 1}`, url: `https://github.com/fixture/calendar/pull/${index + 1}` },
+        })),
+      },
+    }),
+  );
+  await page.goto("/#/");
+  const priority = page.locator(".followup-priority-reasons");
+  await expect(priority.first().locator('[data-tone="blocked"]')).toHaveCount(2);
+  await expect(priority.nth(1).locator('[data-tone="action"]')).toHaveCount(1);
+  await expect(priority.nth(2).locator('[data-tone="waiting"]')).toHaveCount(1);
+  await expect(priority.nth(3).locator('[data-tone="neutral"]')).toHaveCount(1);
+  const colour = (tone: string) =>
+    page
+      .locator(`.followup-priority-reasons [data-tone="${tone}"]`)
+      .first()
+      .evaluate((node) => getComputedStyle(node).color);
+  const tones = await Promise.all(["blocked", "action", "waiting", "neutral"].map(colour));
+  expect(new Set(tones).size).toBe(4);
+  await page.screenshot({ path: testInfo.outputPath("followup-reason-tones.png"), fullPage: true });
+});
+
 test("read leaves task pending; explicit handling moves it to waiting", async ({ page }) => {
   await page.goto("/#/attention?role=authored&status=action");
   const card = page.locator(".followup-card");
