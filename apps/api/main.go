@@ -162,6 +162,8 @@ func main() {
 	})
 	r.Use(cors.New(corsPolicy()))
 	r.Use(requireMutationOrigin)
+	r.GET("/.well-known/oauth-authorization-server", s.authorizationServerMetadata)
+	r.GET("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()
@@ -198,6 +200,14 @@ func main() {
 	api.GET("/follow-up-settings", s.getFollowUpSettings)
 	api.POST("/follow-up-settings", s.saveFollowUpSettings)
 	api.GET("/review-teams", s.listReviewTeams)
+	// Bearer-authenticated surface for the CLI and MCP clients. The MCP
+	// endpoint carries its own authorization middleware, and the OAuth
+	// endpoints are reachable before any token exists.
+	api.GET("/oauth/authorize", s.authorizeEndpoint)
+	api.POST("/oauth/authorize", s.authorizeEndpoint)
+	api.POST("/oauth/token", s.tokenEndpoint)
+	api.POST("/oauth/register", s.registerOAuthClient)
+	api.Any("/mcp", s.mcpHandler())
 	api.GET("/notification-destinations", s.listNotificationDestinations)
 	api.POST("/notification-destinations", s.saveNotificationDestination)
 	api.PUT("/notification-destinations/:id", s.saveNotificationDestination)

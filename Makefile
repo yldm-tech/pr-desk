@@ -1,4 +1,4 @@
-.PHONY: db api web build production backup test
+.PHONY: db api web build cli production backup test
 db:
 	docker compose up -d postgres
 api:
@@ -9,6 +9,8 @@ build:
 	bun run build
 	bun run scripts/embed-web.ts
 	cd apps/api && go build -tags webembed -trimpath -o ../../dist/pr-desk .
+cli:
+	cd apps/api && go build -trimpath -o ../../dist/pr-desk-cli ./cmd/pr-desk-cli
 production:
 	docker compose up -d --build api postgres
 backup:

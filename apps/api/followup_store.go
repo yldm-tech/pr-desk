@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,16 +114,27 @@ type followUpView struct {
 }
 
 func (s *Server) followUpRows(c *gin.Context) ([]followUpView, error) {
-	settings, err := loadFollowUpSettings(s.db, requestSessionID(c))
+	return s.collectFollowUps(requestSessionID(c), func() *gorm.DB { return sessionPRQuery(c, s.db) })
+}
+
+// accountFollowUps is the same view for a bearer-authenticated caller, which
+// has no gin context. A bearer token always belongs to a connected account, so
+// the legacy browser-only scoping in sessionPRQuery does not apply.
+func (s *Server) accountFollowUps(ctx context.Context, sid string) ([]followUpView, error) {
+	return s.collectFollowUps(sid, func() *gorm.DB { return s.db.WithContext(ctx).Where("session_id = ?", sid) })
+}
+
+func (s *Server) collectFollowUps(sid string, scope func() *gorm.DB) ([]followUpView, error) {
+	settings, err := loadFollowUpSettings(s.db, sid)
 	if err != nil {
 		return nil, err
 	}
 	var records []FollowUp
-	if err := sessionPRQuery(c, s.db).Order("last_activity_at DESC, id DESC").Find(&records).Error; err != nil {
+	if err := scope().Order("last_activity_at DESC, id DESC").Find(&records).Error; err != nil {
 		return nil, err
 	}
 	var prs []PullRequest
-	if err := sessionPRQuery(c, s.db).Find(&prs).Error; err != nil {
+	if err := scope().Find(&prs).Error; err != nil {
 		return nil, err
 	}
 	byID := map[uint]PullRequest{}
@@ -198,13 +210,31 @@ func (s *Server) updateFollowUp(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Choose a future reminder within one year"})
 		return
 	}
-	var status = 200
+	status, err := s.applyFollowUpAction(c.Param("id"), input.Action, input.Version, input.Until, now, func(tx *gorm.DB) *gorm.DB { return sessionPRQuery(c, tx) })
+	if err != nil {
+		c.JSON(status, gin.H{"error": "Unable to update follow-up; refresh and retry"})
+		return
+	}
+	c.JSON(200, gin.H{"updated": true})
+}
+
+// applyFollowUpAction holds the optimistic concurrency rule shared by the HTTP
+// handler and the MCP tools: an action is refused when new activity arrived
+// after the caller read the row, so an agent cannot mark away something it has
+// not seen.
+func (s *Server) applyFollowUpAction(id, action string, version uint64, until *time.Time, now time.Time, scope func(*gorm.DB) *gorm.DB) (int, error) {
+	status := 200
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var row FollowUp
-		if err := sessionPRQuery(c, tx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", c.Param("id")).First(&row).Error; err != nil {
+		if err := scope(tx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", id).First(&row).Error; err != nil {
 			status = 404
 			return err
 		}
+		input := struct {
+			Action  string
+			Version uint64
+			Until   *time.Time
+		}{action, version, until}
 		if row.Version != input.Version {
 			status = 409
 			return fmt.Errorf("new activity arrived; refresh before marking handled")
@@ -223,12 +253,8 @@ func (s *Server) updateFollowUp(c *gin.Context) {
 		}
 		return tx.Save(&row).Error
 	})
-	if err != nil {
-		if status == 200 {
-			status = 500
-		}
-		c.JSON(status, gin.H{"error": "Unable to update follow-up; refresh and retry"})
-		return
+	if err != nil && status == 200 {
+		status = 500
 	}
-	c.JSON(200, gin.H{"updated": true})
+	return status, err
 }
