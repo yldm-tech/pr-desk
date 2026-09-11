@@ -41,7 +41,9 @@ func (s *Server) listNotificationDestinations(c *gin.Context) {
 	for _, r := range rows {
 		out = append(out, gin.H{"id": r.ID, "name": r.Name, "kind": destinationKind(r.Kind), "enabled": r.Enabled})
 	}
-	c.JSON(200, gin.H{"data": out})
+	// The form mirrors the outbound address policy, so it has to know whether this
+	// deployment opted into private addresses.
+	c.JSON(200, gin.H{"data": out, "allow_private_hosts": privateDestinationsAllowed()})
 }
 
 // Credentials are write-only: a field left empty on update keeps the stored

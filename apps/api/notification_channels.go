@@ -247,11 +247,19 @@ func sendEmailNotification(ctx context.Context, config destinationConfig, subjec
 
 var headerSanitizer = strings.NewReplacer("\r", " ", "\n", " ")
 
+// mime.QEncoding separates its encoded words with a plain space instead of a fold, so a subject in a
+// language that encodes to several bytes per character runs past the 998 octet line limit of RFC
+// 5322 well before the 120 character cap applied to it. Folding between the words keeps every
+// physical line short and decodes to the same subject.
+func foldEncodedSubject(encoded string) string {
+	return strings.ReplaceAll(encoded, "?= =?", "?=\r\n =?")
+}
+
 func emailMessage(config destinationConfig, subject, body string, now time.Time) []byte {
 	headers := []string{
 		"From: " + headerSanitizer.Replace(config.From),
 		"To: " + headerSanitizer.Replace(strings.Join(config.To, ", ")),
-		"Subject: " + mime.QEncoding.Encode("UTF-8", headerSanitizer.Replace(subject)),
+		"Subject: " + foldEncodedSubject(mime.QEncoding.Encode("UTF-8", headerSanitizer.Replace(subject))),
 		"Date: " + now.Format(time.RFC1123Z),
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=UTF-8",

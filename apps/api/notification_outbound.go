@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,8 +33,9 @@ func blockedDestinationIP(ip net.IP) bool {
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast() {
 		return true
 	}
-	// Carrier-grade NAT space reaches infrastructure that is not on the public internet either.
-	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
+	// Carrier-grade NAT space reaches infrastructure that is not on the public internet either, and
+	// 0.0.0.0/8 is a second spelling of the local host on the platforms that still route it.
+	if ip4 := ip.To4(); ip4 != nil && (ip4[0] == 0 || (ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127)) {
 		return true
 	}
 	return false
@@ -115,8 +117,10 @@ func postJSON(ctx context.Context, endpoint string, body []byte, headers map[str
 		return 0, "", err
 	}
 	defer response.Body.Close()
-	// Provider errors are short; a bounded read keeps a hostile endpoint from filling memory.
-	payload := make([]byte, 2048)
-	read, _ := response.Body.Read(payload)
-	return response.StatusCode, string(payload[:read]), nil
+	// Provider errors are short; a bounded read keeps a hostile endpoint from filling memory. The
+	// whole limit has to be drained rather than a single Read, because a provider that reports a
+	// rejection inside an HTTP 200 body splits it across reads often enough that a prefix would be
+	// unparseable and the delivery would be recorded as sent.
+	payload, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
+	return response.StatusCode, string(payload), nil
 }

@@ -14,7 +14,10 @@ type Destination = { id: number; name: string; kind: Channel; enabled: boolean }
 const emptyDraft = { kind: "telegram" as Channel, name: "", token: "", chat_id: "", url: "", secret: "", host: "", port: "587", username: "", password: "", from: "", to: "" };
 type Draft = typeof emptyDraft;
 const channelLabel = (kind: string) => `followup.channel${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// The server parses addresses with net/mail, which accepts a display name. The
+// browser check stays deliberately narrower than RFC 5322 but has to allow the
+// same two spellings so the form does not reject what the server stores.
+const emailPattern = /^(?:[^<>]*<\s*[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+\s*>|[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)$/;
 const recipientList = (value: string) =>
   value
     .split(/[,\n;]/)
@@ -38,7 +41,10 @@ function isPrivateHost(value: string) {
   return first === 0 || first === 10 || first === 127 || (first === 100 && second >= 64 && second <= 127) || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
 }
 
-function draftErrors(draft: Draft): Record<string, string> {
+// allowPrivate mirrors NOTIFY_ALLOW_PRIVATE_HOSTS on the server: with it the
+// server also accepts plain http, because internal endpoints rarely have a
+// certificate, and the form has to accept the same addresses it does.
+function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string> {
   const found: Record<string, string> = {};
   if (!draft.name.trim()) found.name = "followup.required";
   if (draft.kind === "telegram") {
@@ -47,12 +53,12 @@ function draftErrors(draft: Draft): Record<string, string> {
   }
   if (draft.kind === "lark" || draft.kind === "webhook") {
     const url = draft.url.trim();
-    if (!/^https?:\/\/\S+$/i.test(url)) found.url = "followup.invalidUrl";
-    else if (isPrivateHost(url)) found.url = "followup.privateUrl";
+    if (!(allowPrivate ? /^https?:\/\/\S+$/i : /^https:\/\/\S+$/i).test(url)) found.url = "followup.invalidUrl";
+    else if (!allowPrivate && isPrivateHost(url)) found.url = "followup.privateUrl";
   }
   if (draft.kind === "email") {
     if (!draft.host.trim()) found.host = "followup.required";
-    else if (isPrivateHost(draft.host)) found.host = "followup.privateUrl";
+    else if (!allowPrivate && isPrivateHost(draft.host)) found.host = "followup.privateUrl";
     const port = Number(draft.port.trim());
     if (draft.port.trim() && !(Number.isInteger(port) && port >= 1 && port <= 65535)) found.port = "followup.invalidPort";
     if (!emailPattern.test(draft.from.trim())) found.from = "followup.invalidEmail";
@@ -285,7 +291,7 @@ function NotificationDestinations() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(0);
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
-  const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[] }>(), retry: false });
+  const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[]; allow_private_hosts?: boolean }>(), retry: false });
   const addDestination = useMutation({
     mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: destinationPayload(draft) }),
     onSuccess: () => {
@@ -323,7 +329,7 @@ function NotificationDestinations() {
           }}
           onSubmit={(event) => {
             event.preventDefault();
-            const found = draftErrors(draft);
+            const found = draftErrors(draft, destinations.data?.allow_private_hosts === true);
             setErrors(found);
             if (Object.values(found).some(Boolean)) return;
             addDestination.mutate();

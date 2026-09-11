@@ -76,8 +76,16 @@ func TestDestinationChannelsPersistAndRetainCredentials(t *testing.T) {
 	if json.Unmarshal(w.Body.Bytes(), &created) != nil || created.ID == 0 {
 		t.Fatal("no destination id", w.Body.String())
 	}
-	if w := req("GET", "/dest", ""); !strings.Contains(w.Body.String(), `"kind":"lark"`) {
-		t.Fatal("channel missing from the list", w.Body.String())
+	if w := req("GET", "/dest", ""); !strings.Contains(w.Body.String(), `"kind":"lark"`) || !strings.Contains(w.Body.String(), `"allow_private_hosts":false`) {
+		t.Fatal("channel or outbound policy missing from the list", w.Body.String())
+	}
+	// The form mirrors the policy, so the flag has to follow the environment.
+	t.Setenv("NOTIFY_ALLOW_PRIVATE_HOSTS", "true")
+	if w := req("GET", "/dest", ""); !strings.Contains(w.Body.String(), `"allow_private_hosts":true`) {
+		t.Fatal("opt-in not reported to the form", w.Body.String())
+	}
+	if w := req("POST", "/dest", `{"kind":"webhook","name":"internal","url":"http://10.0.0.9/hook"}`); w.Code != 200 {
+		t.Fatal("private webhook rejected despite the opt-in", w.Code, w.Body.String())
 	}
 	// Disabling sends no credentials; the stored webhook has to survive it.
 	if w := req("PUT", "/dest/"+strconv.Itoa(int(created.ID)), `{"name":"team chat","enabled":false}`); w.Code != 200 {

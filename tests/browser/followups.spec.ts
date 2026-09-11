@@ -197,3 +197,29 @@ test("channel selection swaps the destination fields and posts the channel", asy
   expect((await mailed).postDataJSON()).toMatchObject({ kind: "email", host: "smtp.example.com", port: 587, from: "desk@example.com", to: ["me@example.com", "team@example.com"] });
   await page.screenshot({ path: testInfo.outputPath("followup-channels.png"), fullPage: true });
 });
+
+test("a display name is accepted in email addresses", async ({ page }) => {
+  await page.goto("/#/settings");
+  await page.getByLabel("Channel", { exact: true }).selectOption("email");
+  await page.getByLabel("Name", { exact: true }).fill("Inbox");
+  await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
+  await page.getByLabel("From address", { exact: true }).fill("PR Desk <desk@example.com>");
+  await page.getByLabel("Recipients", { exact: true }).fill("Ops Team <ops@example.com>");
+  const posted = page.waitForRequest((request) => request.url().endsWith("/notification-destinations") && request.method() === "POST");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await posted).postDataJSON()).toMatchObject({ from: "PR Desk <desk@example.com>", to: ["Ops Team <ops@example.com>"] });
+});
+
+test("private webhook addresses are allowed when the server opts in", async ({ page }) => {
+  await page.route("**/api/v1/notification-destinations", async (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { data: [], allow_private_hosts: true } });
+    return route.fulfill({ json: { id: 1, name: "internal", kind: "webhook", enabled: true } });
+  });
+  await page.goto("/#/settings");
+  await page.getByLabel("Channel", { exact: true }).selectOption("webhook");
+  await page.getByLabel("Name", { exact: true }).fill("internal");
+  await page.getByLabel("Webhook URL", { exact: true }).fill("http://10.0.0.9/hooks/pr-desk");
+  const posted = page.waitForRequest((request) => request.url().endsWith("/notification-destinations") && request.method() === "POST");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  expect((await posted).postDataJSON()).toMatchObject({ kind: "webhook", url: "http://10.0.0.9/hooks/pr-desk" });
+});

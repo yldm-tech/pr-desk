@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -109,6 +110,24 @@ func TestLarkDeliverySignsAndReportsProviderRejection(t *testing.T) {
 	}
 }
 
+// Lark reports a rejection inside an HTTP 200 body. A body that arrives in
+// several chunks has to be drained completely, because a prefix does not parse
+// and the delivery would be recorded as sent and never retried.
+func TestLarkRejectionIsDetectedWhenTheBodyArrivesInChunks(t *testing.T) {
+	t.Setenv("NOTIFY_ALLOW_PRIVATE_HOSTS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":19021,`))
+		w.(http.Flusher).Flush()
+		time.Sleep(20 * time.Millisecond)
+		_, _ = w.Write([]byte(`"msg":"sign match fail"}`))
+	}))
+	defer server.Close()
+	if err := sendLarkNotification(context.Background(), destinationConfig{URL: server.URL, Secret: "topsecret"}, "body"); err == nil {
+		t.Fatal("a rejection split across chunks was reported as a successful delivery")
+	}
+}
+
 func TestWebhookDeliverySignsTheBodyAndFailsOnErrorStatus(t *testing.T) {
 	t.Setenv("NOTIFY_ALLOW_PRIVATE_HOSTS", "true")
 	status := 200
@@ -192,6 +211,25 @@ func TestEmailMessageEncodesHeadersAndBody(t *testing.T) {
 	decoded, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(strings.TrimSpace(encoded), "\r\n", ""))
 	if err != nil || string(decoded) != "line one\nline two" {
 		t.Fatal("body not recoverable", err, string(decoded))
+	}
+}
+
+func TestEmailMessageFoldsALongNonASCIISubject(t *testing.T) {
+	config := destinationConfig{From: "desk@example.com", To: []string{"first@example.com"}}
+	subject := notificationSubject(strings.Repeat("跟", 200))
+	message := string(emailMessage(config, subject, "body", time.Date(2026, 9, 11, 8, 0, 0, 0, time.UTC)))
+	for _, line := range strings.Split(message, "\r\n") {
+		if len(line) > 998 {
+			t.Fatal("header line past the RFC 5322 limit", len(line))
+		}
+	}
+	// Folding has to survive unfolding: the decoded subject is still the trimmed original.
+	decoded, err := new(mime.WordDecoder).DecodeHeader(strings.ReplaceAll(strings.SplitN(message, "\r\n\r\n", 2)[0], "\r\n ", " "))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(decoded, subject) {
+		t.Fatal("subject not recoverable after folding", decoded)
 	}
 }
 
