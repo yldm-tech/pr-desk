@@ -49,13 +49,13 @@ Every write tool takes the `version` returned by the listing. If new activity ar
 
 ## Command line
 
-Build it with `make cli`, which produces `dist/pr-desk-cli`.
+Build it with `make cli`, which produces `dist/prdesk`.
 
 ```
-pr-desk-cli login --host https://prdesk.example.com   # add --write to allow state changes
-pr-desk-cli followups --state action --limit 20
-pr-desk-cli followups --json | jq '.follow_ups[] | select(.waiting_days > 14)'
-pr-desk-cli handled 41 7                              # id and version from the listing
+prdesk login --host https://prdesk.example.com   # add --write to allow state changes
+prdesk followups --state action --limit 20
+prdesk followups --json | jq '.follow_ups[] | select(.waiting_days > 14)'
+prdesk handled 41 7                              # id and version from the listing
 ```
 
 `login` opens a browser against the consent page and receives the code on a loopback port it opens for the occasion (RFC 8252). The token is written to `credentials.json` under the user configuration directory with mode `0600`; `PR_DESK_CONFIG_DIR` overrides the location. `logout` deletes the local file, which does not end the grant. To stop a token that leaked, revoke it on the server: `GET /api/v1/api-tokens` lists the account's tokens and `DELETE /api/v1/api-tokens/{id}` revokes one, both with the browser session. A revoked token stops verifying on its next call. There is no UI for this yet.

@@ -24,7 +24,7 @@ import (
 // The CLI ships with a fixed public identifier. It is a public client: it
 // cannot keep a secret, so PKCE is mandatory and its redirect is restricted to
 // the loopback interface (RFC 8252).
-const cliClientID = "pr-desk-cli"
+const cliClientID = "prdesk"
 
 type OAuthClient struct {
 	ID           uint   `gorm:"primaryKey"`

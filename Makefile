@@ -10,7 +10,7 @@ build:
 	bun run scripts/embed-web.ts
 	cd apps/api && go build -tags webembed -trimpath -o ../../dist/pr-desk .
 cli:
-	cd apps/api && go build -trimpath -o ../../dist/pr-desk-cli ./cmd/pr-desk-cli
+	cd apps/api && go build -trimpath -o ../../dist/prdesk ./cmd/prdesk
 production:
 	docker compose up -d --build api postgres
 backup:

@@ -28,7 +28,7 @@ func callTool(stored credentials, name string, arguments map[string]any) ([]byte
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	httpClient := &http.Client{Timeout: 60 * time.Second, Transport: bearerTransport{token: stored.Token, base: http.DefaultTransport}}
-	client := mcp.NewClient(&mcp.Implementation{Name: "pr-desk-cli", Version: "1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "prdesk", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: stored.Host + "/api/v1/mcp", HTTPClient: httpClient}, nil)
 	if err != nil {
 		return nil, errors.New("cannot reach " + stored.Host + ": " + err.Error())
