@@ -1,91 +1,165 @@
-// Migration aid, not part of the suite: playwright.config points at tests/browser,
-// so this only runs when named explicitly. It records the computed styles of
-// chosen elements at several widths so a stylesheet change can be compared
-// against the state before it:
+// Migration aid, not part of the suite: it has its own config so the one CI runs
+// never picks it up. It walks every rendered element and
+// records its computed style, keyed by position in the tree rather than by class
+// name — the names are what a Tailwind migration changes, the positions are not.
 //
-//   git worktree add ../base HEAD --detach
-//   bunx playwright test tests/tools/computed-styles.spec.ts | sed -n 's/^SNAPSHOT //p' > before.json
-//   (repeat on the branch, then diff the two files)
+//   git worktree add ../base <commit> --detach
+//   (there)  bunx playwright test -c playwright.tools.config.ts | sed -n 's/^SNAPSHOT //p' > before.json
+//   (here)   bunx playwright test -c playwright.tools.config.ts | sed -n 's/^SNAPSHOT //p' > after.json
+//   node tests/tools/compare.mjs before.json after.json
 //
-// Two differences are expected and harmless: Tailwind's shadow utility adds
+// Two differences are expected and cannot render: Tailwind's shadow utility adds
 // transparent ring layers to box-shadow, and outline width and colour keep
-// whatever the user agent had when outline-style is none.
+// whatever the user agent had when outline-style is none. compare.mjs ignores them.
 import { test } from "@playwright/test";
+import { installFixtures } from "../browser/fixtures";
 
 const PROPS = [
   "display",
+  "position",
   "alignItems",
   "justifyContent",
+  "flexDirection",
+  "flexWrap",
+  "flexGrow",
+  "flexShrink",
+  "flexBasis",
   "gap",
-  "minHeight",
-  "height",
+  "gridTemplateColumns",
+  "gridTemplateRows",
+  "gridColumn",
+  "alignContent",
   "width",
+  "height",
   "minWidth",
+  "minHeight",
   "maxWidth",
   "maxHeight",
-  "padding",
   "margin",
+  "padding",
+  "top",
+  "right",
+  "bottom",
+  "left",
   "backgroundColor",
-  "borderWidth",
-  "borderStyle",
-  "borderColor",
+  "backgroundImage",
+  "borderTopWidth",
+  "borderRightWidth",
+  "borderBottomWidth",
+  "borderLeftWidth",
+  "borderTopStyle",
+  "borderRightStyle",
+  "borderBottomStyle",
+  "borderLeftStyle",
+  "borderTopColor",
+  "borderRightColor",
+  "borderBottomColor",
+  "borderLeftColor",
   "borderRadius",
   "color",
   "fontFamily",
   "fontSize",
   "fontWeight",
+  "fontStyle",
+  "lineHeight",
+  "letterSpacing",
+  "textAlign",
+  "textDecorationLine",
+  "textTransform",
+  "textOverflow",
   "whiteSpace",
+  "overflowWrap",
+  "overflow",
+  "opacity",
   "cursor",
-  "flexShrink",
-  "flex",
   "zIndex",
   "boxShadow",
-  "outlineWidth",
   "outlineStyle",
+  "outlineWidth",
   "outlineColor",
   "outlineOffset",
   "userSelect",
-  "overflow",
-  "textOverflow",
-  "textAlign",
-  "position",
-  "inset",
-  "overflowWrap",
+  "listStyleType",
+  "verticalAlign",
+  "objectFit",
+  "transform",
+  "visibility",
 ];
 
+// Every route worth a look, at the widths the stylesheets actually branch on.
+const ROUTES = ["/#/", "/#/attention", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
+const WIDTHS = [1280, 900, 800, 760, 640, 480, 400];
+
 test("capture computed styles", async ({ page }) => {
+  test.setTimeout(300_000);
+  await installFixtures(page);
   const snapshot: Record<string, Record<string, string>> = {};
-  const grab = async (key: string, selector: string) => {
-    const found = await page.evaluate(
-      ({ selector, PROPS }) => {
-        const el = document.querySelector(selector);
-        if (!el) return null;
-        const c = getComputedStyle(el);
-        return Object.fromEntries(PROPS.map((p) => [p, c[p as keyof CSSStyleDeclaration] as string]));
-      },
-      { selector, PROPS },
-    );
-    if (found) snapshot[key] = found;
+
+  // Transitions are frozen before reading: a capture taken mid-transition
+  // records an interpolated colour, which shows up as a difference between two
+  // runs that render identically.
+  const settle = async () => {
+    await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important;animation:none!important}" });
+    await page.waitForTimeout(120);
   };
 
-  for (const width of [1280, 800, 640, 480, 400]) {
-    await page.setViewportSize({ width, height: 800 });
-    await page.goto("/#/");
-    await grab(`language-trigger@${width}`, "[aria-label='Language']");
+  const walk = async (label: string) => {
+    const found = await page.evaluate(
+      ({ PROPS, label }) => {
+        const out: Record<string, Record<string, string>> = {};
+        const pathOf = (el: Element) => {
+          const parts: string[] = [];
+          for (let node: Element | null = el; node && node !== document.documentElement; node = node.parentElement) {
+            const siblings = node.parentElement ? [...node.parentElement.children] : [];
+            parts.unshift(`${node.tagName.toLowerCase()}:${siblings.indexOf(node)}`);
+          }
+          return parts.join("/");
+        };
+        for (const el of document.querySelectorAll("body *")) {
+          const style = getComputedStyle(el);
+          if (style.display === "none" && el.tagName !== "DIALOG") continue;
+          const record: Record<string, string> = {};
+          for (const prop of PROPS) record[prop] = style[prop as keyof CSSStyleDeclaration] as string;
+          out[`${label}|${pathOf(el)}`] = record;
+        }
+        return out;
+      },
+      { PROPS, label },
+    );
+    Object.assign(snapshot, found);
+  };
+
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ROUTES) {
+      await page.goto(route);
+      await settle();
+      await walk(`${width}${route}`);
+    }
   }
-  await page.setViewportSize({ width: 1280, height: 800 });
+
+  // Anything that only exists once opened is captured separately.
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/#/");
+  await settle();
   await page.locator("[aria-label='Language']").click();
   await page.waitForTimeout(200);
-  await grab("language-menu", "[data-radix-popper-content-wrapper] > *");
-  await grab("language-option", "[role='option']");
-  await grab("language-option-checked", "[role='option'][data-state='checked']");
+  await settle();
+  await walk("1280/open-language");
   await page.keyboard.press("Escape");
 
-  await page.goto("/#/attention");
-  await grab("repository-select", "[aria-label='Filter by repository']");
+  for (const width of [1280, 640]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#/pull-requests");
+    const activity = page.locator("button.activity").first();
+    if (await activity.count()) {
+      await activity.click();
+      await page.waitForTimeout(250);
+      await settle();
+      await walk(`${width}/open-activity`);
+      await page.keyboard.press("Escape");
+    }
+  }
 
-  // Printed rather than written: this directory is type-checked without node
-  // types, and a marker line is easy for a shell to pick out of the reporter.
   console.log("SNAPSHOT " + JSON.stringify(snapshot));
 });
