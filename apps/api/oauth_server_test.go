@@ -21,6 +21,37 @@ func pkcePair(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+// The consent form carries a token issued by the page that renders it, so a
+// test has to walk the same two steps a browser does.
+func grantConsent(t *testing.T, r *gin.Engine, query url.Values, sessionCookie string) *httptest.ResponseRecorder {
+	t.Helper()
+	get := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+query.Encode(), nil)
+	get.AddCookie(&http.Cookie{Name: "pr_session", Value: sessionCookie})
+	page := httptest.NewRecorder()
+	r.ServeHTTP(page, get)
+	if page.Code != http.StatusOK {
+		t.Fatal("the consent page did not render", page.Code, page.Body.String())
+	}
+	token := ""
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == consentCookie {
+			token = cookie.Value
+		}
+	}
+	form := url.Values{}
+	for key, values := range query {
+		form.Set(key, values[0])
+	}
+	form.Set(consentField, token)
+	post := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	post.AddCookie(&http.Cookie{Name: "pr_session", Value: sessionCookie})
+	post.AddCookie(&http.Cookie{Name: consentCookie, Value: token})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, post)
+	return w
+}
+
 func oauthRouter(s *Server) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -50,11 +81,7 @@ func TestAuthorizationCodeRequiresItsVerifierAndIsSingleUse(t *testing.T) {
 		"code_challenge": {pkcePair(verifier)}, "code_challenge_method": {"S256"},
 		"state": {"xyz"}, "scope": {scopeFollowUpsRead + " " + scopeFollowUpsWrite},
 	}
-	consent := httptest.NewRequest(http.MethodPost, "/oauth/authorize?"+query.Encode(), nil)
-	consent.AddCookie(&http.Cookie{Name: "pr_session", Value: "oauth-browser-a"})
-	consent.Header.Set("Origin", "http://localhost:8080")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, consent)
+	w := grantConsent(t, r, query, "oauth-browser-a")
 	if w.Code != http.StatusFound {
 		t.Fatal("consent did not redirect", w.Code, w.Body.String())
 	}
@@ -103,10 +130,10 @@ func TestAuthorizationCodeProducesAUsableToken(t *testing.T) {
 		"response_type": {"code"}, "client_id": {cliClientID}, "redirect_uri": {redirect},
 		"code_challenge": {pkcePair(verifier)}, "code_challenge_method": {"S256"}, "scope": {scopeFollowUpsRead},
 	}
-	consent := httptest.NewRequest(http.MethodPost, "/oauth/authorize?"+query.Encode(), nil)
-	consent.AddCookie(&http.Cookie{Name: "pr_session", Value: "oauth-browser-b"})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, consent)
+	w := grantConsent(t, r, query, "oauth-browser-b")
+	if w.Code != http.StatusFound {
+		t.Fatal("consent did not redirect", w.Code, w.Body.String())
+	}
 	location, _ := url.Parse(w.Header().Get("Location"))
 	form := url.Values{"grant_type": {"authorization_code"}, "code": {location.Query().Get("code")}, "redirect_uri": {redirect}, "client_id": {cliClientID}, "code_verifier": {verifier}}
 	request := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
@@ -216,11 +243,7 @@ func TestConsentSubmissionCarriesItsParametersInTheBody(t *testing.T) {
 		"code_challenge": {pkcePair(verifier)}, "code_challenge_method": {"S256"},
 		"state": {"round-trip"}, "scope": {scopeFollowUpsRead},
 	}
-	request := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	request.AddCookie(&http.Cookie{Name: "pr_session", Value: "body-browser"})
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, request)
+	w := grantConsent(t, r, form, "body-browser")
 	if w.Code != http.StatusFound {
 		t.Fatalf("the consent submission produced no code: %d %s", w.Code, w.Body.String())
 	}
@@ -324,5 +347,76 @@ func TestRegistrationAcceptsTheLoopbackNamesClientsActuallyUse(t *testing.T) {
 		if code := register(redirect); code != http.StatusBadRequest {
 			t.Errorf("%s was accepted (%d)", redirect, code)
 		}
+	}
+}
+
+// Browsers do not reliably send Origin on a same-origin form post, so consent
+// must not depend on it — that dependency is what answered a real sign-in with
+// 403. The form carries its own token instead.
+func TestConsentSucceedsWithoutOriginAndFailsWithoutItsToken(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	t.Setenv("WEB_ORIGIN", "https://prdesk.example.com")
+	db := integrationDB(t)
+	s := &Server{db: db}
+	if _, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "csrf-a", Username: "c", Token: "encrypted"}, 9801, "csrf-browser"); err != nil {
+		t.Fatal(err)
+	}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(s.resolveBrowserSession, requireMutationOrigin)
+	r.GET("/api/v1/oauth/authorize", s.authorizeEndpoint)
+	r.POST("/api/v1/oauth/authorize", s.authorizeEndpoint)
+
+	verifier := "consent-verifier-long-enough"
+	query := url.Values{
+		"response_type": {"code"}, "client_id": {cliClientID}, "redirect_uri": {"http://127.0.0.1:9/callback"},
+		"code_challenge": {pkcePair(verifier)}, "code_challenge_method": {"S256"}, "scope": {scopeFollowUpsRead},
+	}
+	// Render the page to obtain the token and its cookie.
+	get := httptest.NewRequest(http.MethodGet, "/api/v1/oauth/authorize?"+query.Encode(), nil)
+	get.AddCookie(&http.Cookie{Name: "pr_session", Value: "csrf-browser"})
+	page := httptest.NewRecorder()
+	r.ServeHTTP(page, get)
+	if page.Code != http.StatusOK {
+		t.Fatal("the consent page did not render", page.Code, page.Body.String())
+	}
+	var issued string
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == consentCookie {
+			issued = cookie.Value
+		}
+	}
+	if issued == "" || !strings.Contains(page.Body.String(), issued) {
+		t.Fatal("the page did not carry the token in both the cookie and the form")
+	}
+
+	submit := func(token string, withCookie bool) *httptest.ResponseRecorder {
+		form := url.Values{}
+		for key, values := range query {
+			form.Set(key, values[0])
+		}
+		form.Set(consentField, token)
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/oauth/authorize", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		request.AddCookie(&http.Cookie{Name: "pr_session", Value: "csrf-browser"})
+		if withCookie {
+			request.AddCookie(&http.Cookie{Name: consentCookie, Value: issued})
+		}
+		// Deliberately no Origin header: this is the case that used to 403.
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, request)
+		return w
+	}
+
+	if w := submit(issued, true); w.Code != http.StatusFound {
+		t.Fatal("a legitimate consent without an Origin header was refused", w.Code, w.Body.String())
+	}
+	// A cross-site post cannot read the cookie value, and a Lax cookie is not
+	// attached to it either. Both halves are refused.
+	if w := submit("guessed-token", true); w.Code != http.StatusForbidden {
+		t.Fatal("a forged token was accepted", w.Code)
+	}
+	if w := submit(issued, false); w.Code != http.StatusForbidden {
+		t.Fatal("consent was accepted without the cookie", w.Code)
 	}
 }
