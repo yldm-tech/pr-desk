@@ -77,9 +77,13 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 			state = ""
 		}
 		checksStatus = checkSummary(runs, state)
-		// Recorded from the same snapshot as the summary, so the names always
-		// explain the state stored beside them.
-		if encoded, err := json.Marshal(unhealthyChecks(runs)); err == nil {
+		// The combined state already folds these in; the names have to come from
+		// the same snapshot so they explain the state stored beside them.
+		statuses := make([]commitStatus, 0, len(combined.Statuses))
+		for _, status := range combined.Statuses {
+			statuses = append(statuses, commitStatus{Context: status.GetContext(), State: status.GetState(), URL: status.GetTargetURL()})
+		}
+		if encoded, err := json.Marshal(unhealthyChecks(runs, statuses)); err == nil {
 			recordedChecks = string(encoded)
 		}
 	}
