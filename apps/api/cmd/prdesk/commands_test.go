@@ -72,6 +72,31 @@ func TestListFlagsAcceptsStateForBothListings(t *testing.T) {
 	}
 }
 
+// Both listings answer "what is failing"; the reason filter only ever covered
+// the pull requests this account authored.
+func TestListFlagsAcceptsChecksAndConflictForBothListings(t *testing.T) {
+	for _, command := range []string{"followups", "prs"} {
+		options, err := listFlags(command, []string{"--checks", "failure", "--conflict"})
+		if err != nil {
+			t.Fatalf("%s rejected the check filters: %v", command, err)
+		}
+		if options.arguments["checks"] != "failure" || options.arguments["conflict"] != true {
+			t.Fatalf("%s dropped a check filter: %+v", command, options.arguments)
+		}
+	}
+	// Left off, neither may be sent: conflict false would read as a filter for
+	// the pull requests that do not conflict.
+	options, err := listFlags("prs", []string{"--state", "open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"checks", "conflict"} {
+		if _, present := options.arguments[key]; present {
+			t.Fatalf("an unset %s reached the server", key)
+		}
+	}
+}
+
 func captureStdout(t *testing.T, run func() error) string {
 	t.Helper()
 	original := os.Stdout
