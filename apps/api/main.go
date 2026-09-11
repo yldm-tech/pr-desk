@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	github "github.com/google/go-github/v68/github"
@@ -106,6 +107,32 @@ func newSessionID() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), err
 }
 
+// A CNPG failover removes the postgres-primary endpoint for a few seconds while
+// a replica is promoted, and a rollout can land before the database accepts
+// connections. Exiting on the first refusal hands the problem to
+// CrashLoopBackOff, whose delay grows to minutes — so the service stays down
+// long after the database came back. Retrying here keeps a brief outage brief.
+// The startup probe tolerates two minutes, which is the ceiling this respects.
+const databaseBootTimeout = 45 * time.Second
+
+func openDatabase(dsn string, within time.Duration) (*gorm.DB, error) {
+	config := &gorm.Config{Logger: logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{LogLevel: logger.Warn, SlowThreshold: time.Second, ParameterizedQueries: true})}
+	deadline := time.Now().Add(within)
+	attempt := 0
+	for {
+		db, err := gorm.Open(postgres.Open(dsn), config)
+		if err == nil {
+			return db, nil
+		}
+		attempt++
+		if !time.Now().Before(deadline) {
+			return nil, fmt.Errorf("database unreachable after %d attempts in %s: %w", attempt, within, err)
+		}
+		log.Printf("Database not ready (attempt %d); retrying", attempt)
+		time.Sleep(time.Second)
+	}
+}
+
 func main() {
 	if _, err := tokenCipher(); err != nil {
 		panic(err)
@@ -114,7 +141,7 @@ func main() {
 	if dsn == "" {
 		dsn = "host=localhost user=postgres password=postgres dbname=pr_dashboard port=5432 sslmode=disable"
 	}
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{LogLevel: logger.Warn, SlowThreshold: time.Second, ParameterizedQueries: true})})
+	db, err := openDatabase(dsn, databaseBootTimeout)
 	if err != nil {
 		panic(err)
 	}
