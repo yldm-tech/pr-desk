@@ -17,7 +17,11 @@ COPY apps/api/go.mod apps/api/go.sum ./
 RUN go mod download
 COPY apps/api/ ./
 COPY --from=web /home/vp/app/apps/web/dist/ ./webdist/
-RUN go test -tags webembed -run 'TestWeb|TestEmbedded' ./... && CGO_ENABLED=0 go build -tags webembed -trimpath -o /pr-desk .
+# Declared again because a build argument does not cross stages. The server
+# reports this over MCP, which is how a client tells that it is talking to a
+# newer or older deployment than itself.
+ARG APP_VERSION=dev
+RUN go test -tags webembed -run 'TestWeb|TestEmbedded' ./... && CGO_ENABLED=0 go build -tags webembed -trimpath -ldflags "-X main.appVersion=$APP_VERSION" -o /pr-desk .
 
 FROM ${RUNTIME_IMAGE}
 RUN apk add --no-cache ca-certificates wget

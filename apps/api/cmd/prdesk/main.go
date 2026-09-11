@@ -28,6 +28,7 @@ Usage:
   prdesk handled <id> <version>         mark a follow-up handled
   prdesk snooze <id> <version> <days>   stop reminders for a while
   prdesk unsnooze <id> <version>        let a snoozed follow-up surface again
+  prdesk update [--check]               replace this binary with the latest release
   prdesk version                        print the version of this binary
 
 Filters for followups:
@@ -88,6 +89,8 @@ func main() {
 		err = runShow(args)
 	case "read", "handled", "snooze", "unsnooze":
 		err = runAction(command, args)
+	case "update":
+		err = runUpdate(args)
 	case "version", "--version":
 		fmt.Println(version)
 		return
