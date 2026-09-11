@@ -225,10 +225,37 @@ strong{color:#27272f}
 <h1>Authorize {{.Client}}</h1>
 <p><strong>{{.Client}}</strong> is asking to use your PR Desk account <strong>{{.Account}}</strong>.</p>
 <ul>{{range .Scopes}}<li>{{.}}</li>{{end}}</ul>
-<form method="post" action="/api/v1/oauth/authorize">
+<form id="consent" method="post" action="/api/v1/oauth/authorize">
 {{range $key, $value := .Fields}}<input type="hidden" name="{{$key}}" value="{{$value}}">{{end}}
 <button type="submit">Authorize</button><a href="{{.Cancel}}">Cancel</a>
+<p id="problem" hidden>Authorization could not be completed. Start again from your client.</p>
 </form>
+<script>
+// Submitted with fetch rather than as a form post: a top-level POST navigation
+// is refused by the edge in front of this deployment before it reaches the
+// server. The redirect that comes back is followed here instead. Without
+// scripting the plain form post still runs, which works wherever that edge
+// rule does not apply.
+document.getElementById("consent").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  form.querySelector("button").disabled = true;
+  try {
+    const response = await fetch(form.action, {
+      method: "POST",
+      headers: { "Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(new FormData(form)),
+      credentials: "same-origin",
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.redirect) throw new Error("refused");
+    window.location.assign(payload.redirect);
+  } catch (error) {
+    form.querySelector("button").disabled = false;
+    document.getElementById("problem").hidden = false;
+  }
+});
+</script>
 </main></body></html>`))
 
 var scopeDescriptions = map[string]string{
@@ -357,6 +384,15 @@ func (s *Server) completeAuthorization(c *gin.Context, request authorizeRequest,
 		query.Set("state", request.state)
 	}
 	target.RawQuery = query.Encode()
+	// The consent page submits with fetch and navigates itself. A form post is a
+	// top-level navigation, and the edge in front of this deployment refuses
+	// those to HTML-returning paths — the browser then showed a bare 403 that
+	// never reached this process. Answering JSON keeps the same redirect while
+	// the request stays an ordinary same-origin fetch.
+	if strings.Contains(c.GetHeader("Accept"), "application/json") {
+		c.JSON(http.StatusOK, gin.H{"redirect": target.String()})
+		return
+	}
 	c.Redirect(http.StatusFound, target.String())
 }
 
