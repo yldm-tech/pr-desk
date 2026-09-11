@@ -144,26 +144,8 @@
   color: var(--accent-text);
   border-color: var(--accent);
 }
-/* This view used to cap itself at 900px while every other view and the sync
-   banner above it run the full width of the content area, so its cards lined up
-   with nothing. It now fills the same width and splits into two columns once
-   there is room for both, which also halves how far the page scrolls. */
-.followup-settings-page {
-  display: grid;
-  gap: 20px;
-  align-items: start;
-}
-@media (min-width: 1280px) {
-  .followup-settings-page {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-.followup-settings-column {
-  display: grid;
-  gap: 20px;
-  align-content: start;
-  min-width: 0;
-}
+/* Layout for this page lives on the elements themselves; the one rule left here
+   is the reset that the card margin below would otherwise fight. */
 .followup-settings-page .followup-settings {
   margin-bottom: 0;
 }
@@ -240,13 +222,10 @@
   font-size: 12px;
   line-height: 1.7;
 }
-/* auto-fit rather than a fixed pair: inside a two-column page these grids sit in
-   half the width they were designed for, and a hard two-column rule would keep
-   squeezing the fields instead of stacking them. */
 .followup-setting-fields,
 .followup-destination-form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 20px;
   min-width: 0;
 }

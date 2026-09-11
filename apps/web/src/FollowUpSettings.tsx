@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
+import * as Tabs from "@radix-ui/react-tabs";
 import { Check, Plus } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
@@ -485,8 +487,29 @@ function NotificationDestinations() {
   );
 }
 
+const settingsTabs = ["schedule", "notifications", "access"] as const;
+type SettingsTab = (typeof settingsTabs)[number];
+const tabLabels: Record<SettingsTab, string> = { schedule: "followup.tabSchedule", notifications: "followup.tabNotifications", access: "followup.tabAccess" };
+
 export function FollowUpSettings() {
   const { t } = useTranslation();
+  // The open tab lives in the URL so a reload, a shared link and the back
+  // button all land on the same one. The first tab is the default and carries
+  // no parameter, which keeps /settings itself clean.
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("tab") || "";
+  const active: SettingsTab = (settingsTabs as readonly string[]).includes(requested) ? (requested as SettingsTab) : "schedule";
+  const select = (tab: string) => {
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (tab === "schedule") next.delete("tab");
+        else next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const query = useQuery({
     queryKey: ["follow-up-settings"],
     queryFn: ({ signal }) =>
@@ -504,17 +527,31 @@ export function FollowUpSettings() {
       </p>
     );
   return (
-    // Two explicit columns rather than letting the cards flow: the grid would
-    // align them into rows of equal height, and these sections differ too much
-    // in length for that to leave anything but gaps.
-    <div className="followup-settings-page">
-      <div className="followup-settings-column">
+    // Radix carries the roving tab order and the arrow-key handling that a
+    // tablist is expected to have, and only mounts the open panel.
+    <Tabs.Root className="followup-settings-page grid items-start gap-5" value={active} onValueChange={select}>
+      {/* The strip runs the full width of the content area so it lines up with
+          whatever the page puts above it; the panels keep a readable measure. */}
+      <Tabs.List className="flex gap-1 overflow-x-auto border-b border-[var(--border)] [overscroll-behavior-x:contain] [scrollbar-width:thin]" aria-label={t("followup.settings")}>
+        {settingsTabs.map((tab) => (
+          <Tabs.Trigger
+            key={tab}
+            value={tab}
+            className="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3.5 py-2.5 font-medium text-[var(--muted)] transition-colors hover:text-[var(--foreground)] focus-visible:rounded-t-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)] data-[state=active]:border-[var(--accent)] data-[state=active]:text-[var(--accent-text)]"
+          >
+            {t(tabLabels[tab])}
+          </Tabs.Trigger>
+        ))}
+      </Tabs.List>
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="schedule">
         <SettingsForm settings={query.data} />
+      </Tabs.Content>
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="notifications">
         <NotificationDestinations />
-      </div>
-      <div className="followup-settings-column">
+      </Tabs.Content>
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="access">
         <AccessSettings />
-      </div>
-    </div>
+      </Tabs.Content>
+    </Tabs.Root>
   );
 }
