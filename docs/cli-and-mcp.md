@@ -72,7 +72,17 @@ The progress record is stored on the account and outlives the process that wrote
 
 ## Command line
 
-Build it with `make cli`, which produces `dist/prdesk`.
+### Installing
+
+```
+curl -fsSL https://raw.githubusercontent.com/yldm-tech/pr-desk/main/scripts/install-cli.sh | sh
+```
+
+The script resolves the latest release, downloads the binary for the detected platform, verifies it against the release's `SHA256SUMS` and refuses to install on a mismatch, then places it in `~/.local/bin`. Nothing needs root. `PRDESK_VERSION` pins a release, `PRDESK_INSTALL_DIR` changes the destination and `PRDESK_REPO` points at a fork. Releases carry `prdesk-{darwin,linux}-{arm64,amd64}`; anything else has to be built from source.
+
+`prdesk version` reports which release a binary came from, or `dev` for one built from a checkout.
+
+From a checkout, `make cli` produces `dist/prdesk` and `make install-cli` additionally copies it to `~/.local/bin`. Both report `dev`, since no release produced them.
 
 ```
 prdesk login --host https://prdesk.example.com   # add --write to allow state changes

@@ -8,6 +8,10 @@ import (
 	"os"
 )
 
+// Set by the release build. A binary built straight from a checkout reports
+// "dev", which is the honest answer for one that no release produced.
+var version = "dev"
+
 const usage = `prdesk — read and act on your PR Desk follow-ups
 
 Usage:
@@ -24,6 +28,7 @@ Usage:
   prdesk handled <id> <version>         mark a follow-up handled
   prdesk snooze <id> <version> <days>   stop reminders for a while
   prdesk unsnooze <id> <version>        let a snoozed follow-up surface again
+  prdesk version                        print the version of this binary
 
 Filters for followups:
   --state action|waiting|follow_up|draft|archived
@@ -74,6 +79,9 @@ func main() {
 		err = runShow(args)
 	case "read", "handled", "snooze", "unsnooze":
 		err = runAction(command, args)
+	case "version", "--version":
+		fmt.Println(version)
+		return
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return

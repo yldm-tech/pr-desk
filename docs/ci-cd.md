@@ -19,6 +19,8 @@ It receives `0.1.<CI run number>` and `sha-<full tested SHA>` tags. Retries reus
 
 `latest` is updated only when the tested SHA is still main's tip, so late older runs do not replace newer source with older source. Deployments should select an explicit image version. No version-bump commits are needed; gaps in the version sequence are expected because PR CI runs consume run numbers.
 
+The release also carries the `prdesk` command line client, statically linked and built with `-trimpath`, for darwin and linux on arm64 and amd64, alongside a `SHA256SUMS` covering them. The version is compiled in, so `prdesk version` identifies the release a binary came from. Assets upload with `--clobber` so rerunning a failed release republishes them rather than refusing on the ones that already landed. `scripts/install-cli.sh` consumes these.
+
 Publishing uses the repository `GITHUB_TOKEN` with `packages: write` and `contents: write`, without separate registry credentials. New GHCR packages are private; repository access is linked by OCI source labels. The application image has revision and version labels.
 
 ## Running the image
