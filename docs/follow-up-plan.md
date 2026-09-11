@@ -59,3 +59,11 @@ Reference semantics: GitHub's [search documentation](https://github.com/github/d
 - Embedded the IANA timezone database with `time/tzdata`; validated the existing Tokyo schedule and New York DST test in a network-disabled Linux `scratch` container containing only the compiled test binary. This proves schedule calculation works without OS timezone files.
 - Updated data-handling and development documentation to distinguish durable accounts from browser sessions and documented verified legacy migration, reconnect, disconnection, read/handled states and current notification limitations. Added `follow-up-operations.md` and documented Chromium browser checks in CI.
 - API tests and `go vet` passed. This was additional implementation progress; it does not resolve the pending gonotify integration or complete the goal.
+
+### Settings interface pass
+
+- Translated the remaining hardcoded settings strings (notification language, Telegram destination form, destination states and actions) across the five locales; the settings page no longer mixes English labels into a localized page.
+- Rebuilt the settings layout as two bounded panels with grouped sections, explicit labels tied to their controls through `for`/`id`, per-field help text via `aria-describedby`, matching control styling for `select`, and single-column reflow on narrow viewports.
+- Moved the Telegram destination form out of the preferences form, so it no longer submits preferences on Enter. Destination names, bot tokens and chat IDs are validated in the browser, add failures and destination errors are reported, the bot token is masked, and removal now asks for confirmation in the row.
+- Repository waiting periods report the offending line number instead of failing the save with a generic message, and the timezone field validates against the browser's IANA list with autocompletion.
+- Verified with 15 frontend tests, Vite+ format/lint/type checks, and seven Playwright scenarios including the new destination validation, override line reporting and narrow-viewport settings checks. Screenshots inspected at 1280px and 390px.

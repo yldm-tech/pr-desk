@@ -1,12 +1,64 @@
-import { useState } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Check, Plus } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
+type Destination = { id: number; name: string; enabled: boolean };
+type ControlProps = { id: string; "aria-describedby": string | undefined; "aria-invalid": true | undefined };
+
+// The zone list keeps the free-text IANA field autocompletable; older engines simply get no suggestions.
+const supportedTimezones = (): string[] => {
+  const supported = (Intl as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+  try {
+    return supported ? supported("timeZone") : [];
+  } catch {
+    return [];
+  }
+};
+const isTimezone = (zone: string) => {
+  if (!zone || zone === "Local") return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+};
+const parseOverrides = (text: string): { days: Record<string, number> } | { invalidLine: number } => {
+  const days: Record<string, number> = {};
+  const lines = text.split("\n");
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index].trim();
+    if (!line) continue;
+    const match = line.match(/^([\w.-]+\/[\w.-]+)=(\d+)$/);
+    if (!match || Number(match[2]) < 1 || Number(match[2]) > 365) return { invalidLine: index + 1 };
+    days[match[1]] = Number(match[2]);
+  }
+  return { days };
+};
+
+function Field({ label, hint, error, wide, children }: { label: string; hint?: string; error?: string; wide?: boolean; children: (props: ControlProps) => ReactNode }) {
+  const id = useId();
+  const describedBy = [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ");
+  return (
+    <div className={wide ? "followup-field followup-field-wide" : "followup-field"}>
+      <label htmlFor={id}>{label}</label>
+      {children({ id, "aria-describedby": describedBy || undefined, "aria-invalid": error ? true : undefined })}
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
+      {error && (
+        <p className="followup-field-error" id={`${id}-error`} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function SettingsForm({ settings }: { settings: Settings }) {
   const { t } = useTranslation();
   const client = useQueryClient();
@@ -20,20 +72,10 @@ function SettingsForm({ settings }: { settings: Settings }) {
       .map(([repo, value]) => `${repo}=${value}`)
       .join("\n"),
   );
-  const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: () => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include" }).json<{ data: { id: number; name: string; enabled: boolean }[] }>(), retry: false });
-  const [telegram, setTelegram] = useState({ name: "", token: "", chat_id: "" });
-  const addDestination = useMutation({
-    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: { name: telegram.name, token: telegram.token, chat_id: Number(telegram.chat_id) } }),
-    onSuccess: () => {
-      setTelegram({ name: "", token: "", chat_id: "" });
-      void client.invalidateQueries({ queryKey: ["notification-destinations"] });
-    },
-  });
-  const updateDestination = useMutation({
-    mutationFn: (d: { id: number; name: string; enabled: boolean }) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", json: { name: d.name, enabled: !d.enabled } }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["notification-destinations"] }),
-  });
-  const deleteDestination = useMutation({ mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include" }), onSuccess: () => void client.invalidateQueries({ queryKey: ["notification-destinations"] }) });
+  const [timezoneInvalid, setTimezoneInvalid] = useState(false);
+  const [invalidLine, setInvalidLine] = useState(0);
+  const zonesId = useId();
+  const zones = useMemo(supportedTimezones, []);
   const teams = useQuery({
     queryKey: ["review-teams"],
     queryFn: ({ signal }) =>
@@ -44,104 +86,276 @@ function SettingsForm({ settings }: { settings: Settings }) {
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: () => {
-      const repository_days: Record<string, number> = {};
-      for (const line of overrides
-        .split("\n")
-        .map((value) => value.trim())
-        .filter(Boolean)) {
-        const match = line.match(/^([\w.-]+\/[\w.-]+)=(\d+)$/);
-        if (!match) throw new Error("Invalid repository override");
-        repository_days[match[1]] = Number(match[2]);
-      }
-      return ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", json: { timezone, digest_time: time, wait_days: days, language, teams: selected, repository_days } });
-    },
+    mutationFn: (repository_days: Record<string, number>) => ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", json: { timezone: timezone.trim(), digest_time: time, wait_days: days, language, teams: selected, repository_days } }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["follow-up-settings"] });
       void client.invalidateQueries({ queryKey: ["follow-ups"] });
     },
   });
+  const teamOptions = teams.data?.data || selected.map((id) => ({ id, name: id }));
   return (
     <form
       className="followup-settings"
       onSubmit={(event) => {
         event.preventDefault();
-        mutation.mutate();
+        const parsed = parseOverrides(overrides);
+        const zoneOk = isTimezone(timezone.trim());
+        setTimezoneInvalid(!zoneOk);
+        setInvalidLine("invalidLine" in parsed ? parsed.invalidLine : 0);
+        if (!zoneOk || !("days" in parsed)) return;
+        mutation.mutate(parsed.days);
       }}
     >
-      <div className="followup-setting-fields">
-        <label>
-          Notification language
-          <select value={language} onChange={(e) => setLanguage(e.target.value as "en" | "zh-CN")}>
-            <option value="en">English</option>
-            <option value="zh-CN">简体中文</option>
-          </select>
-        </label>
-        <label>
-          {t("followup.timezone")}
-          <input value={timezone} onChange={(e) => setTimezone(e.target.value)} required placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone} />
-        </label>
-        <label>
-          {t("followup.digestTime")}
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
-        </label>
-        <label>
-          {t("followup.waitDays")}
-          <input type="number" min={1} max={365} value={days} onChange={(e) => setDays(Number(e.target.value))} required />
-        </label>
+      <div className="followup-settings-group">
+        <div className="followup-settings-heading">
+          <h2>{t("followup.schedule")}</h2>
+          <p>{t("followup.scheduleHelp")}</p>
+        </div>
+        <div className="followup-setting-fields">
+          <Field label={t("followup.notificationLanguage")} hint={t("followup.notificationLanguageHelp")}>
+            {(props) => (
+              <select {...props} value={language} onChange={(e) => setLanguage(e.target.value as "en" | "zh-CN")}>
+                <option value="en">English</option>
+                <option value="zh-CN">简体中文</option>
+              </select>
+            )}
+          </Field>
+          <Field label={t("followup.timezone")} hint={t("followup.timezoneHelp")} error={timezoneInvalid ? t("followup.timezoneInvalid") : undefined}>
+            {(props) => (
+              <>
+                <input
+                  {...props}
+                  list={zones.length ? zonesId : undefined}
+                  value={timezone}
+                  onChange={(e) => {
+                    setTimezone(e.target.value);
+                    setTimezoneInvalid(false);
+                  }}
+                  required
+                  placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                />
+                {zones.length > 0 && (
+                  <datalist id={zonesId}>
+                    {zones.map((zone) => (
+                      <option key={zone} value={zone} />
+                    ))}
+                  </datalist>
+                )}
+              </>
+            )}
+          </Field>
+          <Field label={t("followup.digestTime")} hint={t("followup.digestTimeHelp")}>
+            {(props) => <input {...props} type="time" value={time} onChange={(e) => setTime(e.target.value)} required />}
+          </Field>
+          <Field label={t("followup.waitDays")} hint={t("followup.waitDaysHelp")}>
+            {(props) => <input {...props} type="number" min={1} max={365} inputMode="numeric" value={days} onChange={(e) => setDays(Number(e.target.value))} required />}
+          </Field>
+        </div>
       </div>
-      <fieldset>
+      <fieldset className="followup-settings-group">
         <legend>{t("followup.teams")}</legend>
-        <p>{t("followup.teamsHelp")}</p>
+        <p className="followup-settings-note">{t("followup.teamsHelp")}</p>
         {teams.isError && (
-          <p role="alert">
-            {t("followup.teamsError")}{" "}
-            <button type="button" onClick={() => teams.refetch()}>
+          <p className="followup-settings-warning" role="alert">
+            <span>{t("followup.teamsError")}</span>
+            <button className="secondary-action" type="button" onClick={() => teams.refetch()}>
               {t("followup.retry")}
             </button>
           </p>
         )}
-        {teams.isPending && <p>{t("loading")}</p>}
-        {(teams.data?.data || selected.map((id) => ({ id, name: id }))).map((team) => (
-          <label key={team.id} className="followup-team">
-            <input type="checkbox" checked={selected.includes(team.id)} onChange={(e) => setSelected((current) => (e.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id)))} />
-            {team.id}
-          </label>
-        ))}
-      </fieldset>
-      <label>
-        {t("followup.overrides")}
-        <textarea rows={4} value={overrides} onChange={(e) => setOverrides(e.target.value)} placeholder="owner/repository=14" />
-        <small>{t("followup.overridesHelp")}</small>
-      </label>
-      {mutation.isError && <p role="alert">{t("followup.saveError")}</p>}
-      {mutation.isSuccess && <p role="status">{t("followup.saved")}</p>}
-      <button className="secondary-action" type="submit" disabled={mutation.isPending}>
-        {t("followup.save")}
-      </button>
-      <fieldset>
-        <legend>Telegram notifications</legend>
-        <div className="followup-setting-fields">
-          <input aria-label="Telegram name" placeholder="Name" value={telegram.name} onChange={(e) => setTelegram({ ...telegram, name: e.target.value })} />
-          <input aria-label="Telegram bot token" placeholder="Bot token" value={telegram.token} onChange={(e) => setTelegram({ ...telegram, token: e.target.value })} />
-          <input aria-label="Telegram chat ID" placeholder="Chat ID" value={telegram.chat_id} onChange={(e) => setTelegram({ ...telegram, chat_id: e.target.value })} />
-          <button type="button" onClick={() => addDestination.mutate()} disabled={addDestination.isPending}>
-            Add
-          </button>
-        </div>
-        {destinations.data?.data.map((d) => (
-          <div key={d.id}>
-            {d.name} · {d.enabled ? "enabled" : "disabled"}{" "}
-            <button type="button" onClick={() => updateDestination.mutate(d)}>
-              {d.enabled ? "Disable" : "Enable"}
-            </button>{" "}
-            <button type="button" onClick={() => deleteDestination.mutate(d.id)}>
-              Delete
-            </button>
+        {teams.isPending && <p className="followup-settings-note">{t("loading")}</p>}
+        {teamOptions.length > 0 ? (
+          <div className="followup-team-list">
+            {teamOptions.map((team) => (
+              <label key={team.id} className="followup-team">
+                <input type="checkbox" checked={selected.includes(team.id)} onChange={(e) => setSelected((current) => (e.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id)))} />
+                <span>
+                  {team.name}
+                  {team.name !== team.id && <small>{team.id}</small>}
+                </span>
+              </label>
+            ))}
           </div>
-        ))}
+        ) : (
+          !teams.isPending && !teams.isError && <p className="followup-empty-note">{t("followup.teamsEmpty")}</p>
+        )}
       </fieldset>
+      <div className="followup-settings-group">
+        <Field label={t("followup.overrides")} hint={t("followup.overridesHelp")} error={invalidLine ? t("followup.overridesInvalid", { line: invalidLine }) : undefined} wide>
+          {(props) => (
+            <textarea
+              {...props}
+              rows={4}
+              value={overrides}
+              onChange={(e) => {
+                setOverrides(e.target.value);
+                setInvalidLine(0);
+              }}
+              placeholder="owner/repository=14"
+            />
+          )}
+        </Field>
+      </div>
+      <div className="followup-settings-actions">
+        <button className="primary-action" type="submit" disabled={mutation.isPending}>
+          {mutation.isPending ? t("followup.saving") : t("followup.save")}
+        </button>
+        {mutation.isError && (
+          <p className="followup-field-error" role="alert">
+            {t("followup.saveError")}
+          </p>
+        )}
+        {mutation.isSuccess && !mutation.isPending && (
+          <p className="followup-save-status" role="status">
+            <Check size={14} aria-hidden="true" />
+            {t("followup.saved")}
+          </p>
+        )}
+      </div>
     </form>
+  );
+}
+
+function NotificationDestinations() {
+  const { t } = useTranslation();
+  const client = useQueryClient();
+  const [telegram, setTelegram] = useState({ name: "", token: "", chat_id: "" });
+  const [errors, setErrors] = useState({ name: false, token: false, chat_id: false });
+  const [confirming, setConfirming] = useState(0);
+  const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
+  const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[] }>(), retry: false });
+  const addDestination = useMutation({
+    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: { name: telegram.name.trim(), token: telegram.token.trim(), chat_id: Number(telegram.chat_id.trim()) } }),
+    onSuccess: () => {
+      setTelegram({ name: "", token: "", chat_id: "" });
+      invalidate();
+    },
+  });
+  const updateDestination = useMutation({ mutationFn: (d: Destination) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", json: { name: d.name, enabled: !d.enabled } }), onSuccess: invalidate });
+  const deleteDestination = useMutation({
+    mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include" }),
+    onSuccess: () => {
+      setConfirming(0);
+      invalidate();
+    },
+  });
+  const rows = destinations.data?.data || [];
+  return (
+    <section className="followup-settings" aria-labelledby="notification-destinations-heading">
+      <div className="followup-settings-group">
+        <div className="followup-settings-heading">
+          <h2 id="notification-destinations-heading">{t("followup.telegram")}</h2>
+          <p>{t("followup.telegramHelp")}</p>
+        </div>
+        <form
+          className="followup-destination-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const next = { name: !telegram.name.trim(), token: !telegram.token.trim(), chat_id: !/^-?\d+$/.test(telegram.chat_id.trim()) };
+            setErrors(next);
+            if (next.name || next.token || next.chat_id) return;
+            addDestination.mutate();
+          }}
+        >
+          <Field label={t("followup.destinationName")} hint={t("followup.destinationNameHelp")} error={errors.name ? t("followup.required") : undefined}>
+            {(props) => (
+              <input
+                {...props}
+                value={telegram.name}
+                onChange={(e) => {
+                  setTelegram({ ...telegram, name: e.target.value });
+                  setErrors({ ...errors, name: false });
+                }}
+              />
+            )}
+          </Field>
+          <Field label={t("followup.chatId")} hint={t("followup.chatIdHelp")} error={errors.chat_id ? t("followup.chatIdInvalid") : undefined}>
+            {(props) => (
+              <input
+                {...props}
+                inputMode="numeric"
+                value={telegram.chat_id}
+                onChange={(e) => {
+                  setTelegram({ ...telegram, chat_id: e.target.value });
+                  setErrors({ ...errors, chat_id: false });
+                }}
+              />
+            )}
+          </Field>
+          <Field label={t("followup.botToken")} hint={t("followup.botTokenHelp")} error={errors.token ? t("followup.required") : undefined} wide>
+            {(props) => (
+              <input
+                {...props}
+                type="password"
+                autoComplete="off"
+                value={telegram.token}
+                onChange={(e) => {
+                  setTelegram({ ...telegram, token: e.target.value });
+                  setErrors({ ...errors, token: false });
+                }}
+              />
+            )}
+          </Field>
+          <div className="followup-destination-actions">
+            <button className="secondary-action" type="submit" disabled={addDestination.isPending}>
+              <Plus size={15} aria-hidden="true" />
+              {addDestination.isPending ? t("followup.adding") : t("followup.add")}
+            </button>
+            {addDestination.isError && (
+              <p className="followup-field-error" role="alert">
+                {t("followup.addError")}
+              </p>
+            )}
+          </div>
+        </form>
+        {destinations.isError ? (
+          <p className="followup-settings-warning" role="alert">
+            <span>{t("followup.destinationsError")}</span>
+            <button className="secondary-action" type="button" onClick={() => destinations.refetch()}>
+              {t("followup.retry")}
+            </button>
+          </p>
+        ) : rows.length === 0 && !destinations.isPending ? (
+          <p className="followup-empty-note">{t("followup.destinationsEmpty")}</p>
+        ) : (
+          <ul className="followup-destination-list">
+            {rows.map((destination) => (
+              <li key={destination.id} className="followup-destination">
+                <strong>{destination.name}</strong>
+                {confirming === destination.id ? (
+                  <>
+                    <span className="followup-destination-confirm">{t("followup.confirmRemove")}</span>
+                    <button className="secondary-action followup-destination-danger" type="button" disabled={deleteDestination.isPending} onClick={() => deleteDestination.mutate(destination.id)}>
+                      {t("followup.remove")}
+                    </button>
+                    <button className="secondary-action" type="button" onClick={() => setConfirming(0)}>
+                      {t("followup.cancel")}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="followup-destination-state" data-state={destination.enabled ? "enabled" : "disabled"}>
+                      {t(destination.enabled ? "followup.destinationEnabled" : "followup.destinationDisabled")}
+                    </span>
+                    <button className="secondary-action" type="button" disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
+                      {t(destination.enabled ? "followup.disable" : "followup.enable")}
+                    </button>
+                    <button className="secondary-action followup-destination-danger" type="button" onClick={() => setConfirming(destination.id)}>
+                      {t("followup.remove")}
+                    </button>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {(updateDestination.isError || deleteDestination.isError) && (
+          <p className="followup-field-error" role="alert">
+            {t("followup.destinationActionError")}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -164,9 +378,9 @@ export function FollowUpSettings() {
       </p>
     );
   return (
-    <section>
-      <h2>{t("followup.settings")}</h2>
+    <div className="followup-settings-page">
       <SettingsForm settings={query.data} />
-    </section>
+      <NotificationDestinations />
+    </div>
   );
 }

@@ -17,6 +17,7 @@ test.beforeEach(async ({ page }) => {
     },
     { id: 2, version: 1, role: "reviewer", state: "action", reasons: ["review_requested"], unread: true, excerpt: "", waiting_since: "2026-09-01T00:00:00Z", archived_at: null, pr: { id: 2, repo: "fixture/reviewer", number: 24, title: "Review storage migration", url: "https://github.com/fixture/reviewer/pull/24" } },
   ];
+  const destinations: { id: number; name: string; enabled: boolean }[] = [];
   await page.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     let data: unknown = {};
@@ -67,6 +68,13 @@ test.beforeEach(async ({ page }) => {
       case "review-teams":
         data = { data: [{ id: "fixture/reviewers", name: "Reviewers" }] };
         break;
+      case "notification-destinations":
+        if (route.request().method() === "POST") {
+          const body = route.request().postDataJSON();
+          destinations.push({ id: destinations.length + 1, name: body.name, enabled: true });
+          data = destinations[destinations.length - 1];
+        } else data = { data: destinations };
+        break;
       default:
         data = { data: [] };
     }
@@ -111,9 +119,48 @@ test("reviewer filter and mobile layout", async ({ page }, testInfo) => {
 test("settings save timezone and selected review teams", async ({ page }) => {
   await page.goto("/#/settings");
   await page.getByLabel("Timezone", { exact: true }).fill("Europe/Madrid");
-  await page.getByLabel("fixture/reviewers", { exact: true }).check();
+  await page.getByRole("checkbox", { name: /fixture\/reviewers/ }).check();
   const saved = page.waitForRequest((req) => req.url().endsWith("/follow-up-settings") && req.method() === "POST");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   expect((await saved).postDataJSON()).toMatchObject({ timezone: "Europe/Madrid", digest_time: "09:00", teams: ["fixture/reviewers"] });
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+});
+
+test("repository waiting periods report the offending line instead of failing the save", async ({ page }) => {
+  await page.goto("/#/settings");
+  let posted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/follow-up-settings") && request.method() === "POST") posted = true;
+  });
+  await page.getByLabel("Repository waiting periods", { exact: true }).fill("fixture/calendar=14\nbroken-line");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Line 2" })).toBeVisible();
+  expect(posted).toBe(false);
+});
+
+test("settings fit a narrow viewport", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#/settings");
+  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: testInfo.outputPath("mobile-settings.png"), fullPage: true });
+});
+
+test("telegram destination validates the chat ID before calling the API", async ({ page }, testInfo) => {
+  await page.goto("/#/settings");
+  await expect(page.getByText("No destinations yet. Reminders stay inside the app.")).toBeVisible();
+  let posted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/notification-destinations") && request.method() === "POST") posted = true;
+  });
+  await page.getByLabel("Name", { exact: true }).fill("Team channel");
+  await page.getByLabel("Bot token", { exact: true }).fill("fixture:token");
+  await page.getByLabel("Chat ID", { exact: true }).fill("not-a-number");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Chat ID has to be a number." })).toBeVisible();
+  expect(posted).toBe(false);
+  await page.getByLabel("Chat ID", { exact: true }).fill("-1001234567890");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".followup-destination")).toContainText("Team channel");
+  await page.screenshot({ path: testInfo.outputPath("followup-settings.png"), fullPage: true });
 });
