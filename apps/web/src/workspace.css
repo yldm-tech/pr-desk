@@ -485,56 +485,6 @@
   .sync-collected {
     margin: 8px 0;
   }
-  .activity-dialog {
-    width: min(640px, 100vw);
-  }
-  .activity-dialog .drawer {
-    width: 100%;
-    padding: 0;
-    box-shadow: none;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-    min-height: 100dvh;
-  }
-  .drawer-heading {
-    flex-direction: row;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 20px 24px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-  }
-  .drawer-heading h2 {
-    font-size: 15px;
-    line-height: 1.6;
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .drawer-heading .drawerclose {
-    position: static;
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    border-radius: 6px;
-    font-size: 24px;
-  }
-  .drawerclose:hover {
-    background: var(--surface-muted);
-  }
-  .drawer-content {
-    padding: 0 24px;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-  }
   .comment {
     padding: 18px 0;
   }
@@ -803,9 +753,6 @@
     color: var(--warning);
     margin: 0 0 20px;
     font-size: 12px;
-  }
-  .drawer-content > .activity-section:last-of-type {
-    margin-bottom: 24px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

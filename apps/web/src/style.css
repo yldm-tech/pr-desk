@@ -375,24 +375,6 @@
     cursor: pointer;
     color: inherit;
   }
-  .drawer {
-    width: min(480px, 100vw);
-    height: 100%;
-    background: var(--surface);
-    padding: 28px;
-    box-shadow: -10px 0 30px var(--shadow);
-    overflow: auto;
-    position: relative;
-  }
-  .drawerclose {
-    position: absolute;
-    right: 18px;
-    top: 12px;
-    border: 0;
-    background: none;
-    font-size: 28px;
-    cursor: pointer;
-  }
   .comment {
     padding: 16px 0;
     border-bottom: 1px solid var(--border);
@@ -570,9 +552,6 @@
       display: inline-flex;
       margin-left: 6px;
     }
-    .drawer {
-      padding: 22px 18px;
-    }
   }
   .sync:disabled {
     opacity: 0.65;
@@ -598,7 +577,6 @@
   .activity-warning ul {
     padding-left: 20px;
   }
-  .drawer code,
   .thread span,
   .comment p {
     overflow-wrap: anywhere;
@@ -665,31 +643,6 @@
   }
   .repositories h2 {
     margin-bottom: 12px;
-  }
-
-  .activity-dialog {
-    border: 0;
-    padding: 0;
-    margin: 0 0 0 auto;
-    width: min(480px, 100vw);
-    max-width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
-    background: var(--surface);
-    color: var(--foreground);
-    overflow: auto;
-  }
-  .activity-dialog::backdrop {
-    background: var(--overlay);
-  }
-  .activity-dialog .drawer {
-    width: 100%;
-    min-height: 100%;
-    height: auto;
-  }
-  .drawerclose:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
   .language {
     display: flex;
