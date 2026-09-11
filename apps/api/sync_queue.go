@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	github "github.com/google/go-github/v68/github"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // Persist intent before acknowledging it. The scheduler recovers accepted work
@@ -76,7 +77,10 @@ func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*githu
 			}
 			if x.GetState() == "closed" {
 				var follow FollowUp
-				err := tx.Where("session_id = ? AND pull_request_id = ?", sid, pr.ID).First(&follow).Error
+				// Most closed pull requests are not tracked, so "no row" is the
+				// ordinary case here. Session{} keeps gorm from logging every one
+				// of them as a warning, which buried real errors during a sync.
+				err := tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(logger.Silent)}).Where("session_id = ? AND pull_request_id = ?", sid, pr.ID).First(&follow).Error
 				if err == nil {
 					facts := follow.facts()
 					facts.Closed = true

@@ -14,6 +14,14 @@ import (
 type historyPageSinkKey struct{}
 type historyPageSink func([]*github.Issue) error
 
+// A full history walk of a large account is 100+ search requests spread over
+// minutes, and any interruption used to mean starting from the beginning. The
+// recursion completes leaf intervals in creation-time order, so the end of the
+// last completed interval is a safe point to resume from: everything up to it
+// has already been handed to the page sink and stored.
+type historyCursorKey struct{}
+type historyCursor func(completedThrough time.Time) error
+
 // Share a conservative search budget across sessions; avoid bursts between partitions.
 var historySearchLimiter = rate.NewLimiter(rate.Every(3*time.Second), 1)
 
@@ -89,6 +97,13 @@ func fetchHistory(ctx context.Context, gh *github.Client, query string, from, th
 		}
 		if received < total {
 			return fmt.Errorf("GitHub returned fewer history records than advertised")
+		}
+		// This interval is complete and stored; record it so an interruption
+		// later on does not discard the work.
+		if mark, ok := ctx.Value(historyCursorKey{}).(historyCursor); ok {
+			if err := mark(end); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
