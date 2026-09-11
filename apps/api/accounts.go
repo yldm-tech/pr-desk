@@ -18,7 +18,7 @@ type BrowserSession struct {
 }
 
 func migrateDatabase(db *gorm.DB) error {
-	if err := db.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}, &BrowserSession{}, &FollowUp{}, &FollowUpSettings{}, &FollowUpEvent{}, &NotificationDestination{}, &NotificationDelivery{}); err != nil {
+	if err := db.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}, &BrowserSession{}, &FollowUp{}, &FollowUpSettings{}, &FollowUpEvent{}, &NotificationDestination{}, &NotificationDelivery{}, &APIToken{}, &OAuthClient{}, &OAuthCode{}); err != nil {
 		return err
 	}
 	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS oauth_github_account ON " + db.NamingStrategy.TableName("OAuthToken") + "(git_hub_id) WHERE git_hub_id > 0").Error

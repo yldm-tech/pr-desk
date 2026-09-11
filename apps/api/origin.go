@@ -32,9 +32,47 @@ func corsPolicy() cors.Config {
 }
 
 // CORS controls response access, not whether a browser sends a mutation. Require the configured UI origin before executing cookie-authenticated writes.
+// Endpoints that non-browser clients call without an Origin. The MCP endpoint
+// has to reach its own middleware even unauthenticated, because the 401 it
+// returns is what tells a client where to obtain a token; answering 403 here
+// would break discovery. Neither endpoint is reachable with ambient browser
+// credentials: both require a bearer token or a PKCE code.
+var originExemptPaths = map[string]bool{
+	"/api/v1/mcp":            true,
+	"/api/v1/oauth/token":    true,
+	"/api/v1/oauth/register": true,
+}
+
+// sameOriginRequest compares the declared origin against the host the request
+// was actually addressed to. A cross-site form post carries the attacker's
+// origin and is refused; a form served by this server matches.
+func sameOriginRequest(c *gin.Context) bool {
+	origin := c.GetHeader("Origin")
+	if origin == "" {
+		return false
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return parsed.Host != "" && parsed.Host == c.Request.Host
+}
+
 func requireMutationOrigin(c *gin.Context) {
 	switch c.Request.Method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		c.Next()
+		return
+	}
+	if originExemptPaths[c.Request.URL.Path] {
+		c.Next()
+		return
+	}
+	// The consent page is served by the API itself, so its form submission
+	// carries the API's own origin rather than the UI's. Accepting a same-origin
+	// submission keeps the forgery protection — a cross-site origin is still
+	// refused — while letting the flow work when the UI has its own origin.
+	if c.Request.URL.Path == "/api/v1/oauth/authorize" && sameOriginRequest(c) {
 		c.Next()
 		return
 	}
