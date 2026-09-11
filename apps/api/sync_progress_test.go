@@ -103,6 +103,69 @@ func TestSyncFailureRetainsReasonAndRetryDeadline(t *testing.T) {
 	}
 }
 
+// A deploy cancels the worker context mid-run. Recording that as a failure put
+// a red "sync failed" in front of anyone who looked, and earned the account a
+// fifteen minute cooldown for something the upstream had no part in — so a run
+// of deploys could keep the data frozen while every retry was cancelled again.
+func TestShutdownMidRunIsReportedAsInterruptedNotFailed(t *testing.T) {
+	db := integrationDB(t)
+	db.Create(&OAuthToken{SessionID: "interrupted-run"})
+	tracker := &syncTracker{db: db, sid: "interrupted-run"}
+	tracker.set("details", 20, 54)
+	tracker.recordFailure(context.Canceled)
+	tracker.finish(false)
+
+	var token OAuthToken
+	db.Where("session_id = ?", "interrupted-run").First(&token)
+	var progress syncProgress
+	if err := json.Unmarshal([]byte(token.SyncProgress), &progress); err != nil {
+		t.Fatal(err)
+	}
+	if progress.Status != "interrupted" {
+		t.Fatalf("a shutdown was reported as %q", progress.Status)
+	}
+	if progress.ErrorCode != "interrupted" {
+		t.Fatalf("the reason was lost: %#v", progress)
+	}
+	// Due at the ordinary cadence from the checkpoint, not fifteen minutes out.
+	now := time.Now()
+	stamp := now.Add(-time.Minute)
+	token.HistorySyncedAt = &stamp
+	if next := nextAutoSyncAt(token, now); next.After(now.Add(autoSyncInterval)) {
+		t.Fatalf("a shutdown earned a cooldown; next sync is %v away", next.Sub(now))
+	}
+}
+
+// The exemption must not swallow a genuine failure that happens to follow one.
+func TestARealFailureAfterAnInterruptionStillCoolsDown(t *testing.T) {
+	db := integrationDB(t)
+	db.Create(&OAuthToken{SessionID: "interrupted-then-failed"})
+	tracker := &syncTracker{db: db, sid: "interrupted-then-failed"}
+	tracker.set("details", 1, 10)
+	tracker.recordFailure(context.Canceled)
+	tracker.finish(false)
+	// set clears the code, as it does at the start of every phase.
+	tracker.set("details", 1, 10)
+	tracker.recordFailure(errDetailStorage)
+	tracker.finish(false)
+
+	var token OAuthToken
+	db.Where("session_id = ?", "interrupted-then-failed").First(&token)
+	var progress syncProgress
+	if err := json.Unmarshal([]byte(token.SyncProgress), &progress); err != nil {
+		t.Fatal(err)
+	}
+	if progress.Status != "failed" || progress.ErrorCode != "storage" {
+		t.Fatalf("the real failure was masked by the earlier interruption: %#v", progress)
+	}
+	now := time.Now()
+	stamp := now.Add(-time.Minute)
+	token.HistorySyncedAt = &stamp
+	if next := nextAutoSyncAt(token, now); !next.After(now.Add(autoSyncInterval)) {
+		t.Fatalf("a storage failure lost its cooldown; next sync is %v away", next.Sub(now))
+	}
+}
+
 func TestSyncPhasesPreserveEarlierCounts(t *testing.T) {
 	db := integrationDB(t)
 	db.Create(&OAuthToken{SessionID: "stages"})
