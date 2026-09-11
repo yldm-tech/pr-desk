@@ -190,8 +190,14 @@ func main() {
 	})
 	r.Use(cors.New(corsPolicy()))
 	r.Use(requireMutationOrigin)
+	// RFC 9728 builds the metadata URL by appending the resource's path to the
+	// well-known prefix, so a client looking for https://host/api/v1/mcp asks
+	// for /.well-known/oauth-protected-resource/api/v1/mcp. Without these the
+	// request fell through to the SPA and the client parsed HTML as JSON.
 	r.GET("/.well-known/oauth-authorization-server", s.authorizationServerMetadata)
+	r.GET("/.well-known/oauth-authorization-server/*resource", s.authorizationServerMetadata)
 	r.GET("/.well-known/oauth-protected-resource", s.protectedResourceMetadata)
+	r.GET("/.well-known/oauth-protected-resource/*resource", s.protectedResourceMetadata)
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 		defer cancel()

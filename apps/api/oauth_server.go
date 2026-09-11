@@ -53,13 +53,21 @@ func (c OAuthClient) redirects() []string { return strings.Fields(c.RedirectURIs
 
 // A loopback redirect may use any port, because the client picks a free one at
 // runtime; everything else has to match what was registered, exactly.
+//
+// RFC 8252 prefers the literal addresses, but most clients — including Claude
+// Code — register "localhost", and refusing it means their registration fails
+// before the user ever sees a consent page. The redirect is only ever followed
+// by the user's own browser, so the name resolves on their machine, not here.
 func loopbackRedirect(raw string) bool {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "http" {
 		return false
 	}
-	host := parsed.Hostname()
-	return host == "127.0.0.1" || host == "::1"
+	switch parsed.Hostname() {
+	case "127.0.0.1", "::1", "localhost":
+		return true
+	}
+	return false
 }
 
 func redirectAllowed(client OAuthClient, redirect string) bool {
