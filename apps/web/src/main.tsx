@@ -5,7 +5,6 @@ import App from "./App";
 import { SkeletonTheme } from "react-loading-skeleton";
 import "./style.css";
 import "./workspace.css";
-import "./followup.css";
 
 const client = new QueryClient();
 createRoot(document.getElementById("root")!).render(

@@ -5,7 +5,7 @@
 import postcss from "postcss";
 import { readFileSync } from "node:fs";
 
-const files = ["apps/web/src/style.css", "apps/web/src/workspace.css", "apps/web/src/followup.css"];
+const files = ["apps/web/src/style.css", "apps/web/src/workspace.css"];
 const source = readFileSync(process.argv[2], "utf8");
 const used = new Set();
 for (const m of source.matchAll(/className=\{?[`"]([^`"]+)[`"]/g)) for (const c of m[1].split(/\s+/)) if (c && !c.includes("{")) used.add(c);

@@ -15,6 +15,9 @@ export const secondaryAction = `${actionShape} ${actionSize} ${secondarySkin}`;
 // Inside a list row, and beside the field it acts on, the same button is smaller.
 export const compactAction = `${actionShape} min-h-[34px] px-3 py-1.5 text-[12px] ${secondarySkin}`;
 
+// Inside a follow-up card, where several sit in a row under the text.
+export const inlineAction = `${actionShape} min-h-10 px-2.5 py-[7px] text-[12px] ${secondarySkin}`;
+
 // Beside a block of text to copy: full height, small label.
 export const copyAction = `${actionShape} min-h-10 shrink-0 px-3 py-2 text-[12px] ${secondarySkin}`;
 

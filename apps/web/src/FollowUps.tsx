@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { inlineAction, secondaryAction } from "./action-styles";
+import { followUpActions, followUpCard, followUpCardHeading, followUpCounts, followUpExcerpt, followUpFilters, followUpPriority, followUpPriorityReasons, followUpReason, followUpReasonCompact, followUpReasons, followUpSnooze, followUpSummary, followUpWait, followUpWorkspace } from "./followup-styles";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -43,8 +45,8 @@ function FollowUpCard({ item, onChanged }: { item: FollowUp; onChanged: (message
   const snooze = (days: number) => mutation.mutate({ action: "snooze", until: new Date(Date.now() + days * 86400000).toISOString() });
   const githubURL = safeGitHubLink(item.pr.url || "");
   return (
-    <article className="followup-card" id={`followup-${item.id}`}>
-      <div className="followup-card-heading">
+    <article data-testid="follow-up-card" className={followUpCard} id={`followup-${item.id}`}>
+      <div className={followUpCardHeading}>
         <span>
           {item.pr.repo} #{item.pr.number}
         </span>
@@ -58,35 +60,35 @@ function FollowUpCard({ item, onChanged }: { item: FollowUp; onChanged: (message
           {item.pr.title}
         </a>
       </h3>
-      <div className="followup-reasons">
+      <div className={followUpReasons}>
         {item.reasons.map((reason) => (
-          <span key={reason} className="followup-reason" data-tone={reasonTone(reason)}>
+          <span key={reason} className={followUpReason} data-tone={reasonTone(reason)}>
             {t(`followup.${reason}`)}
           </span>
         ))}
       </div>
-      {item.excerpt && <p className="followup-excerpt">{item.excerpt}</p>}
-      <p className="followup-wait">{t("followup.waitingSince", { date: new Date(item.waiting_since).toLocaleString(i18n.resolvedLanguage) })}</p>
+      {item.excerpt && <p className={followUpExcerpt}>{item.excerpt}</p>}
+      <p className={followUpWait}>{t("followup.waitingSince", { date: new Date(item.waiting_since).toLocaleString(i18n.resolvedLanguage) })}</p>
       {mutation.isError && <p role="alert">{t("followup.saveError")}</p>}
-      <div className="followup-actions">
+      <div className={followUpActions}>
         {item.unread && (
-          <button className="secondary-action" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "read" })}>
+          <button className={inlineAction} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "read" })}>
             {t("followup.read")}
           </button>
         )}
         {item.state !== "archived" && (
           <>
-            <button className="secondary-action" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "handled" })}>
+            <button className={inlineAction} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "handled" })}>
               {t("followup.handled")}
             </button>
-            <button className="secondary-action" disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "followed_up" })}>
+            <button className={inlineAction} disabled={mutation.isPending} onClick={() => mutation.mutate({ action: "followed_up" })}>
               {t("followup.followedUp")}
             </button>
             <details>
               <summary>{t("followup.snooze")}</summary>
-              <div className="followup-snooze">
+              <div className={followUpSnooze}>
                 {[3, 7].map((days) => (
-                  <button key={days} className="secondary-action" disabled={mutation.isPending} onClick={() => snooze(days)}>
+                  <button key={days} className={inlineAction} disabled={mutation.isPending} onClick={() => snooze(days)}>
                     {t("followup.days", { count: days })}
                   </button>
                 ))}
@@ -94,7 +96,7 @@ function FollowUpCard({ item, onChanged }: { item: FollowUp; onChanged: (message
                   {t("followup.custom")}
                   <input type="datetime-local" value={date} onChange={(e) => setDate(e.target.value)} />
                 </label>
-                <button className="secondary-action" disabled={!date || mutation.isPending || !Number.isFinite(new Date(date).getTime()) || new Date(date).getTime() <= Date.now()} onClick={() => mutation.mutate({ action: "snooze", until: new Date(date).toISOString() })}>
+                <button className={inlineAction} disabled={!date || mutation.isPending || !Number.isFinite(new Date(date).getTime()) || new Date(date).getTime() <= Date.now()} onClick={() => mutation.mutate({ action: "snooze", until: new Date(date).toISOString() })}>
                   {t("followup.confirmSnooze")}
                 </button>
               </div>
@@ -118,9 +120,9 @@ export function FollowUpSummary() {
     );
   const priority = query.data.data.filter((item) => item.state === "action" || item.state === "follow_up").slice(0, 5);
   return (
-    <section className="followup-summary" aria-label={t("followup.title")}>
+    <section className={followUpSummary} aria-label={t("followup.title")}>
       {!query.data.baseline_complete && <p role="status">{t("followup.baseline")}</p>}
-      <div className="followup-counts">
+      <div className={followUpCounts}>
         {["authored", "reviewer", "follow_up", "recent_merged"].map((key) => (
           <Link key={key} to={`/attention?${key === "authored" || key === "reviewer" ? `role=${key}&status=action` : `status=${key === "recent_merged" ? "archived&merged=1" : key}`}`}>
             <span>{t(`followup.${key === "authored" || key === "reviewer" ? key + "_action" : key}`)}</span>
@@ -132,16 +134,16 @@ export function FollowUpSummary() {
         <h2>{t("followup.priority")}</h2>
         <Link to="/attention">{t("followup.viewAll")}</Link>
       </div>
-      <ul className="followup-priority">
+      <ul data-testid="priority-list" className={followUpPriority}>
         {priority.map((item) => (
           <li key={item.id}>
             <Link to={`/attention?focus=${item.id}`}>
               <span>
                 {item.pr.repo} #{item.pr.number} · {item.pr.title}
               </span>
-              <small className="followup-priority-reasons">
+              <small data-testid="priority-reasons" className={followUpPriorityReasons}>
                 {item.reasons.map((reason) => (
-                  <span key={reason} className="followup-reason" data-tone={reasonTone(reason)}>
+                  <span key={reason} className={followUpReasonCompact} data-tone={reasonTone(reason)}>
                     {t(`followup.${reason}`)}
                   </span>
                 ))}
@@ -196,7 +198,7 @@ export function FollowUpWorkspace() {
     if (announcement.id && document.activeElement === document.body) region.current?.focus();
   }, [announcement, items.length]);
   return (
-    <section className="followup-workspace" ref={region} tabIndex={-1}>
+    <section className={followUpWorkspace} ref={region} tabIndex={-1}>
       <p className="sr-only" role="status" aria-live="polite">
         {announcement.text}
       </p>
@@ -206,17 +208,17 @@ export function FollowUpWorkspace() {
         <Link to="/settings">{t("followup.goSettings")}</Link>
       </div>
       {repo && (
-        <p className="search-chip followup-repository-chip">
+        <p data-testid="repository-chip" className="search-chip">
           <span>{repo}</span>
           <button className="linkbtn" type="button" onClick={clearRepository} aria-label={t("clearRepositoryFilter", { repo })}>
             ×
           </button>
         </p>
       )}
-      <div className="followup-filters">
+      <div className={followUpFilters}>
         <div role="group" aria-label={t("followup.title")}>
           {["all", "authored", "reviewer"].map((value) => (
-            <button key={value} className="secondary-action" aria-pressed={role === value} onClick={() => change("role", value)}>
+            <button key={value} className={secondaryAction} aria-pressed={role === value} onClick={() => change("role", value)}>
               {t(`followup.${value}`)}
             </button>
           ))}

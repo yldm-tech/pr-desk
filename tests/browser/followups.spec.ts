@@ -8,12 +8,12 @@ test.beforeEach(async ({ page }) => {
 test("overview preserves global follow-ups when contribution year changes", async ({ page }, testInfo) => {
   await page.goto("/#/");
   await expect(page.getByRole("heading", { name: "Needs your attention" })).toBeVisible();
-  await expect(page.locator(".followup-priority")).toContainText("Handle timezone boundaries");
+  await expect(page.getByTestId("priority-list")).toContainText("Handle timezone boundaries");
   await page.screenshot({ path: testInfo.outputPath("overview.png"), fullPage: true });
   await page.getByRole("tab", { name: "2025", exact: true }).click();
-  await expect(page.locator(".followup-priority")).toContainText("Review storage migration");
+  await expect(page.getByTestId("priority-list")).toContainText("Review storage migration");
   await page.getByRole("link", { name: "View all follow-ups" }).click();
-  await expect(page.locator(".followup-card")).toHaveCount(2);
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(2);
 });
 
 test("follow-up reasons are coloured by what they ask for", async ({ page }, testInfo) => {
@@ -39,14 +39,15 @@ test("follow-up reasons are coloured by what they ask for", async ({ page }, tes
     }),
   );
   await page.goto("/#/");
-  const priority = page.locator(".followup-priority-reasons");
+  const priority = page.getByTestId("priority-reasons");
   await expect(priority.first().locator('[data-tone="blocked"]')).toHaveCount(2);
   await expect(priority.nth(1).locator('[data-tone="action"]')).toHaveCount(1);
   await expect(priority.nth(2).locator('[data-tone="waiting"]')).toHaveCount(1);
   await expect(priority.nth(3).locator('[data-tone="neutral"]')).toHaveCount(1);
   const colour = (tone: string) =>
     page
-      .locator(`.followup-priority-reasons [data-tone="${tone}"]`)
+      .getByTestId("priority-reasons")
+      .locator(`[data-tone="${tone}"]`)
       .first()
       .evaluate((node) => getComputedStyle(node).color);
   const tones = await Promise.all(["blocked", "action", "waiting", "neutral"].map(colour));
@@ -56,7 +57,7 @@ test("follow-up reasons are coloured by what they ask for", async ({ page }, tes
 
 test("read leaves task pending; explicit handling moves it to waiting", async ({ page }) => {
   await page.goto("/#/attention?role=authored&status=action");
-  const card = page.locator(".followup-card");
+  const card = page.getByTestId("follow-up-card");
   await expect(card).toHaveCount(1);
   await page.getByRole("button", { name: "Mark read", exact: true }).click();
   await expect(page.getByRole("button", { name: "Mark read", exact: true })).toHaveCount(0);
@@ -70,8 +71,8 @@ test("read leaves task pending; explicit handling moves it to waiting", async ({
 test("reviewer filter and mobile layout", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/#/attention?role=reviewer");
-  await expect(page.locator(".followup-card")).toHaveCount(1);
-  await expect(page.locator(".followup-card")).toContainText("Review storage migration");
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(1);
+  await expect(page.getByTestId("follow-up-card")).toContainText("Review storage migration");
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
   expect(overflow).toBe(false);
   await page.screenshot({ path: testInfo.outputPath("mobile-followups.png"), fullPage: true });
@@ -187,13 +188,13 @@ test("private webhook addresses are allowed when the server opts in", async ({ p
 
 test("the repository attention link keeps its repository filter", async ({ page }) => {
   await page.goto("/#/attention?repo=fixture/reviewer");
-  await expect(page.locator(".followup-card")).toHaveCount(1);
-  await expect(page.locator(".followup-card")).toContainText("Review storage migration");
-  await expect(page.locator(".followup-repository-chip")).toContainText("fixture/reviewer");
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(1);
+  await expect(page.getByTestId("follow-up-card")).toContainText("Review storage migration");
+  await expect(page.getByTestId("repository-chip")).toContainText("fixture/reviewer");
   // The chip clears the filter without leaving the view.
   await page.getByRole("button", { name: /fixture\/reviewer/ }).click();
-  await expect(page.locator(".followup-card")).toHaveCount(2);
-  await expect(page.locator(".followup-repository-chip")).toHaveCount(0);
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(2);
+  await expect(page.getByTestId("repository-chip")).toHaveCount(0);
 });
 
 test("a saved review team stays listed when GitHub no longer returns it", async ({ page }) => {
@@ -257,7 +258,7 @@ test("the settings tabs are addressable and only render the open one", async ({ 
 
 test("a card action is announced and does not strand the focus", async ({ page }) => {
   await page.goto("/#/attention?role=authored&status=action");
-  const card = page.locator(".followup-card");
+  const card = page.getByTestId("follow-up-card");
   await expect(card).toHaveCount(1);
   const handled = card.getByRole("button", { name: "Handled · wait for others", exact: true });
   await handled.focus();
