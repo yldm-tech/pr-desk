@@ -499,15 +499,6 @@
     padding: 14px 0;
     border-bottom: 1px solid var(--border);
   }
-  .profile-skeleton .profile-stats > div {
-    text-align: center;
-  }
-  .profile-skeleton .profile-metadata {
-    line-height: 1.9;
-  }
-  .account-skeleton .account-trigger {
-    min-height: 40px;
-  }
   .access-skeleton {
     margin-bottom: 16px;
   }
@@ -528,35 +519,6 @@
 }
 
 @layer components {
-  .account-trigger {
-    border-radius: 9px;
-    min-height: 38px;
-  }
-  .account-trigger {
-    padding: 4px 9px 4px 5px;
-  }
-  .profile-close {
-    min-height: 32px;
-    min-width: 32px;
-    border-radius: 6px;
-  }
-  .profile-close:hover {
-    background: var(--surface-muted);
-  }
-  .profile-popover {
-    border-radius: 12px;
-  }
-  .profile-stats a {
-    border-radius: 6px;
-    padding: 5px 0;
-  }
-  .profile-stats a:hover {
-    background: var(--surface-muted);
-    text-decoration: none;
-  }
-  .profile-disconnect {
-    min-height: 44px;
-  }
   .activity-section:first-child {
     border-top: 0;
     margin-top: 0;
@@ -654,14 +616,6 @@
   h1,
   .overview-layout h1 {
     font-size: 20px;
-  }
-  .account-trigger > span,
-  .account-trigger > svg {
-    display: none;
-  }
-  .account-trigger {
-    padding: 3px;
-    min-height: 36px;
   }
   .header-actions {
     gap: 6px;

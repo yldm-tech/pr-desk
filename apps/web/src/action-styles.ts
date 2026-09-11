@@ -6,4 +6,4 @@ export const primaryAction = `${actionBase} border border-[var(--accent-text)] b
 
 // A button that reads as a link: used to retry a request without leaving the
 // sentence it sits in.
-export const linkAction = "cursor-pointer border-0 bg-none p-0 font-[inherit] text-[var(--accent-text)] underline underline-offset-[3px] disabled:cursor-wait disabled:opacity-50";
+export const linkAction = "cursor-pointer border-0 bg-none p-0 text-[var(--accent-text)] [font:inherit] underline underline-offset-[3px] disabled:cursor-wait disabled:opacity-50";

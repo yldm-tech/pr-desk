@@ -159,6 +159,20 @@ test("capture computed styles", async ({ page }) => {
   await walk("1280/open-language");
   await page.keyboard.press("Escape");
 
+  for (const width of [1280, 640, 480, 400]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#/");
+    await settle();
+    const account = page.locator("[aria-label='Profile']").first();
+    if (await account.count()) {
+      await account.click();
+      await page.waitForTimeout(250);
+      await settle();
+      await walk(`${width}/open-account`);
+      await page.keyboard.press("Escape");
+    }
+  }
+
   for (const width of [1280, 640]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/#/pull-requests");

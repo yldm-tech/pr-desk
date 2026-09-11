@@ -408,31 +408,14 @@
   .checks.pending {
     color: var(--warning);
   }
-  button,
-  .connectbtn {
+  button {
     font-family: inherit;
   }
   button {
     cursor: pointer;
   }
-  .connectbtn {
-    display: inline-flex;
-    align-items: center;
-    padding: 7px 10px;
-    border-radius: 7px;
-    background: var(--accent);
-    color: var(--surface);
-    text-decoration: none;
-    font-size: 11px;
-    font-weight: 600;
-    box-shadow: 0 1px 2px var(--shadow);
-  }
-  .connectbtn:hover {
-    background: var(--accent-text);
-  }
   .filters button:focus-visible,
   .sync:focus-visible,
-  .connectbtn:focus-visible,
   .commentbtn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -1282,185 +1265,10 @@
     margin-bottom: 16px;
     min-height: 36px;
   }
-  .account-trigger {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    border: 1px solid var(--border);
-    border-radius: 24px;
-    background: var(--surface);
-    color: var(--foreground);
-    padding: 5px 12px 5px 5px;
-    font: inherit;
-    font-size: 12px;
-    max-width: 260px;
-  }
-  .account-trigger > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .account-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-  .account-avatar-fallback {
-    display: grid;
-    place-items: center;
-    background: var(--border);
-  }
-  .profile-popover {
-    box-sizing: border-box;
-    width: min(340px, calc(100vw - 32px));
-    max-height: var(--radix-popover-content-available-height);
-    overflow: auto;
-    background: var(--surface);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px;
-    box-shadow: 0 16px 48px var(--shadow);
-    z-index: 30;
-    font-family: inherit;
-    font-size: 12px;
-  }
-  .profile-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    font-size: 13px;
-  }
-  .profile-close {
-    display: grid;
-    place-items: center;
-    border: 0;
-    background: none;
-    color: var(--muted);
-    padding: 3px;
-  }
-  .profile-identity {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    text-decoration: none;
-    color: inherit;
-  }
-  .profile-identity .account-avatar {
-    width: 52px;
-    height: 52px;
-  }
-  .profile-identity strong {
-    display: block;
-    font-size: 18px;
-    overflow-wrap: anywhere;
-  }
-  .profile-identity small {
-    display: block;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-  .profile-bio {
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-    margin: 18px 0;
-  }
-  .profile-metadata {
-    margin: 16px 0;
-    color: var(--muted);
-  }
-  .profile-metadata p {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin: 10px 0;
-    overflow-wrap: anywhere;
-  }
-  .profile-metadata svg {
-    flex-shrink: 0;
-  }
-  .profile-stats {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    border-block: 1px solid var(--border);
-    padding: 14px 0;
-    gap: 8px;
-  }
-  .profile-stats a {
-    text-decoration: none;
-    color: inherit;
-    text-align: center;
-  }
-  .profile-stats strong {
-    display: block;
-    font-size: 18px;
-  }
-  .profile-stats span {
-    display: block;
-    font-size: 10px;
-    color: var(--muted);
-    margin-top: 6px;
-  }
-  .profile-github {
-    display: block;
-    text-align: center;
-    border: 1px solid var(--border);
-    background: var(--surface-muted);
-    border-radius: 7px;
-    margin-top: 16px;
-    padding: 9px;
-    color: var(--accent-text);
-    text-decoration: none;
-  }
-  .profile-disconnect {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    border: 0;
-    border-top: 1px solid var(--border);
-    padding: 15px 0 0;
-    margin-top: 16px;
-    background: none;
-    color: var(--danger);
-    font: inherit;
-  }
-  .profile-disconnect:disabled {
-    opacity: 0.5;
-    cursor: wait;
-  }
-  .profile-popover a:hover {
-    color: var(--accent-text);
-    text-decoration: underline;
-  }
-  .account-trigger:hover {
-    background: var(--surface-muted);
-    border-color: var(--accent-border);
-  }
-  .account-trigger:focus-visible,
-  .profile-popover a:focus-visible,
-  .profile-popover button:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
-  }
-  .profile-retry {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-muted);
-    padding: 7px 12px;
-    color: var(--accent-text);
-  }
   @media (max-width: 640px) {
     .account-bar {
       margin-top: -6px;
       margin-bottom: 18px;
-    }
-    .account-trigger {
-      max-width: 220px;
     }
   }
   .sync-feedback {
@@ -1568,7 +1376,6 @@
   }
   nav button,
   .sync,
-  .account-trigger,
   .visibility-tabs button,
   .overview-year-tab,
   .search-form input,
@@ -1577,8 +1384,7 @@
   .pr-repository {
     font-size: var(--text-body);
   }
-  .panel-heading h2,
-  .profile-heading {
+  .panel-heading h2 {
     font-size: var(--text-heading);
     font-weight: 600;
   }
@@ -1597,9 +1403,6 @@
   .distribution-details table,
   .ring-label span,
   .trend-total span,
-  .profile-popover,
-  .profile-stats span,
-  .profile-identity small,
   .prtitle small,
   .stat span,
   .thead {
@@ -1609,11 +1412,9 @@
   .panel-kicker {
     letter-spacing: 0;
   }
-  .profile-popover,
   .overview-page svg text {
     font-family: var(--font-ui);
   }
-  .account-trigger,
   .overview-year-tab,
   .visibility-tabs button {
     font-weight: 400;
@@ -1623,8 +1424,7 @@
   nav button.active {
     font-weight: 600;
   }
-  .overview-page,
-  .profile-stats {
+  .overview-page {
     font-variant-numeric: tabular-nums;
   }
   .visibility-feedback a {
@@ -1714,9 +1514,6 @@
     .header-actions {
       gap: 8px;
     }
-    .account-trigger {
-      max-width: 180px;
-    }
   }
   @media (max-width: 640px) {
     .page-header .account-bar {
@@ -1727,9 +1524,6 @@
     }
     .header-actions {
       margin-left: auto;
-    }
-    .account-trigger {
-      max-width: 150px;
     }
   }
 

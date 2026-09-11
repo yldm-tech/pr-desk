@@ -1,5 +1,6 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
+import { accountTrigger, profileBio, profileIdentity, profileMetadata, profileStats } from "./profile-styles";
 import "react-loading-skeleton/dist/skeleton.css";
 import { useTranslation } from "react-i18next";
 
@@ -159,22 +160,22 @@ export function RepositorySkeleton({ count = 6 }: { count?: number }) {
 export function ProfileSkeleton() {
   return (
     <LoadingFrame className="profile-skeleton">
-      <div className="profile-identity">
+      <div className={profileIdentity}>
         <Skeleton circle width={48} height={48} />
         <div className="skeleton-flex">
           <Skeleton width="75%" height={16} />
           <Skeleton width="55%" height={12} />
         </div>
       </div>
-      <div className="profile-bio">
+      <div className={profileBio}>
         <Skeleton count={2} height={12} />
       </div>
-      <div className="profile-metadata">
+      <div className={`${profileMetadata} leading-[1.9]`}>
         <Skeleton width="65%" height={12} />
         <Skeleton width="80%" height={12} />
         <Skeleton width="75%" height={12} />
       </div>
-      <div className="profile-stats">
+      <div className={`${profileStats} [&>div]:text-center`}>
         {[0, 1, 2].map((i) => (
           <div key={i}>
             <Skeleton width={36} height={20} />
@@ -239,7 +240,7 @@ export function AccessSkeleton() {
 export function AccountSkeleton() {
   return (
     <LoadingFrame className="account-skeleton">
-      <div className="account-trigger">
+      <div className={`${accountTrigger} min-h-10`}>
         <Skeleton circle width={30} height={30} />
         <Skeleton width={64} height={12} />
       </div>

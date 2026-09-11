@@ -65,6 +65,9 @@ export async function installFixtures(page: Page) {
           checks: [{ id: 3, name: "build", status: "completed", conclusion: "success", html_url: "https://github.com/fixture/calendar/runs/3" }],
         };
         break;
+      case "profile":
+        data = { login: "fixture", name: "Fixture User", avatar_url: "", bio: "Keeps an eye on pull requests.", company: "Fixture Inc", location: "Earth", created_at: "2015-03-01T00:00:00Z", followers: 42, following: 7, public_repos: 13 };
+        break;
       case "repositories":
         data = { data: [] };
         break;

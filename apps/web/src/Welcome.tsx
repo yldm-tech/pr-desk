@@ -55,7 +55,7 @@ export function Welcome() {
               <strong className="text-[12px] font-semibold">{t("navAttention")}</strong>
               <p className="mx-0 mt-1 mb-0 text-[11px] leading-[1.5] text-[var(--muted)]">{t("welcomeAttentionHint")}</p>
             </div>
-            <span className="h-[7px] w-[7px] rounded-full bg-[var(--accent)]" aria-hidden="true" />
+            <span className="h-[7px] w-[7px] rounded-[50%] bg-[var(--accent)]" aria-hidden="true" />
           </div>
           <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] py-[18px]">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--accent-soft)] text-[var(--accent-text)]">
