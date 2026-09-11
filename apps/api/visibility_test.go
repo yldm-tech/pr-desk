@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestVisibilityBackfillDoesNotAssumePublic(t *testing.T) {
@@ -47,5 +48,33 @@ func TestVisibilityBackfillDoesNotAssumePublic(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// updated_at carries GitHub activity time, not the time our poll ran: the list
+// is ordered by it and the UI prints it. A one-column gorm Update would let the
+// auto-update-time callback stamp every touched row with the backfill's clock.
+func TestVisibilityBackfillKeepsGitHubActivityTime(t *testing.T) {
+	db := integrationDB(t)
+	activity := time.Date(2021, 3, 4, 5, 6, 7, 0, time.UTC)
+	row := PullRequest{SessionID: "visibility-time", Repo: "fixture/calendar", Number: 7, Title: "Old but tracked", UpdatedAt: activity}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&PullRequest{}).Where("id = ?", row.ID).UpdateColumn("updated_at", activity).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := storeRepositoryVisibility(db, row.SessionID, row.Repo, true); err != nil {
+		t.Fatal(err)
+	}
+	var after PullRequest
+	if err := db.First(&after, row.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if after.RepoPrivate == nil || !*after.RepoPrivate {
+		t.Fatal("visibility was not written")
+	}
+	if !after.UpdatedAt.UTC().Equal(activity) {
+		t.Fatal("the backfill moved GitHub activity time to now", after.UpdatedAt)
 	}
 }

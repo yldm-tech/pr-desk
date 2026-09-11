@@ -244,3 +244,54 @@ func TestNotificationSubjectUsesTheFirstLine(t *testing.T) {
 		t.Fatal("long subject not trimmed", len([]rune(subject)))
 	}
 }
+
+// PR titles and verbatim third-party comment excerpts travel in the body. With
+// a parse mode set, "a < b" in a title breaks delivery outright and an anchor
+// in someone else's comment renders as a live link inside our own message.
+func TestTelegramDeliverySendsPlainTextAndNeverLeaksTheToken(t *testing.T) {
+	t.Setenv("NOTIFY_ALLOW_PRIVATE_HOSTS", "true")
+	var payload map[string]any
+	var path string
+	reply := `{"ok":true,"result":{}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		payload = map[string]any{}
+		_ = json.Unmarshal(raw, &payload)
+		path = r.URL.Path
+		_, _ = w.Write([]byte(reply))
+	}))
+	original := telegramAPIBase
+	telegramAPIBase = server.URL
+	defer func() { telegramAPIBase = original }()
+
+	config := destinationConfig{Token: "8100000:AAH-secret-token", ChatID: -1001234567890}
+	body := "fixture/calendar #17 · fix: handle a < b\n<a href=\"https://evil.test\">Approve here</a> & done"
+	if err := sendTelegramNotification(context.Background(), config, body); err != nil {
+		t.Fatal(err)
+	}
+	if _, set := payload["parse_mode"]; set {
+		t.Fatal("a parse mode was sent; markup inside titles and comments would be interpreted", payload)
+	}
+	if payload["text"] != body {
+		t.Fatal("body was altered before sending", payload["text"])
+	}
+	if path != "/bot"+config.Token+"/sendMessage" {
+		t.Fatal("unexpected endpoint", path)
+	}
+
+	// Telegram reports a refusal inside a 200 response.
+	reply = `{"ok":false,"description":"chat not found"}`
+	if err := sendTelegramNotification(context.Background(), config, "body"); err == nil {
+		t.Fatal("a refusal inside ok:false was reported as delivered")
+	}
+
+	// A transport failure quotes the URL, and the URL embeds the bot token.
+	server.Close()
+	err := sendTelegramNotification(context.Background(), config, "body")
+	if err == nil {
+		t.Fatal("expected a transport failure")
+	}
+	if strings.Contains(err.Error(), config.Token) {
+		t.Fatal("the bot token leaked into the error", err)
+	}
+}

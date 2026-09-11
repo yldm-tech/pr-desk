@@ -16,8 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/nikoksr/notify/service/telegram"
 )
 
 const (
@@ -28,6 +26,9 @@ const (
 )
 
 var destinationKinds = []string{destinationTelegram, destinationLark, destinationEmail, destinationWebhook}
+
+// Overridden in tests to point at a local server.
+var telegramAPIBase = "https://api.telegram.org"
 
 // destinationConfig is the decrypted payload of every destination. Each kind
 // fills in its own subset; the shared shape keeps credential retention on
@@ -107,23 +108,50 @@ func sendNotification(ctx context.Context, destination NotificationDestination, 
 	return fmt.Errorf("unsupported destination kind %q", destination.Kind)
 }
 
-// sendTelegramNotification is the production adapter for nikoksr/notify.
+// sendTelegramNotification posts to the Bot API directly. The notification
+// body carries PR titles and verbatim excerpts of other people's comments, so
+// it is sent without a parse mode: Telegram then treats it as plain text and
+// markup inside a title or a comment can neither break delivery nor render as
+// a link. Going through the Bot API also avoids the identity lookup that
+// nikoksr/notify performs on construction, which used an unbounded client and
+// stalled the single-threaded outbox for every account behind it.
 func sendTelegramNotification(ctx context.Context, config destinationConfig, body string) error {
 	if config.Token == "" || config.ChatID == 0 {
 		return errors.New("invalid telegram destination configuration")
 	}
-	service, err := telegram.New(config.Token)
+	encoded, err := json.Marshal(map[string]any{"chat_id": config.ChatID, "text": body, "disable_web_page_preview": true})
 	if err != nil {
 		return err
 	}
-	service.AddReceivers(config.ChatID)
-	return service.Send(ctx, "PR Desk", body)
+	status, response, err := postJSON(ctx, telegramAPIBase+"/bot"+config.Token+"/sendMessage", encoded, nil)
+	if err != nil {
+		// The endpoint embeds the bot token, and transport errors quote the URL.
+		return errors.New("telegram request failed: " + redactToken(err.Error(), config.Token))
+	}
+	var result struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	if json.Unmarshal([]byte(response), &result) == nil && !result.OK {
+		return fmt.Errorf("telegram rejected the message: %s", result.Description)
+	}
+	if status < 200 || status > 299 {
+		return fmt.Errorf("telegram returned %d", status)
+	}
+	return nil
+}
+
+func redactToken(message, token string) string {
+	if token == "" {
+		return message
+	}
+	return strings.ReplaceAll(message, token, "REDACTED")
 }
 
 // sendLarkNotification posts to a Lark or Feishu custom bot webhook. The
-// signed variant is implemented here rather than through nikoksr/notify
-// because that adapter only accepts a URL, and signature validation is the
-// default the group bot dialog steers people towards.
+// signed variant is implemented here because the obvious adapter only accepts
+// a URL, and signature validation is the default the group bot dialog steers
+// people towards.
 func sendLarkNotification(ctx context.Context, config destinationConfig, body string) error {
 	if config.URL == "" {
 		return errors.New("invalid lark destination configuration")

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
+	"gorm.io/gorm"
 	"strings"
 )
 
@@ -39,8 +40,15 @@ func (s *Server) ensureRepositoryVisibility(c *gin.Context) error {
 			if result.Private == nil {
 				return fmt.Errorf("missing repository visibility")
 			}
-			return s.db.WithContext(ctx).Model(&PullRequest{}).Where("session_id = ? AND repo = ?", requestSessionID(c), repo).Update("repo_private", result.GetPrivate()).Error
+			return storeRepositoryVisibility(s.db.WithContext(ctx), requestSessionID(c), repo, result.GetPrivate())
 		})
 	}
 	return group.Wait()
+}
+
+// UpdateColumn, not Update: updated_at carries GitHub activity time, and gorm
+// appends an auto-update-time assignment to a plain single-column Update, which
+// would restamp every pull request of the repository with the backfill's clock.
+func storeRepositoryVisibility(db *gorm.DB, sessionID, repo string, private bool) error {
+	return db.Model(&PullRequest{}).Where("session_id = ? AND repo = ?", sessionID, repo).UpdateColumn("repo_private", private).Error
 }
