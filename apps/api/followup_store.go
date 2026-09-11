@@ -134,8 +134,10 @@ func (s *Server) collectFollowUps(sid string, scope func() *gorm.DB) ([]followUp
 		return nil, err
 	}
 	var prs []PullRequest
-	if err := scope().Find(&prs).Error; err != nil {
-		return nil, err
+	if tracked := trackedPullRequestIDs(records); len(tracked) > 0 {
+		if err := scope().Where("id IN ?", tracked).Find(&prs).Error; err != nil {
+			return nil, err
+		}
 	}
 	byID := map[uint]PullRequest{}
 	for _, pr := range prs {

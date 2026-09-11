@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Check, Plus } from "lucide-react";
@@ -11,7 +11,7 @@ const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(),
 type Settings = z.infer<typeof settingsSchema>;
 const channels = ["telegram", "lark", "email", "webhook"] as const;
 type Channel = (typeof channels)[number];
-type Destination = { id: number; name: string; kind: Channel; enabled: boolean };
+type Destination = { id: number; name: string; kind: Channel; enabled: boolean; failing?: boolean };
 const emptyDraft = { kind: "telegram" as Channel, name: "", token: "", chat_id: "", url: "", secret: "", host: "", port: "587", username: "", password: "", from: "", to: "" };
 type Draft = typeof emptyDraft;
 const channelLabel = (kind: string) => `followup.channel${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
@@ -302,6 +302,13 @@ function NotificationDestinations() {
   const [draft, setDraft] = useState(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(0);
+  // Removing a destination takes the focused button with it and said nothing.
+  const [announcement, setAnnouncement] = useState({ text: "", id: 0 });
+  const region = useRef<HTMLDivElement>(null);
+  const announce = (text: string) => setAnnouncement((previous) => ({ text, id: previous.id + 1 }));
+  useEffect(() => {
+    if (announcement.id && document.activeElement === document.body) region.current?.focus();
+  }, [announcement]);
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
   const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[]; allow_private_hosts?: boolean }>(), retry: false });
   const addDestination = useMutation({
@@ -323,13 +330,17 @@ function NotificationDestinations() {
     mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include", retry: 0 }),
     onSuccess: () => {
       setConfirming(0);
+      announce(t("followup.announceRemoved"));
       invalidate();
     },
   });
   const rows = destinations.data?.data || [];
   return (
     <section className="followup-settings" aria-labelledby="notification-destinations-heading">
-      <div className="followup-settings-group">
+      <div className="followup-settings-group" ref={region} tabIndex={-1}>
+        <p className="sr-only" role="status" aria-live="polite">
+          {announcement.text}
+        </p>
         <div className="followup-settings-heading">
           <h2 id="notification-destinations-heading">{t("followup.notifications")}</h2>
           <p>{t("followup.notificationsHelp")}</p>
@@ -436,6 +447,7 @@ function NotificationDestinations() {
               <li key={destination.id} className="followup-destination">
                 <strong>{destination.name}</strong>
                 <span className="followup-destination-kind">{t(channelLabel(destination.kind || "telegram"))}</span>
+                {destination.failing && <span className="followup-destination-failing">{t("followup.destinationFailing")}</span>}
                 {confirming === destination.id ? (
                   <>
                     <span className="followup-destination-confirm">{t("followup.confirmRemove")}</span>

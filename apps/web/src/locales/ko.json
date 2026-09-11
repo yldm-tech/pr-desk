@@ -258,5 +258,6 @@
   "welcomeUpdateTitle": "소식 놓치지 않기",
   "welcomeUpdateDescription": "탭을 닫아도 백그라운드 동기화로 업데이트를 이어갑니다.",
   "publicRepositories": "공개 저장소",
-  "openStatus": "열림"
+  "openStatus": "열림",
+  "dismissMessage": "이 메시지 닫기"
 }

@@ -258,5 +258,6 @@
   "welcomeUpdateTitle": "Mantente al día",
   "welcomeUpdateDescription": "La sincronización continúa en segundo plano, incluso al cerrar esta pestaña.",
   "publicRepositories": "Repositorios públicos",
-  "openStatus": "Abierto"
+  "openStatus": "Abierto",
+  "dismissMessage": "Descartar este mensaje"
 }

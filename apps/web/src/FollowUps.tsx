@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -31,11 +31,15 @@ export function useFollowUps(enabled = true) {
   });
 }
 
-function FollowUpCard({ item }: { item: FollowUp }) {
+function FollowUpCard({ item, onChanged }: { item: FollowUp; onChanged: (message: string) => void }) {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const [date, setDate] = useState("");
-  const mutation = useMutation({ mutationFn: (action: { action: string; until?: string }) => ky.post(apiURL + `/api/v1/follow-ups/${item.id}`, { credentials: "include", retry: 0, json: { ...action, version: item.version } }), onSettled: () => client.invalidateQueries({ queryKey: ["follow-ups"] }) });
+  const mutation = useMutation({
+    mutationFn: (action: { action: string; until?: string }) => ky.post(apiURL + `/api/v1/follow-ups/${item.id}`, { credentials: "include", retry: 0, json: { ...action, version: item.version } }),
+    onSuccess: (_result, action) => onChanged(t("followup.announceAction", { action: t(`followup.${action.action === "snooze" ? "snooze" : action.action === "read" ? "read" : "followedUp"}`), title: item.pr.title })),
+    onSettled: () => client.invalidateQueries({ queryKey: ["follow-ups"] }),
+  });
   const snooze = (days: number) => mutation.mutate({ action: "snooze", until: new Date(Date.now() + days * 86400000).toISOString() });
   const githubURL = safeGitHubLink(item.pr.url || "");
   return (
@@ -154,6 +158,14 @@ export function FollowUpSummary() {
 export function FollowUpWorkspace() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
+  // An action can remove the card that held the focus, and nothing announced
+  // the result, so a screen reader user was left with no feedback and the focus
+  // on the document body. The counter makes repeating the same action announce
+  // again; the check runs after the render that removed the card, because
+  // before it the focus is still on a button that is about to disappear.
+  const [announcement, setAnnouncement] = useState({ text: "", id: 0 });
+  const region = useRef<HTMLElement>(null);
+  const announce = (text: string) => setAnnouncement((previous) => ({ text, id: previous.id + 1 }));
   const query = useFollowUps();
   const role = params.get("role") || "all",
     status = params.get("status") || "all",
@@ -180,8 +192,14 @@ export function FollowUpWorkspace() {
       (status === "all" ? item.state !== "archived" : item.state === status) &&
       (!params.get("merged") || (item.pr.merged_at && item.archived_at && new Date(item.archived_at).getTime() > Date.now() - 7 * 86400000)),
   );
+  useEffect(() => {
+    if (announcement.id && document.activeElement === document.body) region.current?.focus();
+  }, [announcement, items.length]);
   return (
-    <section className="followup-workspace">
+    <section className="followup-workspace" ref={region} tabIndex={-1}>
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement.text}
+      </p>
       {query.data && !query.data.baseline_complete && <p role="status">{t("followup.baseline")}</p>}
       <div className="panel-heading">
         <h2>{t("followup.title")}</h2>
@@ -219,7 +237,7 @@ export function FollowUpWorkspace() {
           {t("followup.unavailable")} <button onClick={() => query.refetch()}>{t("followup.retry")}</button>
         </p>
       ) : items.length ? (
-        items.map((item) => <FollowUpCard key={item.id} item={item} />)
+        items.map((item) => <FollowUpCard key={item.id} item={item} onChanged={announce} />)
       ) : (
         <p>{t("followup.empty")}</p>
       )}

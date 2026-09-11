@@ -258,5 +258,6 @@
   "welcomeUpdateTitle": "持续跟进动态",
   "welcomeUpdateDescription": "后台同步最新进展，关闭页面后也会继续更新。",
   "publicRepositories": "公开仓库",
-  "openStatus": "进行中"
+  "openStatus": "进行中",
+  "dismissMessage": "关闭该提示"
 }

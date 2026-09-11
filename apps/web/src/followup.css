@@ -409,6 +409,19 @@
   padding: 6px 12px;
   font-size: 12px;
 }
+.followup-destination-failing {
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.followup-workspace:focus-visible,
+.followup-settings-group:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
 .followup-destination-danger {
   color: var(--danger);
 }

@@ -60,8 +60,14 @@ func (s *Server) connectAccount(ctx context.Context, candidate OAuthToken, githu
 	if githubID <= 0 || browserID == "" {
 		return OAuthToken{}, errors.New("invalid account identity")
 	}
+	// Resolved before the transaction: it calls GitHub, and the transaction
+	// below holds an advisory lock for this account.
+	donor, err := findCacheDonor(ctx, s.db.WithContext(ctx), candidate, githubID)
+	if err != nil {
+		return OAuthToken{}, err
+	}
 	var account OAuthToken
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Serialize first logins and reauthorizations for the same GitHub ID.
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", githubID).Error; err != nil {
 			return err
@@ -73,8 +79,10 @@ func (s *Server) connectAccount(ctx context.Context, candidate OAuthToken, githu
 			if err := tx.Create(&account).Error; err != nil {
 				return err
 			}
-			if err := restoreAccountCache(ctx, tx, account, githubID); err != nil {
-				return err
+			if donor != "" {
+				if err := copySessionCache(tx, donor, account.SessionID); err != nil {
+					return err
+				}
 			}
 		} else if err != nil {
 			return err
