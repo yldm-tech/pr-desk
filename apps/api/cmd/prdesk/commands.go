@@ -50,7 +50,7 @@ func runList(command string, args []string) error {
 		// Only list_pull_requests accepts a title search, and the tool schema
 		// rejects unknown fields outright. Reported before authenticating, so a
 		// wrong flag does not look like a sign-in problem.
-		return errors.New("--query only applies to: pr-desk-cli prs")
+		return errors.New("--query only applies to: prdesk prs")
 	}
 	stored, err := loadCredentials()
 	if err != nil {
@@ -239,7 +239,7 @@ func runAction(command string, args []string) error {
 		needed = 3
 	}
 	if len(rest) < needed {
-		return fmt.Errorf("usage: pr-desk-cli %s <id> <version>%s (both come from the listing)", command, map[bool]string{true: " <days>"}[command == "snooze"])
+		return fmt.Errorf("usage: prdesk %s <id> <version>%s (both come from the listing)", command, map[bool]string{true: " <days>"}[command == "snooze"])
 	}
 	id, err := strconv.ParseUint(rest[0], 10, 64)
 	if err != nil {

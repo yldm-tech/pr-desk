@@ -1,4 +1,4 @@
-// Command pr-desk-cli reads a PR Desk account from the terminal and gives an
+// Command prdesk reads a PR Desk account from the terminal and gives an
 // agent a scriptable way in. It authenticates with the same authorization code
 // flow a browser would use, keeping the GitHub credentials inside the server.
 package main
@@ -8,19 +8,19 @@ import (
 	"os"
 )
 
-const usage = `pr-desk-cli — read and act on your PR Desk follow-ups
+const usage = `prdesk — read and act on your PR Desk follow-ups
 
 Usage:
-  pr-desk-cli login [--host URL] [--write]   authorize this machine in the browser
-  pr-desk-cli logout                         forget the stored token
-  pr-desk-cli status                         show who is signed in
-  pr-desk-cli followups [filters]            list tracked pull requests needing attention
-  pr-desk-cli prs [filters]                  search synchronized pull requests
-  pr-desk-cli repos                          per-repository counts
-  pr-desk-cli summary                        counts by follow-up state
-  pr-desk-cli read <id> <version>            mark a follow-up read
-  pr-desk-cli handled <id> <version>         mark a follow-up handled
-  pr-desk-cli snooze <id> <version> <days>   stop reminders for a while
+  prdesk login [--host URL] [--write]   authorize this machine in the browser
+  prdesk logout                         forget the stored token
+  prdesk status                         show who is signed in
+  prdesk followups [filters]            list tracked pull requests needing attention
+  prdesk prs [filters]                  search synchronized pull requests
+  prdesk repos                          per-repository counts
+  prdesk summary                        counts by follow-up state
+  prdesk read <id> <version>            mark a follow-up read
+  prdesk handled <id> <version>         mark a follow-up handled
+  prdesk snooze <id> <version> <days>   stop reminders for a while
 
 Filters:
   --state action|waiting|follow_up|draft|archived

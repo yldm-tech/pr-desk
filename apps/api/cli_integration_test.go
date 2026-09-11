@@ -48,8 +48,8 @@ func TestCLIReadsFollowUpsThroughMCP(t *testing.T) {
 	server := httptest.NewServer(router)
 	defer server.Close()
 
-	binary := filepath.Join(t.TempDir(), "pr-desk-cli")
-	build := exec.Command("go", "build", "-o", binary, "./cmd/pr-desk-cli")
+	binary := filepath.Join(t.TempDir(), "prdesk")
+	build := exec.Command("go", "build", "-o", binary, "./cmd/prdesk")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatal("cannot build the CLI: ", string(out))
 	}

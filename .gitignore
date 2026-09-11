@@ -25,4 +25,4 @@ playwright-report/
 
 # Go build output
 apps/api/api
-apps/api/cmd/pr-desk-cli/pr-desk-cli
+apps/api/cmd/prdesk/prdesk

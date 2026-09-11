@@ -22,7 +22,7 @@ import (
 
 const (
 	defaultHost    = "http://localhost:8080"
-	cliClientID    = "pr-desk-cli"
+	cliClientID    = "prdesk"
 	scopeRead      = "followups:read"
 	scopeWrite     = "followups:write"
 	loginTimeLimit = 5 * time.Minute
@@ -56,14 +56,14 @@ func loadCredentials() (credentials, error) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return credentials{}, errors.New("not signed in; run: pr-desk-cli login")
+		return credentials{}, errors.New("not signed in; run: prdesk login")
 	}
 	var stored credentials
 	if json.Unmarshal(raw, &stored) != nil || stored.Token == "" {
-		return credentials{}, errors.New("the stored credentials are unreadable; run: pr-desk-cli login")
+		return credentials{}, errors.New("the stored credentials are unreadable; run: prdesk login")
 	}
 	if !stored.ExpiresAt.IsZero() && !stored.ExpiresAt.After(time.Now()) {
-		return credentials{}, errors.New("the stored token expired; run: pr-desk-cli login")
+		return credentials{}, errors.New("the stored token expired; run: prdesk login")
 	}
 	return stored, nil
 }
