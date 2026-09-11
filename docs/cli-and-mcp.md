@@ -42,7 +42,7 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
 | `get_sync_status` | read | How old the data is and how old that verdict is, so an empty result can be judged |
 | `list_pull_requests` | read | Search synchronized pull requests by repository, title, state, role, check state or conflict |
-| `list_repositories` | read | Per-repository open, attention, conflict and failing-check counts |
+| `list_repositories` | read | Per-repository open, attention, conflict and failing-check counts, all scoped to the follow-up workspace rather than to every synchronized pull request |
 | `mark_follow_up_read` | write | Does not mark the work handled |
 | `mark_follow_up_handled` | write | Restarts the waiting clock |
 | `snooze_follow_up` | write | Suppresses reminders for 1–365 days |
@@ -62,14 +62,26 @@ GitHub reports through two APIs and both are read. Check runs are what GitHub Ac
 
 The `checks_failed` and `conflict` reasons are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix and does not belong in your action queue. Filtering `list_follow_ups` by `reason` therefore answers "what is PR Desk asking me to do", and on an account that mostly reviews it can legitimately return nothing while plenty of branches are red.
 
-To ask the other question — which branches are failing, whoever owns them — filter on the state instead. `checks` and `conflict` are accepted by both `list_follow_ups` and `list_pull_requests` and apply whatever your role is, and `list_repositories` reports `checks_failing` next to `needs_attention` for the same reason: one count is the work, the other is the weather.
-
-The browser's own repositories table reports `checks_failing` too, and it is the only column the two surfaces agree on. Everything else there is deliberately narrower: its scope is the pull requests you authored, and its attention count is a query over stored columns, where the tool's is the follow-up state that read, handled and snooze all move. The page answers "how does my own work stand"; the tool answers "what is the follow-up workspace holding".
+To ask the other question — which branches are failing, whoever owns them — filter on the state instead. `checks` and `conflict` are accepted by both `list_follow_ups` and `list_pull_requests` and apply whatever your role is.
 
 ```
 prdesk prs --state open --checks failure --url    # every red branch, whoever owns it
 prdesk followups --reason checks_failed           # only the ones that are yours to fix
 ```
+
+### Three places count failing checks, and none of them agree
+
+`checks_failing` appears in `list_repositories` and in the browser's repositories table, and a red branch is also what `list_pull_requests --checks failure` returns. They are counted over three different populations, so do not expect the totals to reconcile. `list_pull_requests` is the only one that answers "every branch that is red".
+
+| Surface | Counts over | Misses |
+|---------|-------------|--------|
+| `list_pull_requests --checks failure` | every synchronized pull request | nothing |
+| `list_repositories` → `checks_failing` | the follow-up workspace | pull requests no follow-up tracks: a review requested through a team you have not selected, anything the inclusion rules drop |
+| Browser repositories table | open pull requests you authored | every pull request you only review |
+
+Observed on one account: 13 red branches from `list_pull_requests`, 9 when the tool's per-repository counts are added up, and one repository absent from the tool's output altogether because its only tracked pull request was requested through an unselected team. All three numbers are correct for the question their own surface asks.
+
+The rest of the browser table is narrower again: its attention count is a query over stored columns, where the tool's is the follow-up state that read, handled and snooze all move. The page answers "how does my own work stand"; the tool answers "what is the follow-up workspace holding".
 
 ### Reading the sync status
 

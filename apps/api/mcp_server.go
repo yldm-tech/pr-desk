@@ -460,10 +460,11 @@ type repositoryOutput struct {
 	Open       int    `json:"open"`
 	Attention  int    `json:"needs_attention"`
 	Conflicts  int    `json:"conflicts"`
-	// Counted whatever the role is, so a repository whose red branches all belong
-	// to somebody else still reports them. needs_attention stays narrower: it is
-	// what PR Desk is asking this account to do.
-	ChecksFailing int `json:"checks_failing"`
+	// Counted whatever the role is, but only across the follow-up workspace like
+	// every other count here, so it is not the number of red branches: one that
+	// no follow-up tracks is absent, and so is a repository whose only such pull
+	// request is untracked. list_pull_requests answers the unqualified question.
+	ChecksFailing int `json:"checks_failing" jsonschema:"How many of this repository's tracked pull requests have failing checks, whatever your role. Scoped to the follow-up workspace like the other counts, so it undercounts red branches; filter list_pull_requests by checks for the complete answer"`
 }
 
 type repositoryListOutput struct {
@@ -628,7 +629,7 @@ func (s *Server) newMCPServer() *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpFollowUpSummary)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_sync_status", Description: "Report how fresh the synchronized data is and whether the first inventory finished, so an empty result can be judged.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpSyncStatus)
 	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state, role, check state or conflict. Unlike list_follow_ups this covers pull requests you only review, so it is the way to find every branch with failing checks rather than only your own.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize tracked repositories with their open, attention-needing, conflicting and check-failing pull request counts.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize the follow-up workspace by repository: open, attention-needing, conflicting and check-failing counts. Every count is scoped to the pull requests a follow-up tracks, so a repository with no tracked pull request is absent entirely and the totals do not reconcile with list_pull_requests, which is what answers \"every branch that is red\".", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_read", Description: "Mark a follow-up as read. This does not mark the work as handled and does not touch GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("read"))
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("handled"))
 	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("snooze"))
