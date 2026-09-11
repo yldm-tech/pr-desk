@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -80,6 +81,9 @@ func requireMutationOrigin(c *gin.Context) {
 		}
 	}
 	if c.GetHeader("Origin") != webOrigin() {
+		// The origin is not a secret and naming it is the difference between a
+		// report of "403" and knowing which header was wrong.
+		log.Printf("Refused %s %s: Origin %q does not match %q", c.Request.Method, c.Request.URL.Path, c.GetHeader("Origin"), webOrigin())
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed"})
 		return
 	}

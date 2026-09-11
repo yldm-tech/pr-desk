@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -246,8 +247,13 @@ func (s *Server) hasAccountSession(c *gin.Context) bool {
 }
 
 func (s *Server) authorizeEndpoint(c *gin.Context) {
+	// safeRequestLogger deliberately skips this path so that authorization
+	// parameters never reach the log. One line without them still answers the
+	// question a "403" report cannot: did the request arrive at all.
+	log.Printf("Authorize %s: session=%t", c.Request.Method, s.hasAccountSession(c))
 	request, problem := s.parseAuthorizeRequest(c)
 	if problem != "" {
+		log.Printf("Authorize rejected: %s", problem)
 		c.String(http.StatusBadRequest, problem)
 		return
 	}
@@ -272,6 +278,8 @@ func (s *Server) authorizeEndpoint(c *gin.Context) {
 		presented := c.Request.Form.Get(consentField)
 		stored, err := c.Cookie(consentCookie)
 		if err != nil || stored == "" || subtle.ConstantTimeCompare([]byte(stored), []byte(presented)) != 1 {
+			// Values are never logged; which half was missing is what matters.
+			log.Printf("Consent refused: cookie present=%t, field present=%t, match=%t", err == nil && stored != "", presented != "", stored != "" && stored == presented)
 			c.String(http.StatusForbidden, "This authorization form expired. Start again from your client.")
 			return
 		}
