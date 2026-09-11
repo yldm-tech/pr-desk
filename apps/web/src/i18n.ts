@@ -7,12 +7,13 @@ import ja from "./locales/ja.json";
 import ko from "./locales/ko.json";
 import es from "./locales/es.json";
 import { followupLocales } from "./followup-locales";
+import { accessLocales } from "./access-locales";
 export const resources = {
-  en: { translation: { ...en, followup: followupLocales.en } },
-  "zh-CN": { translation: { ...zh, followup: followupLocales["zh-CN"] } },
-  ja: { translation: { ...ja, followup: followupLocales.ja } },
-  ko: { translation: { ...ko, followup: followupLocales.ko } },
-  es: { translation: { ...es, followup: followupLocales.es } },
+  en: { translation: { ...en, followup: followupLocales.en, access: accessLocales.en } },
+  "zh-CN": { translation: { ...zh, followup: followupLocales["zh-CN"], access: accessLocales["zh-CN"] } },
+  ja: { translation: { ...ja, followup: followupLocales.ja, access: accessLocales.ja } },
+  ko: { translation: { ...ko, followup: followupLocales.ko, access: accessLocales.ko } },
+  es: { translation: { ...es, followup: followupLocales.es, access: accessLocales.es } },
 } as const;
 void i18n
   .use(LanguageDetector)
