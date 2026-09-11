@@ -49,7 +49,7 @@ func (s *Server) overview(c *gin.Context) {
 		}
 	}
 	scope := func() *gorm.DB {
-		q := sessionPRQuery(c, s.db).Model(&PullRequest{})
+		q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Model(&PullRequest{})
 		if visibility == "public" || visibility == "private" {
 			q = q.Where("repo_private = ?", visibility == "private")
 		}
@@ -81,7 +81,7 @@ func (s *Server) overview(c *gin.Context) {
 		Private             int64 `json:"private"`
 		Unknown             int64 `json:"unknown"`
 	}
-	countsQuery := sessionPRQuery(c, s.db).Model(&PullRequest{})
+	countsQuery := sessionPRQuery(c, s.db).Where("role = ?", "authored").Model(&PullRequest{})
 	if scoped {
 		countsQuery = countsQuery.Where("COALESCE(merged_at, pr_created_at, updated_at) >= ? AND COALESCE(merged_at, pr_created_at, updated_at) < ?", start, end)
 	}
@@ -90,12 +90,12 @@ func (s *Server) overview(c *gin.Context) {
 		return
 	}
 	var recordedYears []int
-	if err := sessionPRQuery(c, s.db).Model(&PullRequest{}).Distinct("EXTRACT(YEAR FROM COALESCE(merged_at, pr_created_at, updated_at) AT TIME ZONE 'UTC')::integer").Pluck("EXTRACT(YEAR FROM COALESCE(merged_at, pr_created_at, updated_at) AT TIME ZONE 'UTC')::integer", &recordedYears).Error; err != nil {
+	if err := sessionPRQuery(c, s.db).Where("role = ?", "authored").Model(&PullRequest{}).Distinct("EXTRACT(YEAR FROM COALESCE(merged_at, pr_created_at, updated_at) AT TIME ZONE 'UTC')::integer").Pluck("EXTRACT(YEAR FROM COALESCE(merged_at, pr_created_at, updated_at) AT TIME ZONE 'UTC')::integer", &recordedYears).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Unable to load available years"})
 		return
 	}
 	var connection OAuthToken
-	s.db.Where("session_id = ? AND created_at > ?", requestSessionID(c), now.Add(-30*24*time.Hour)).First(&connection)
+	s.db.Where("session_id = ?", requestSessionID(c)).First(&connection)
 	firstYear := now.Year() - 1
 	if connection.GitHubCreatedAt != nil && connection.GitHubCreatedAt.Year() >= 2008 {
 		firstYear = connection.GitHubCreatedAt.Year()

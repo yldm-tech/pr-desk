@@ -31,6 +31,8 @@ jobs:
       - run: bun audit
       - run: vp check
       - run: bun run test:web
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:browser
       - run: bun run build
   api:
     name: API race and PostgreSQL tests

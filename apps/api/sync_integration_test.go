@@ -89,7 +89,7 @@ func integrationDB(t *testing.T) *gorm.DB {
 	if err := tx.Exec("SET LOCAL search_path TO " + schema).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}); err != nil {
+	if err := migrateDatabase(tx); err != nil {
 		t.Fatal(err)
 	}
 

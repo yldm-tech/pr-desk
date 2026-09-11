@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"io"
 	"log"
@@ -27,6 +28,10 @@ import (
 )
 
 type PullRequest struct {
+	Role          string     `json:"role" gorm:"index;not null;default:authored"`
+	ReviewTracked bool       `json:"-"`
+	Author        string     `json:"author"`
+	Draft         bool       `json:"draft"`
 	RepoPrivate   *bool      `json:"repo_private" gorm:"index"`
 	ID            uint       `json:"id" gorm:"primaryKey"`
 	SessionID     string     `json:"-" gorm:"index;not null"`
@@ -45,17 +50,19 @@ type PullRequest struct {
 	UpdatedAt     time.Time  `json:"updated_at" gorm:"index"`
 }
 type OAuthToken struct {
-	SyncRequestedAt *time.Time `json:"-"`
-	FullSyncPending bool       `json:"-"`
-	SyncProgress    string     `json:"-"`
-	GitHubCreatedAt *time.Time
-	HistorySyncedAt *time.Time
-	HistoryTotal    int
-	ID              uint   `gorm:"primaryKey"`
-	SessionID       string `gorm:"index;not null"`
-	Username        string
-	Token           string
-	CreatedAt       time.Time
+	GitHubID           int64      `gorm:"not null;default:0"`
+	AuthorizationError string     `gorm:"not null;default:''"`
+	SyncRequestedAt    *time.Time `json:"-"`
+	FullSyncPending    bool       `json:"-"`
+	SyncProgress       string     `json:"-"`
+	GitHubCreatedAt    *time.Time
+	HistorySyncedAt    *time.Time
+	HistoryTotal       int
+	ID                 uint   `gorm:"primaryKey"`
+	SessionID          string `gorm:"index;not null"`
+	Username           string
+	Token              string
+	CreatedAt          time.Time
 }
 type ReviewComment struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -80,10 +87,19 @@ var githubHTTPClient = &http.Client{Timeout: 20 * time.Second}
 
 func sessionPRQuery(c *gin.Context, db *gorm.DB) *gorm.DB {
 	sid := requestSessionID(c)
+	if c.GetBool("account_session") {
+		return db.WithContext(c.Request.Context()).Where("session_id = ?", sid)
+	}
 	return db.WithContext(c.Request.Context()).Where("session_id = ?", sid).Where("session_id IN (?)", db.Model(&OAuthToken{}).Select("session_id").Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)))
 }
 
-func requestSessionID(c *gin.Context) string { v, _ := c.Cookie("pr_session"); return v }
+func requestSessionID(c *gin.Context) string {
+	if value, ok := c.Get("storage_session"); ok {
+		return value.(string)
+	}
+	v, _ := c.Cookie("pr_session")
+	return v
+}
 func newSessionID() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -102,7 +118,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if err := db.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}); err != nil {
+	if err := migrateDatabase(db); err != nil {
 		panic(err)
 	}
 	workerCtx, stopWorkers := context.WithCancel(context.Background())
@@ -144,7 +160,7 @@ func main() {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 		c.Next()
 	})
-	r.Use(cors.New(cors.Config{AllowOrigins: []string{webOrigin()}, AllowCredentials: true, AllowHeaders: []string{"Content-Type", "Authorization"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}}))
+	r.Use(cors.New(corsPolicy()))
 	r.Use(requireMutationOrigin)
 	r.GET("/health", func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
@@ -159,6 +175,7 @@ func main() {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	r.StaticFile("/swagger.json", "docs/swagger.json")
 	api := r.Group("/api/v1")
+	api.Use(s.resolveBrowserSession)
 	api.GET("/pull-requests", s.listPRs)
 	api.GET("/pull-requests/:id", s.getPR)
 	api.POST("/pull-requests", s.createPR)
@@ -176,6 +193,15 @@ func main() {
 	api.GET("/stats", s.stats)
 	api.GET("/overview", s.overview)
 	api.GET("/repositories", s.repositories)
+	api.GET("/follow-ups", s.listFollowUps)
+	api.POST("/follow-ups/:id", s.updateFollowUp)
+	api.GET("/follow-up-settings", s.getFollowUpSettings)
+	api.POST("/follow-up-settings", s.saveFollowUpSettings)
+	api.GET("/review-teams", s.listReviewTeams)
+	api.GET("/notification-destinations", s.listNotificationDestinations)
+	api.POST("/notification-destinations", s.saveNotificationDestination)
+	api.PUT("/notification-destinations/:id", s.saveNotificationDestination)
+	api.DELETE("/notification-destinations/:id", s.deleteNotificationDestination)
 	addr := ":8080"
 	if port := os.Getenv("PORT"); port != "" {
 		addr = ":" + port
@@ -205,6 +231,19 @@ func main() {
 }
 func (s *Server) logout(c *gin.Context) {
 	sid := requestSessionID(c)
+	if c.GetBool("account_session") {
+		err := s.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("id = ?", c.GetString("browser_session")).Delete(&BrowserSession{}).Error; err != nil {
+				return err
+			}
+			return tx.Model(&OAuthToken{}).Where("session_id = ?", sid).Updates(map[string]any{"token": "", "authorization_error": "disconnected"}).Error
+		})
+		if err != nil {
+			c.JSON(503, gin.H{"error": "Unable to disconnect; please retry"})
+			return
+		}
+		sid = ""
+	}
 	if sid != "" {
 		if err := s.db.WithContext(c.Request.Context()).Where("session_id = ?", sid).Delete(&OAuthToken{}).Error; err != nil {
 			c.JSON(503, gin.H{"error": "Unable to disconnect; please retry"})
@@ -218,8 +257,13 @@ func (s *Server) logout(c *gin.Context) {
 func (s *Server) authStatus(c *gin.Context) {
 	var t OAuthToken
 	sid := requestSessionID(c)
-	connected := sid != "" && s.db.Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)).First(&t).Error == nil
-	c.JSON(200, gin.H{"connected": connected, "username": t.Username})
+	connected := false
+	if c.GetBool("account_session") {
+		connected = s.db.Where("session_id = ?", sid).First(&t).Error == nil
+	} else {
+		connected = sid != "" && connectionQuery(s.db).Where("session_id = ?", sid).First(&t).Error == nil
+	}
+	c.JSON(200, gin.H{"connected": connected, "username": t.Username, "sync_paused": connected && (t.AuthorizationError != "" || t.Token == ""), "last_synced_at": t.HistorySyncedAt})
 }
 func (s *Server) comments(c *gin.Context) {
 	var v []ReviewComment
@@ -240,7 +284,7 @@ func (s *Server) stats(c *gin.Context) {
 		NeedsReview int64 `json:"needs_review"`
 		Attention   int64 `json:"attention"`
 	}
-	err := sessionPRQuery(c, s.db).Model(&PullRequest{}).Select(`COUNT(*) AS total,
+	err := sessionPRQuery(c, s.db).Where("role = ?", "authored").Model(&PullRequest{}).Select(`COUNT(*) AS total,
  COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL) AS open,
  COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL AND has_conflicts) AS conflicts,
  COUNT(*) FILTER (WHERE merged_at >= ? AND merged_at < ?) AS merged,
@@ -263,7 +307,7 @@ func (s *Server) repositories(c *gin.Context) {
 	}
 	var rows []repositorySummary
 	rows = make([]repositorySummary, 0)
-	q := sessionPRQuery(c, s.db).Where("state = ? AND merged_at IS NULL", "open").Model(&PullRequest{}).Select(`repo, COUNT(*) AS total, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL) AS open, COUNT(*) FILTER (WHERE has_conflicts = true) AS conflicts, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL AND (has_conflicts = true OR review_status = 'changes_requested' OR checks_status IN ('failure','error'))) AS needs_attention`).Group("repo").Order("repo ASC")
+	q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Where("state = ? AND merged_at IS NULL", "open").Model(&PullRequest{}).Select(`repo, COUNT(*) AS total, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL) AS open, COUNT(*) FILTER (WHERE has_conflicts = true) AS conflicts, COUNT(*) FILTER (WHERE state = 'open' AND merged_at IS NULL AND (has_conflicts = true OR review_status = 'changes_requested' OR checks_status IN ('failure','error'))) AS needs_attention`).Group("repo").Order("repo ASC")
 	if err := q.Scan(&rows).Error; err != nil {
 		c.JSON(500, gin.H{"error": "unable to load repositories"})
 		return
@@ -351,20 +395,20 @@ func githubCallback(c *gin.Context) {
 		return
 	}
 	accountCreated := user.GetCreatedAt().Time
-	current := OAuthToken{SessionID: sessionID, Username: username, Token: encrypted, GitHubCreatedAt: &accountCreated}
-	if err := appServer.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&current).Error; err != nil {
-			return err
-		}
-		return restoreAccountCache(c.Request.Context(), tx, current, user.GetID())
-	}); err != nil {
+	storageID, err := newSessionID()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Unable to create account"})
+		return
+	}
+	current, err := appServer.connectAccount(c.Request.Context(), OAuthToken{SessionID: storageID, Username: username, Token: encrypted, GitHubCreatedAt: &accountCreated}, user.GetID(), sessionID)
+	if err != nil {
 		c.JSON(500, gin.H{"error": "Unable to restore GitHub connection data"})
 		return
 	}
 
 	c.SetCookie("pr_connected", "1", 86400*30, "/", "", secureCookies(c), true)
 	c.SetCookie("pr_session", sessionID, 86400*30, "/", "", secureCookies(c), true)
-	appServer.startLoginSync(sessionID)
+	appServer.startLoginSync(current.SessionID)
 	// Never expose the access token to the browser; return to the local UI.
 	redirect := os.Getenv("WEB_ORIGIN")
 	if redirect == "" {
@@ -380,7 +424,7 @@ type syncResult struct {
 
 func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bool) (result syncResult) {
 	var t OAuthToken
-	if sid == "" || s.db.Where("session_id = ? AND created_at > ?", sid, time.Now().Add(-30*24*time.Hour)).First(&t).Error != nil {
+	if sid == "" || connectionQuery(s.db).Where("session_id = ?", sid).First(&t).Error != nil {
 		return syncResult{401, gin.H{"error": "not connected"}}
 	}
 	pool, err := s.db.DB()
@@ -496,13 +540,29 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		}
 		return syncResult{502, gin.H{"error": "Some PR details could not be loaded; list data has been saved"}}
 	}
+	if err := s.syncReviewRequests(ctx, t, token, from, syncStarted); err != nil {
+		progress.recordFailure(err)
+		return syncResult{502, gin.H{"error": "Unable to complete review inbox sync; retry to refresh"}}
+	}
 
 	var historyTotal int64
-	if err := s.db.Model(&PullRequest{}).Where("session_id = ?", sid).Count(&historyTotal).Error; err != nil {
+	if err := s.db.Model(&PullRequest{}).Where("session_id = ? AND role = ?", sid, "authored").Count(&historyTotal).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to count saved history"}}
 	}
 	if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"history_synced_at": syncStarted, "history_total": historyTotal, "full_sync_pending": false}).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to save sync checkpoint"}}
+	}
+	if t.GitHubID > 0 {
+		settings, err := loadFollowUpSettings(s.db, sid)
+		if err != nil {
+			return syncResult{500, gin.H{"error": "Unable to load inventory checkpoint"}}
+		}
+		if settings.BaselineAt == nil {
+			settings.BaselineAt = &syncStarted
+			if err := s.db.Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "session_id"}}, DoUpdates: clause.AssignmentColumns([]string{"baseline_at"})}).Create(&settings).Error; err != nil {
+				return syncResult{500, gin.H{"error": "Unable to save inventory checkpoint"}}
+			}
+		}
 	}
 	succeeded = true
 	return syncResult{200, gin.H{"synced": len(items)}}
@@ -510,7 +570,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 
 func (s *Server) listPRs(c *gin.Context) {
 	var prs []PullRequest
-	q := sessionPRQuery(c, s.db).Where("state = ? AND merged_at IS NULL", "open")
+	q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Where("state = ? AND merged_at IS NULL", "open")
 	if st := c.Query("state"); st != "" {
 		q = q.Where("state = ?", st)
 	}
@@ -581,7 +641,7 @@ func (s *Server) createPR(c *gin.Context) {
 	}
 	p.SessionID = requestSessionID(c)
 	var connection OAuthToken
-	if p.SessionID == "" || s.db.Where("session_id = ? AND created_at > ?", p.SessionID, time.Now().Add(-30*24*time.Hour)).First(&connection).Error != nil {
+	if p.SessionID == "" || connectionQuery(s.db).Where("session_id = ?", p.SessionID).First(&connection).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}

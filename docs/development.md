@@ -1,6 +1,6 @@
 # Development and operations
 
-Local Web dashboard for GitHub pull requests, built with Go/Gin, GORM/PostgreSQL and React/Vite. The application is under development; it is not yet ready for a shared production deployment. Connections and PR storage are isolated by browser session.
+Local Web dashboard for GitHub pull requests, built with Go/Gin, GORM/PostgreSQL and React/Vite. The application is under development; it is not yet ready for a shared production deployment. New logins use durable GitHub account identity with independent browser sessions. See [follow-up operations](follow-up-operations.md) for migration and the implementation status of reminders.
 
 ## Local development
 
@@ -39,7 +39,7 @@ The API also exposes `GET /api/v1/repositories`, scoped to the active session, w
 
 ## Concurrent synchronization
 
-Synchronization reserves a PostgreSQL connection and holds a session advisory lock until the request finishes. API replicas using the same database reject concurrent syncs for the same browser session with HTTP 409; different sessions can sync concurrently. Database lock failures return HTTP 503. Cleanup uses an independent timeout after request cancellation and discards connections whose unlock cannot be confirmed. Each active sync consumes one additional database connection. Connect directly to PostgreSQL or use session pooling; transaction-mode connection proxies do not support these session locks.
+Synchronization reserves a PostgreSQL connection and holds a session advisory lock until the run finishes. For migrated accounts, replicas and browser sessions share the same durable account partition, so they reject overlapping syncs for that account with HTTP 409. Different accounts can sync independently. Legacy sessions retain their original partitions until verified reconnect. Database lock failures return HTTP 503. Cleanup uses an independent timeout after cancellation and discards connections whose unlock cannot be confirmed. Each active sync consumes one additional database connection. Connect directly to PostgreSQL or use session pooling; transaction-mode connection proxies do not support these session locks.
 
 Set `TEST_DATABASE_URL` to a test PostgreSQL database and run `cd apps/api && go test -race ./... -count=1` to exercise database integration tests, including independent connection pools, cancellation cleanup and concurrent HTTP sync requests. Without this variable the database tests are skipped. Tests use temporary transactional schemas and do not modify application tables.
 
@@ -75,6 +75,6 @@ JavaScript tooling uses Vite+ 0.3.1 and Bun 1.3.4. From the repository root use 
 
 Successful GitHub login immediately starts a background sync after saving the connection. It does not delay the redirect or depend on the callback request staying open. Existing checkpoints and advisory locks prevent duplicate work; server shutdown cancels the task. The periodic worker remains a fallback if the process stops before login-triggered work completes.
 
-The API starts a `robfig/cron` worker automatically. Every 30 seconds it checks eligible connections and runs incremental syncs that are due, normally five minutes after the previous successful completion. The browser can be closed; the API and PostgreSQL must remain running. Failed runs wait at least 15 minutes, and first-time connections still import full history. Expired (30-day) and disconnected sessions are excluded.
+The API starts a `robfig/cron` worker automatically. Every 30 seconds it checks eligible connections and runs incremental syncs that are due, normally five minutes after the previous successful completion. The browser can be closed; the API and PostgreSQL must remain running. Failed runs wait at least 15 minutes, and first-time connections still import full history. New account credentials stop syncing after disconnection or a recorded authorization failure; expiring a browser session does not delete the account or its data. Expired legacy (30-day) sessions are excluded.
 
 Automatic and manual runs share `syncSession` and PostgreSQL advisory locks. The checkpoint is checked again under the lock, so replicas do not repeat freshly completed work. A scan skips overlapping invocations and processes sessions serially to limit GitHub search pressure. Each run has a 30-minute timeout; server shutdown cancels active worker requests. Checkpoints and failure cooldowns survive restarts. The frontend only polls progress and refreshes cached views.

@@ -6,7 +6,14 @@ import zh from "./locales/zh-CN.json";
 import ja from "./locales/ja.json";
 import ko from "./locales/ko.json";
 import es from "./locales/es.json";
-export const resources = { en: { translation: en }, "zh-CN": { translation: zh }, ja: { translation: ja }, ko: { translation: ko }, es: { translation: es } } as const;
+import { followupLocales } from "./followup-locales";
+export const resources = {
+  en: { translation: { ...en, followup: followupLocales.en } },
+  "zh-CN": { translation: { ...zh, followup: followupLocales["zh-CN"] } },
+  ja: { translation: { ...ja, followup: followupLocales.ja } },
+  ko: { translation: { ...ko, followup: followupLocales.ko } },
+  es: { translation: { ...es, followup: followupLocales.es } },
+} as const;
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
