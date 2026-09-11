@@ -620,7 +620,17 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		if item.GetState() != "open" {
 			continue
 		}
-		group.Go(func() error { err := enrich(item); progress.advance(); return err })
+		// Advancing on failure too would leave a failed run reporting details
+		// 56/56, which reads as "everything saved" when nothing about the
+		// failing pull requests was. The gap between completed and total is how
+		// an operator sees how much of the phase actually landed.
+		group.Go(func() error {
+			err := enrich(item)
+			if err == nil {
+				progress.advance()
+			}
+			return err
+		})
 	}
 	if err := group.Wait(); err != nil {
 		progress.recordFailure(err)
