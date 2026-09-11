@@ -279,7 +279,6 @@
     font-size: 12px;
     line-height: 1.6;
   }
-  .awaiting-review,
   .open {
     background: var(--surface-muted);
     color: var(--muted);
@@ -388,107 +387,6 @@
   }
   .secondary-action:hover {
     background: var(--surface-muted);
-  }
-  .repo-grid {
-    gap: 14px;
-  }
-  .repo-card {
-    margin: 0;
-    padding: 20px;
-    border-radius: 12px;
-    gap: 20px;
-    box-shadow: none;
-    transition: border-color 0.15s;
-    background: var(--surface);
-  }
-  .repo-card:hover {
-    background: var(--surface);
-  }
-  .repo-name {
-    width: 100%;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    color: var(--foreground);
-    font-size: 14px;
-    line-height: 1.6;
-    min-width: 0;
-  }
-  .repo-name svg {
-    flex-shrink: 0;
-    margin-top: 2px;
-    color: var(--accent);
-  }
-  .repo-name span {
-    font: inherit;
-    color: inherit;
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-  .repo-pr-filter {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 9px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    width: 100%;
-    text-align: left;
-  }
-  .repo-pr-filter:hover {
-    border-color: var(--accent-border);
-    background: var(--accent-soft);
-  }
-  .repo-pr-filter span {
-    margin: 0;
-  }
-  .connection-card {
-    max-width: 740px;
-    margin: 48px auto;
-    padding: 48px 32px;
-    text-align: center;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-  }
-  .connection-icon {
-    display: grid;
-    place-items: center;
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 24px;
-    background: var(--accent-soft);
-    color: var(--accent-text);
-    border-radius: 18px;
-  }
-  .connection-card h2 {
-    font-size: 26px;
-    letter-spacing: -0.5px;
-    margin: 0 0 12px;
-  }
-  .connection-card > p {
-    max-width: 420px;
-    margin: 0 auto 26px;
-    font-size: 14px;
-    line-height: 1.8;
-    color: var(--muted);
-  }
-  .connection-features {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 20px;
-    margin-top: 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border-subtle);
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .connection-features span {
-    display: flex;
-    align-items: center;
-    gap: 7px;
   }
   .achievement-top,
   .achievement-bottom {
@@ -718,47 +616,6 @@
 }
 
 @layer components {
-  .repo-name > span {
-    flex: 1;
-    min-width: 0;
-  }
-  .repo-name small {
-    display: block;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--muted);
-    margin-bottom: 3px;
-  }
-  .repo-name strong {
-    display: block;
-    font-size: 15px;
-    line-height: 1.5;
-  }
-  .repo-name .repo-external {
-    margin-top: 5px;
-    color: var(--muted);
-  }
-  .repo-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    width: 100%;
-    gap: 12px;
-    margin: 0;
-  }
-  .repo-metrics dt {
-    font-size: 12px;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-  .repo-metrics dd {
-    font-size: 22px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-    margin: 0;
-  }
-  .repo-pr-filter:hover span {
-    text-decoration: none;
-  }
   .account-trigger,
   .language-trigger {
     border-radius: 9px;
@@ -863,9 +720,6 @@
     color: var(--warning);
     line-height: 1.7;
   }
-  .connection-card {
-    box-shadow: 0 8px 32px var(--shadow);
-  }
   .filters button,
   .visibility-tabs button,
   .overview-year-tab {
@@ -931,9 +785,6 @@
     font-size: 11px;
     line-height: 1.6;
   }
-  .repo-card {
-    padding: 18px;
-  }
   .activity-footer .secondary-action {
     font-size: 12px;
     padding: 9px 12px;
@@ -945,9 +796,6 @@
 }
 
 @layer components {
-  .repo-pr-filter {
-    margin-top: auto;
-  }
   .sync-status-error {
     display: flex;
     flex-wrap: wrap;
@@ -969,19 +817,9 @@
   .spinning {
     animation: none;
   }
-  .repo-card {
-    transition: none;
-  }
 }
 
 @media (max-width: 480px) {
-  .connection-card {
-    padding: 32px 24px;
-    margin: 28px auto;
-  }
-  .connection-card h2 {
-    font-size: 22px;
-  }
   .sidebottom .organization-access {
     min-width: 36px;
   }
