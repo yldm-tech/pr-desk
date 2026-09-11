@@ -4,27 +4,30 @@ import { useTranslation } from "react-i18next";
 import { apiURL } from "./api-url";
 import { primaryAction } from "./action-styles";
 
-// The container queries are written out rather than using the @max-[…] variant:
-// that variant compiles to `width < 800px`, which excludes the boundary the
-// `(max-width: 800px)` it replaces includes. Where two of them set the same
-// property they are given non-overlapping ranges, because one variant does not
-// reliably override another — the generated stylesheet decides the order.
-const at800 = "[@container_dashboard_(max-width:800px)]:";
-const between = "[@container_dashboard_(max-width:800px)_and_(min-width:481px)]:";
-const at480 = "[@container_dashboard_(max-width:480px)]:";
+// The container breakpoints carry a hundredth of a pixel because the variant
+// compiles to a strict "less than" while the `(max-width: 800px)` it replaces
+// included 800 itself. Where two of them set the same property they are given
+// non-overlapping ranges, because one variant does not reliably override
+// another — the generated stylesheet decides the order.
+//
+// They are written out in full rather than held in a constant: Tailwind finds
+// classes by scanning the source for complete names, and a prefix joined on at
+// runtime produces a class it never writes a rule for.
 
 export function Welcome() {
   const { t } = useTranslation();
   return (
-    <section className={`mx-auto mt-12 mb-0 grid max-w-[1100px] grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-12 ${at800}mt-[22px] ${at800}grid-cols-1 ${at800}gap-[30px]`}>
+    <section className="mx-auto mt-12 mb-0 grid max-w-[1100px] grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-center gap-12 @max-[800.02px]/dashboard:mt-[22px] @max-[800.02px]/dashboard:grid-cols-1 @max-[800.02px]/dashboard:gap-[30px]">
       <div>
         <span className="inline-flex items-center gap-2 text-[12px] font-medium text-[var(--accent-text)]">
           <GitPullRequest size={15} aria-hidden="true" />
           {t("welcomeEyebrow")}
         </span>
-        <h2 className={`mx-0 mt-[22px] mb-5 text-[clamp(30px,3.3vw,46px)] leading-[1.22] font-[650] tracking-[-1.5px] text-balance whitespace-pre-line ${between}text-[36px] ${between}tracking-[-1px] ${at480}text-[31px] ${at480}tracking-[-1px]`}>{t("welcomeHeadline")}</h2>
-        <p className={`m-0 max-w-[470px] text-[15px] leading-[1.85] text-[var(--muted)] ${at800}max-w-none ${at480}text-[14px]`}>{t("welcomeDescription")}</p>
-        <div className={`mx-0 mt-7 mb-[17px] flex flex-wrap items-center gap-[22px] ${at480}gap-4`}>
+        <h2 className="mx-0 mt-[22px] mb-5 text-[clamp(30px,3.3vw,46px)] leading-[1.22] font-[650] tracking-[-1.5px] text-balance whitespace-pre-line @max-[800.02px]/dashboard:@min-[481px]/dashboard:text-[36px] @max-[800.02px]/dashboard:@min-[481px]/dashboard:tracking-[-1px] @max-[480.02px]/dashboard:text-[31px] @max-[480.02px]/dashboard:tracking-[-1px]">
+          {t("welcomeHeadline")}
+        </h2>
+        <p className="m-0 max-w-[470px] text-[15px] leading-[1.85] text-[var(--muted)] @max-[800.02px]/dashboard:max-w-none @max-[480.02px]/dashboard:text-[14px]">{t("welcomeDescription")}</p>
+        <div className="mx-0 mt-7 mb-[17px] flex flex-wrap items-center gap-[22px] @max-[480.02px]/dashboard:gap-4">
           <a className={primaryAction} href={apiURL + "/api/v1/auth/github"}>
             <GitPullRequest size={18} aria-hidden="true" />
             {t("connectGitHub")}
@@ -40,7 +43,7 @@ export function Welcome() {
           {t("welcomeSyncNote")}
         </span>
       </div>
-      <div className={`min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_16px_42px_var(--shadow)] ${at800}w-full ${at800}max-w-[560px] ${at800}justify-self-center`} aria-label={t("welcomePreview")}>
+      <div className="min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_16px_42px_var(--shadow)] @max-[800.02px]/dashboard:w-full @max-[800.02px]/dashboard:max-w-[560px] @max-[800.02px]/dashboard:justify-self-center" aria-label={t("welcomePreview")}>
         <div className="flex items-center gap-2 border-b border-[var(--border-subtle)] px-5 py-[17px] text-[13px]">
           <img className="h-[22px] w-[22px]" src="/favicon.svg" alt="" />
           <strong>PR Desk</strong>
@@ -81,7 +84,7 @@ export function Welcome() {
           </div>
         </div>
       </div>
-      <div className={`col-span-full grid grid-cols-3 gap-7 border-t border-[var(--border)] pt-[30px] ${between}gap-5 ${at480}grid-cols-1 ${at480}gap-[22px]`}>
+      <div className="col-span-full grid grid-cols-3 gap-7 border-t border-[var(--border)] pt-[30px] @max-[800.02px]/dashboard:@min-[481px]/dashboard:gap-5 @max-[480.02px]/dashboard:grid-cols-1 @max-[480.02px]/dashboard:gap-[22px]">
         {[
           { icon: Inbox, title: "welcomeFollowTitle", description: "welcomeFollowDescription" },
           { icon: LayoutDashboard, title: "welcomeExploreTitle", description: "welcomeExploreDescription" },

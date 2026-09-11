@@ -6,6 +6,9 @@
 //   - its shadow utility keeps transparent ring layers where the CSS said none
 //   - its border utilities set a style and colour on edges that have no width
 //   - offsets survive on an element the layout has made static
+//   - its alignment utilities emit the flexbox spelling of a keyword where the
+//     stylesheet used the box-alignment one: start and flex-start place items
+//     identically in a flex or grid container
 import { readFileSync } from "node:fs";
 
 const [beforePath, afterPath] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
@@ -30,6 +33,10 @@ const invisible = (prop, a, b, rowA, rowB) => {
     }
   }
   if (["top", "right", "bottom", "left"].includes(prop)) return rowA.position === "static" && rowB.position === "static";
+  if (["alignItems", "alignContent", "justifyItems", "justifyContent", "alignSelf", "justifySelf"].includes(prop)) {
+    const spell = (v) => v.replace(/^flex-/, "");
+    return spell(a) === spell(b);
+  }
   if (prop.startsWith("outline") && prop !== "outlineStyle") return rowA.outlineStyle === "none" && rowB.outlineStyle === "none";
   return false;
 };

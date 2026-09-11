@@ -1,6 +1,7 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
+import { repositoryAction, repositoryControls, repositoryIdentity, repositoryListCaption, repositoryListPanel, repositoryNumber, repositoryRow, repositoryRows, repositorySummary, repositorySummaryItem } from "./repository-styles";
 import { accountTrigger, profileBio, profileIdentity, profileMetadata, profileStats } from "./profile-styles";
 import "react-loading-skeleton/dist/skeleton.css";
 import { useTranslation } from "react-i18next";
@@ -133,10 +134,10 @@ export function PRListSkeleton({ count = 5 }: { count?: number }) {
 export function RepositorySkeleton({ count = 6 }: { count?: number }) {
   return (
     <LoadingFrame className="repository-skeleton">
-      <div className="repository-rows">
+      <div className={repositoryRows}>
         {Array.from({ length: count }, (_, i) => (
-          <div className="repository-row" key={i}>
-            <div className="repository-identity">
+          <div className={repositoryRow} key={i}>
+            <div className={repositoryIdentity}>
               <Skeleton width={36} height={36} />
               <div className="skeleton-flex">
                 <Skeleton width="45%" height={11} />
@@ -144,11 +145,11 @@ export function RepositorySkeleton({ count = 6 }: { count?: number }) {
               </div>
             </div>
             {[0, 1, 2].map((key) => (
-              <div className="repository-number" key={key}>
+              <div className={repositoryNumber} key={key}>
                 <Skeleton width={24} height={18} />
               </div>
             ))}
-            <div className="repository-action">
+            <div className={repositoryAction}>
               <Skeleton width={70} height={15} />
             </div>
           </div>
@@ -271,25 +272,25 @@ export function PageSkeleton({ page }: { page: string }) {
   if (page === "Overview") return <OverviewSkeleton controls />;
   if (page === "Repositories")
     return (
-      <div className="repository-workspace">
+      <div className="grid gap-[22px]">
         <LoadingFrame>
-          <div className="repository-summary">
+          <div className={repositorySummary}>
             {[0, 1, 2].map((key) => (
-              <div className="repository-summary-item" key={key}>
+              <div className={repositorySummaryItem} key={key}>
                 <Skeleton width={80} height={13} />
                 <Skeleton width={30} height={27} />
               </div>
             ))}
           </div>
         </LoadingFrame>
-        <div className="repository-list-panel">
+        <div className={repositoryListPanel}>
           <LoadingFrame>
-            <div className="repository-controls">
+            <div className={repositoryControls}>
               <Skeleton height={40} containerClassName="flex-1" />
               <Skeleton width={100} height={40} />
               <Skeleton width={100} height={40} />
             </div>
-            <div className="repository-list-caption">
+            <div className={repositoryListCaption}>
               <Skeleton width={140} height={12} />
             </div>
           </LoadingFrame>

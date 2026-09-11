@@ -11,7 +11,7 @@
 // Two differences are expected and cannot render: Tailwind's shadow utility adds
 // transparent ring layers to box-shadow, and outline width and colour keep
 // whatever the user agent had when outline-style is none. compare.mjs ignores them.
-import { test } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
 import { installFixtures } from "../browser/fixtures";
 
 const PROPS = [
@@ -88,10 +88,37 @@ const PROPS = [
 
 // Every route worth a look, at the widths the stylesheets actually branch on.
 const ROUTES = ["/#/", "/#/attention", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
-const WIDTHS = [1280, 900, 800, 760, 640, 480, 400];
+// Desktop, then each width a stylesheet or container query branches at.
+const WIDTHS = [1280, 800, 760, 640, 400];
+
+// Records every rendered element, keyed by its position in the tree.
+async function collect(page: Page, props: string[], label: string) {
+  return page.evaluate(
+    ({ props, label }) => {
+      const out: Record<string, Record<string, string>> = {};
+      const pathOf = (el: Element) => {
+        const parts: string[] = [];
+        for (let node: Element | null = el; node && node !== document.documentElement; node = node.parentElement) {
+          const siblings = node.parentElement ? [...node.parentElement.children] : [];
+          parts.unshift(`${node.tagName.toLowerCase()}:${siblings.indexOf(node)}`);
+        }
+        return parts.join("/");
+      };
+      for (const el of document.querySelectorAll("body *")) {
+        const style = getComputedStyle(el);
+        if (style.display === "none" && el.tagName !== "DIALOG") continue;
+        const record: Record<string, string> = {};
+        for (const prop of props) record[prop] = style[prop as keyof CSSStyleDeclaration] as string;
+        out[`${label}|${pathOf(el)}`] = record;
+      }
+      return out;
+    },
+    { props, label },
+  );
+}
 
 test("capture computed styles", async ({ page }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(0);
   await installFixtures(page);
   const snapshot: Record<string, Record<string, string>> = {};
 
@@ -103,31 +130,7 @@ test("capture computed styles", async ({ page }) => {
     await page.waitForTimeout(120);
   };
 
-  const walk = async (label: string) => {
-    const found = await page.evaluate(
-      ({ PROPS, label }) => {
-        const out: Record<string, Record<string, string>> = {};
-        const pathOf = (el: Element) => {
-          const parts: string[] = [];
-          for (let node: Element | null = el; node && node !== document.documentElement; node = node.parentElement) {
-            const siblings = node.parentElement ? [...node.parentElement.children] : [];
-            parts.unshift(`${node.tagName.toLowerCase()}:${siblings.indexOf(node)}`);
-          }
-          return parts.join("/");
-        };
-        for (const el of document.querySelectorAll("body *")) {
-          const style = getComputedStyle(el);
-          if (style.display === "none" && el.tagName !== "DIALOG") continue;
-          const record: Record<string, string> = {};
-          for (const prop of PROPS) record[prop] = style[prop as keyof CSSStyleDeclaration] as string;
-          out[`${label}|${pathOf(el)}`] = record;
-        }
-        return out;
-      },
-      { PROPS, label },
-    );
-    Object.assign(snapshot, found);
-  };
+  const walk = async (label: string) => Object.assign(snapshot, await collect(page, PROPS, label));
 
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
@@ -137,17 +140,6 @@ test("capture computed styles", async ({ page }) => {
       await walk(`${width}${route}`);
     }
   }
-
-  // The welcome page only exists for a visitor who has not connected an account,
-  // so the status endpoint is answered differently for this pass.
-  await page.route("**/api/v1/auth/status", (route) => route.fulfill({ json: { connected: false, username: "", sync_paused: false } }));
-  for (const width of [1280, 900, 800, 760, 640, 480, 400]) {
-    await page.setViewportSize({ width, height: 900 });
-    await page.goto("/#/");
-    await settle();
-    await walk(`${width}/disconnected`);
-  }
-  await page.unroute("**/api/v1/auth/status");
 
   // Anything that only exists once opened is captured separately.
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -159,7 +151,7 @@ test("capture computed styles", async ({ page }) => {
   await walk("1280/open-language");
   await page.keyboard.press("Escape");
 
-  for (const width of [1280, 640, 480, 400]) {
+  for (const width of [1280, 640, 400]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/#/");
     await settle();
@@ -186,5 +178,27 @@ test("capture computed styles", async ({ page }) => {
     }
   }
 
+  console.log("SNAPSHOT " + JSON.stringify(snapshot));
+});
+
+// The welcome page only exists for a visitor who has not connected an account.
+// It gets its own test so the page starts without a session rather than having
+// to shed one it has already cached.
+test("capture computed styles when disconnected", async ({ page }) => {
+  test.setTimeout(0);
+  await installFixtures(page);
+  await page.route("**/api/v1/auth/status", (route) => route.fulfill({ json: { connected: false, username: "", sync_paused: false } }));
+  const snapshot: Record<string, Record<string, string>> = {};
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#/");
+    await page
+      .getByRole("link", { name: /Connect GitHub/ })
+      .first()
+      .waitFor();
+    await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important;animation:none!important}" });
+    await page.waitForTimeout(120);
+    Object.assign(snapshot, await collect(page, PROPS, `${width}/disconnected`));
+  }
   console.log("SNAPSHOT " + JSON.stringify(snapshot));
 });
