@@ -1,5 +1,6 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
+import { activityComment, activitySection, activityThread } from "./activity-styles";
 import { accountTrigger, profileBio, profileIdentity, profileMetadata, profileStats } from "./profile-styles";
 import "react-loading-skeleton/dist/skeleton.css";
 import { useTranslation } from "react-i18next";
@@ -194,10 +195,10 @@ export function ActivitySkeleton() {
   const { t } = useTranslation();
   return (
     <LoadingFrame className="activity-skeleton">
-      <section className="activity-section">
+      <section className={activitySection}>
         <h3>{t("comments")}</h3>
         {[0, 1].map((i) => (
-          <article className="comment" key={i}>
+          <article className={activityComment} key={i}>
             <Skeleton width="35%" height={14} />
             <Skeleton width="55%" height={11} />
             <div className="mt-3">
@@ -208,14 +209,14 @@ export function ActivitySkeleton() {
           </article>
         ))}
       </section>
-      <section className="activity-section">
+      <section className={activitySection}>
         <h3>{t("reviewDiscussions")}</h3>
         <Skeleton height={36} />
       </section>
-      <section className="activity-section">
+      <section className={activitySection}>
         <h3>{t("ciChecks")}</h3>
         {[0, 1, 2].map((i) => (
-          <div className="thread" key={i}>
+          <div className={activityThread} key={i}>
             <Skeleton width={150} height={13} />
             <Skeleton width={45} height={13} />
           </div>

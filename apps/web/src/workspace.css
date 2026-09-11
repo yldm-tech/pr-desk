@@ -450,23 +450,6 @@
     flex: 1;
     min-width: 130px;
   }
-  .comment {
-    padding: 18px 0;
-  }
-  .comment p {
-    font-size: 13px;
-    line-height: 1.8;
-  }
-  .comment small {
-    font-size: 12px;
-  }
-  .activity-section h3 {
-    font-size: 13px;
-    margin: 20px 0 6px;
-  }
-  .activity-section a {
-    color: var(--accent-text);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -519,58 +502,6 @@
 }
 
 @layer components {
-  .activity-section:first-child {
-    border-top: 0;
-    margin-top: 0;
-    padding-top: 18px;
-  }
-  .activity-section h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    margin: 12px 0;
-  }
-  .activity-count {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--muted);
-    background: var(--surface-muted);
-    border-radius: 5px;
-    padding: 1px 6px;
-  }
-  .activity-section > .muted {
-    background: var(--surface-muted);
-    padding: 16px;
-    border-radius: 8px;
-    font-size: 12px;
-  }
-  .comment {
-    border: 1px solid var(--border-subtle);
-    border-radius: 9px;
-    padding: 16px;
-    margin: 12px 0;
-  }
-  .comment-author {
-    color: var(--foreground);
-    font-weight: 600;
-    text-decoration: none;
-  }
-  .comment code {
-    display: block;
-    margin-top: 12px;
-    padding: 6px 8px;
-    background: var(--surface-muted);
-    border-radius: 5px;
-    font-size: 11px;
-  }
-  .thread {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-  .thread:last-child {
-    border: 0;
-  }
   .activity-footer {
     position: sticky;
     bottom: 0;
