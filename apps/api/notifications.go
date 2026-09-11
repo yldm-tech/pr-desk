@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +42,26 @@ type NotificationDelivery struct {
 }
 
 type notificationSender func(context.Context, NotificationDestination, NotificationDelivery) error
+
+// A failed delivery records only a fixed classification, so that an upstream
+// message can never carry a credential or a recipient into the database. The
+// detail is logged instead, and endpoints are stripped first because a webhook
+// URL is itself the secret.
+var deliveryURLPattern = regexp.MustCompile(`https?://\S+`)
+
+func deliveryErrorSummary(err error) string {
+	if err == nil {
+		return ""
+	}
+	summary := strings.TrimSpace(deliveryURLPattern.ReplaceAllString(err.Error(), "[endpoint]"))
+	if summary == "" {
+		return "delivery_failed"
+	}
+	if runes := []rune(summary); len(runes) > 200 {
+		return string(runes[:200])
+	}
+	return summary
+}
 
 func digestDue(settings FollowUpSettings, now time.Time) (string, bool) {
 	location, err := time.LoadLocation(settings.Timezone)
@@ -307,7 +329,11 @@ func (s *Server) deliverOneNotification(ctx context.Context, now time.Time, send
 	} else {
 		delay := time.Minute * time.Duration(1<<min(delivery.Attempts-1, 6))
 		updates["available_at"] = now.Add(delay)
+		// The stored reason stays a fixed classification on purpose: an upstream
+		// message can quote credentials or recipients. The detail an operator
+		// needs goes to the log instead, with endpoints removed.
 		updates["last_error"] = "delivery_failed"
+		log.Printf("Notification outbox: destination %d attempt %d failed: %s", destination.ID, delivery.Attempts, deliveryErrorSummary(err))
 	}
 	return true, s.db.WithContext(ctx).Model(&NotificationDelivery{}).Where("id = ? AND attempts = ?", delivery.ID, delivery.Attempts).Updates(updates).Error
 }

@@ -227,7 +227,7 @@
   "aboutGettingStartedDescription": "GitHub アカウントを接続してプルリクエストを取り込みます。必要に応じて組織やリポジトリへのアクセスを許可し、貢献やレビューをダッシュボードで確認しましょう。",
   "filterRepository": "リポジトリで絞り込む",
   "allRepositories": "すべてのリポジトリ",
-  "clearRepositoryFilter": "リポジトリの絞り込みを解除",
+  "clearRepositoryFilter": "{{repo}} のフィルターを解除",
   "repositoryScope": "リポジトリの状態",
   "activeRepositories": "活動中のリポジトリ",
   "attentionRepositories": "対応が必要",
@@ -256,5 +256,7 @@
   "welcomeExploreTitle": "貢献の全体像を見る",
   "welcomeExploreDescription": "貢献の推移やリポジトリ別の分布を振り返れます。",
   "welcomeUpdateTitle": "更新を見逃さない",
-  "welcomeUpdateDescription": "タブを閉じてもバックグラウンドで更新を続けます。"
+  "welcomeUpdateDescription": "タブを閉じてもバックグラウンドで更新を続けます。",
+  "publicRepositories": "公開リポジトリ",
+  "openStatus": "オープン"
 }

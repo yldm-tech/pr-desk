@@ -22,3 +22,6 @@ output/
 apps/api/webdist/
 test-results/
 playwright-report/
+
+# Go build output
+apps/api/api

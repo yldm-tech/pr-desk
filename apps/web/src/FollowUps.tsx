@@ -23,7 +23,7 @@ export function useFollowUps(enabled = true) {
     enabled,
     queryFn: ({ signal }) =>
       ky
-        .get(apiURL + "/api/v1/follow-ups", { credentials: "include", signal })
+        .get(apiURL + "/api/v1/follow-ups", { credentials: "include", signal, retry: 0 })
         .json()
         .then((data) => responseSchema.parse(data)),
     staleTime: 15000,
@@ -35,7 +35,7 @@ function FollowUpCard({ item }: { item: FollowUp }) {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const [date, setDate] = useState("");
-  const mutation = useMutation({ mutationFn: (action: { action: string; until?: string }) => ky.post(apiURL + `/api/v1/follow-ups/${item.id}`, { credentials: "include", json: { ...action, version: item.version } }), onSettled: () => client.invalidateQueries({ queryKey: ["follow-ups"] }) });
+  const mutation = useMutation({ mutationFn: (action: { action: string; until?: string }) => ky.post(apiURL + `/api/v1/follow-ups/${item.id}`, { credentials: "include", retry: 0, json: { ...action, version: item.version } }), onSettled: () => client.invalidateQueries({ queryKey: ["follow-ups"] }) });
   const snooze = (days: number) => mutation.mutate({ action: "snooze", until: new Date(Date.now() + days * 86400000).toISOString() });
   const githubURL = safeGitHubLink(item.pr.url || "");
   return (
@@ -156,7 +156,8 @@ export function FollowUpWorkspace() {
   const [params, setParams] = useSearchParams();
   const query = useFollowUps();
   const role = params.get("role") || "all",
-    status = params.get("status") || "all";
+    status = params.get("status") || "all",
+    repo = params.get("repo") || "";
   const change = (key: string, value: string) =>
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -165,10 +166,17 @@ export function FollowUpWorkspace() {
       next.delete("merged");
       return next;
     });
+  const clearRepository = () =>
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("repo");
+      return next;
+    });
   const items = (query.data?.data || []).filter(
     (item) =>
       (!params.get("focus") || String(item.id) === params.get("focus")) &&
       (role === "all" || item.role === role) &&
+      (!repo || item.pr.repo === repo) &&
       (status === "all" ? item.state !== "archived" : item.state === status) &&
       (!params.get("merged") || (item.pr.merged_at && item.archived_at && new Date(item.archived_at).getTime() > Date.now() - 7 * 86400000)),
   );
@@ -179,6 +187,14 @@ export function FollowUpWorkspace() {
         <h2>{t("followup.title")}</h2>
         <Link to="/settings">{t("followup.goSettings")}</Link>
       </div>
+      {repo && (
+        <p className="search-chip followup-repository-chip">
+          <span>{repo}</span>
+          <button className="linkbtn" type="button" onClick={clearRepository} aria-label={t("clearRepositoryFilter", { repo })}>
+            ×
+          </button>
+        </p>
+      )}
       <div className="followup-filters">
         <div role="group" aria-label={t("followup.title")}>
           {["all", "authored", "reviewer"].map((value) => (

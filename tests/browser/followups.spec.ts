@@ -261,3 +261,30 @@ test("private webhook addresses are allowed when the server opts in", async ({ p
   await page.getByRole("button", { name: "Add", exact: true }).click();
   expect((await posted).postDataJSON()).toMatchObject({ kind: "webhook", url: "http://10.0.0.9/hooks/pr-desk" });
 });
+
+test("the repository attention link keeps its repository filter", async ({ page }) => {
+  await page.goto("/#/attention?repo=fixture/reviewer");
+  await expect(page.locator(".followup-card")).toHaveCount(1);
+  await expect(page.locator(".followup-card")).toContainText("Review storage migration");
+  await expect(page.locator(".followup-repository-chip")).toContainText("fixture/reviewer");
+  // The chip clears the filter without leaving the view.
+  await page.getByRole("button", { name: /fixture\/reviewer/ }).click();
+  await expect(page.locator(".followup-card")).toHaveCount(2);
+  await expect(page.locator(".followup-repository-chip")).toHaveCount(0);
+});
+
+test("a saved review team stays listed when GitHub no longer returns it", async ({ page }) => {
+  await page.route("**/api/v1/review-teams", (route) => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/v1/follow-up-settings", (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ json: { saved: true } });
+    return route.fulfill({ json: { timezone: "Asia/Tokyo", digest_time: "09:00", wait_days: 7, teams: ["acme/reviewers"], repository_days: {} } });
+  });
+  await page.goto("/#/settings");
+  // Without the merge the checkbox disappears while the id is still posted back.
+  const team = page.getByRole("checkbox", { name: /acme\/reviewers/ });
+  await expect(team).toBeChecked();
+  await team.uncheck();
+  const saved = page.waitForRequest((request) => request.url().endsWith("/follow-up-settings") && request.method() === "POST");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saved).postDataJSON()).toMatchObject({ teams: [] });
+});

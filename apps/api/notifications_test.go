@@ -163,3 +163,50 @@ func TestDisabledDestinationDoesNotSendQueuedMessages(t *testing.T) {
 		t.Fatal("skipped delivery was retried", err)
 	}
 }
+
+func TestDeliveryErrorSummaryRemovesEndpoints(t *testing.T) {
+	if summary := deliveryErrorSummary(nil); summary != "" {
+		t.Fatal("a success produced an error reason", summary)
+	}
+	summary := deliveryErrorSummary(errors.New(`Post "https://open.feishu.cn/open-apis/bot/v2/hook/9f3-secret": dial tcp 1.2.3.4:443: i/o timeout`))
+	if strings.Contains(summary, "9f3-secret") || strings.Contains(summary, "https://") {
+		t.Fatal("the webhook endpoint survived into the stored reason", summary)
+	}
+	if !strings.Contains(summary, "[endpoint]") || !strings.Contains(summary, "i/o timeout") {
+		t.Fatal("the reason lost the part an operator needs", summary)
+	}
+	if long := deliveryErrorSummary(errors.New(strings.Repeat("跟", 400))); len([]rune(long)) != 200 {
+		t.Fatal("long reasons are not bounded", len([]rune(long)))
+	}
+}
+
+// A disconnected account keeps its follow-up rows frozen, so every waiting row
+// eventually looks overdue and would produce a digest every day forever.
+func TestOutboxOnlyMaterializesConnectedAccounts(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	db := integrationDB(t)
+	s := &Server{db: db}
+	if _, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "outbox-live", Username: "live", Token: "encrypted"}, 9001, "outbox-browser-live"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "outbox-gone", Username: "gone", Token: "encrypted"}, 9002, "outbox-browser-gone"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&OAuthToken{}).Where("session_id = ?", "outbox-gone").Updates(map[string]any{"token": "", "authorization_error": "disconnected"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := s.notifiableSessions(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := map[string]bool{}
+	for _, sid := range sessions {
+		found[sid] = true
+	}
+	if !found["outbox-live"] {
+		t.Fatal("a connected account was skipped", sessions)
+	}
+	if found["outbox-gone"] {
+		t.Fatal("a disconnected account would still be sent notifications", sessions)
+	}
+}

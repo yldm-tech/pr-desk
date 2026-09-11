@@ -47,19 +47,41 @@ func (s *Server) startSyncScheduler(ctx context.Context, schedule string) (*cron
 	return scheduler, nil
 }
 
+// Only connected accounts are materialized. A disconnected or revoked account
+// keeps its follow-up rows frozen at the moment synchronization stopped, so
+// every waiting row eventually crosses its waiting period and would otherwise
+// produce a daily digest forever, counting up days that can never be refreshed.
+func (s *Server) notifiableSessions(ctx context.Context) ([]string, error) {
+	var sessions []string
+	err := connectionQuery(s.db.WithContext(ctx).Model(&OAuthToken{})).Where("session_id <> '' AND token <> ''").Pluck("session_id", &sessions).Error
+	return sessions, err
+}
+
 func (s *Server) processNotificationOutbox(ctx context.Context) {
-	var settings []FollowUpSettings
-	if err := s.db.WithContext(ctx).Find(&settings).Error; err != nil {
+	sessions, err := s.notifiableSessions(ctx)
+	if err != nil {
+		log.Print("Notification outbox: unable to load connected accounts")
 		return
 	}
-	now := time.Now().UTC()
-	for _, item := range settings {
-		if err := s.queueAccountNotifications(ctx, item.SessionID, now); err != nil {
+	for _, sid := range sessions {
+		if ctx.Err() != nil {
+			return
+		}
+		// A fresh timestamp per account and per delivery. One slow destination
+		// used to push every account behind it past its own lease and retry
+		// delay, which let a second replica claim the same message and made the
+		// backoff expire before it was written.
+		if err := s.queueAccountNotifications(ctx, sid, time.Now().UTC()); err != nil {
+			log.Printf("Notification outbox: cannot materialize messages for an account: %v", err)
 			continue
 		}
 		for i := 0; i < 100; i++ {
-			claimed, err := s.deliverOneNotification(ctx, now, sendNotification)
-			if err != nil || !claimed {
+			claimed, err := s.deliverOneNotification(ctx, time.Now().UTC(), sendNotification)
+			if err != nil {
+				log.Printf("Notification outbox: delivery could not be recorded: %v", err)
+				break
+			}
+			if !claimed {
 				break
 			}
 		}

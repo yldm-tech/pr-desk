@@ -1,6 +1,5 @@
 import { Welcome } from "./Welcome";
 import { Repositories } from "./Repositories";
-import { RepositorySelect } from "./RepositorySelect";
 import { About } from "./About";
 import { FollowUpSummary, FollowUpWorkspace, useFollowUps } from "./FollowUps";
 import { FollowUpSettings } from "./FollowUpSettings";
@@ -28,7 +27,7 @@ const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
 const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
 function statusKey(status: string) {
-  return ({ Open: "openCount", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
+  return ({ Open: "openStatus", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
 }
 export default function App() {
   const { t } = useTranslation();
@@ -184,7 +183,7 @@ export default function App() {
     refetch: refetchRepositories,
   } = useQuery<RepositorySummary[]>({
     queryKey: ["repositories"],
-    enabled: !!auth?.connected && ["Repositories", "Needs attention"].includes(filter),
+    enabled: !!auth?.connected && filter === "Repositories",
     gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       const r = await api(apiURL + "/api/v1/repositories", { credentials: "include" });
@@ -462,28 +461,8 @@ export default function App() {
                 </div>
                 <div className="toolbar">
                   {searchControl}
-                  {filter === "Needs attention" && (
-                    <RepositorySelect
-                      repositories={repositoryData || []}
-                      loading={repositoriesLoading}
-                      value={repository}
-                      onChange={(value) =>
-                        setParams((current) => {
-                          const next = new URLSearchParams(current);
-                          if (value) next.set("repo", value);
-                          else next.delete("repo");
-                          next.delete("page");
-                          return next;
-                        })
-                      }
-                    />
-                  )}
-                  {filter === "Needs attention" && repositoriesError && (
-                    <button className="access-recheck" onClick={() => refetchRepositories()}>
-                      {t("retry")}
-                    </button>
-                  )}
-                  {filter !== "Needs attention" && (
+                  {/* "Needs attention" returns FollowUpWorkspace further up, so this branch only ever renders the PR list. */}
+                  {
                     <div className="filters max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
                       {[
                         ["All", t("filterAll")],
@@ -496,7 +475,7 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                  )}
+                  }
                 </div>
                 {isError && data && (
                   <div className="sync-status-error" role="status">
@@ -510,8 +489,8 @@ export default function App() {
                 {!isLoading && (!isError || data) && shown.length === 0 && (
                   <div className="empty-state">
                     <Inbox size={28} />
-                    <h2>{t(filter === "Needs attention" && !search && !repository && page === 0 ? "caughtUp" : "emptyResultsTitle")}</h2>
-                    <p>{t(search || repository || page > 0 ? "emptyResultsDescription" : filter === "Needs attention" ? "noActionNeeded" : "noOpenResults")}</p>
+                    <h2>{t("emptyResultsTitle")}</h2>
+                    <p>{t(search || repository || page > 0 ? "emptyResultsDescription" : "noOpenResults")}</p>
                     {page > 0 ? (
                       <button className="secondary-action" onClick={() => setPage(0)}>
                         {t("firstPage")}
