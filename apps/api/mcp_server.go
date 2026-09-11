@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -52,25 +54,37 @@ func toolResult(summary string) *mcp.CallToolResult {
 }
 
 type listFollowUpsInput struct {
-	State      string `json:"state,omitempty" jsonschema:"Only return follow-ups in this state: action, waiting, follow_up, draft or archived"`
-	Role       string `json:"role,omitempty" jsonschema:"Only return follow-ups where you are the authored or reviewer party"`
-	Repository string `json:"repository,omitempty" jsonschema:"Only return follow-ups for this owner/name repository"`
-	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum number of follow-ups to return (default 30, maximum 200)"`
+	State          string `json:"state,omitempty" jsonschema:"Only return follow-ups in this state: action, waiting, follow_up, draft or archived"`
+	Role           string `json:"role,omitempty" jsonschema:"Only return follow-ups where you are the authored or reviewer party"`
+	Repository     string `json:"repository,omitempty" jsonschema:"Only return follow-ups for this owner/name repository"`
+	Reason         string `json:"reason,omitempty" jsonschema:"Only return follow-ups carrying this reason: human_feedback, conflict, checks_failed, changes_requested, review_requested, approval_revoked, author_updated, overdue or snooze_due"`
+	Unread         bool   `json:"unread,omitempty" jsonschema:"Only return follow-ups with activity you have not marked read"`
+	MinWaitingDays int    `json:"min_waiting_days,omitempty" jsonschema:"Only return follow-ups whose waiting clock has run at least this many days"`
+	Sort           string `json:"sort,omitempty" jsonschema:"waiting to put the longest wait first, or activity for the most recently changed first (default)"`
+	Limit          int    `json:"limit,omitempty" jsonschema:"Maximum number of follow-ups to return (default 30, maximum 200)"`
 }
 
 type followUpOutput struct {
-	ID         uint     `json:"id" jsonschema:"Identifier to pass to the follow-up tools"`
-	Version    uint64   `json:"version" jsonschema:"Pass this back when changing the follow-up; a mismatch means new activity arrived"`
-	Repository string   `json:"repository"`
-	Number     int      `json:"number"`
-	Title      string   `json:"title"`
-	URL        string   `json:"url"`
-	Role       string   `json:"role"`
-	State      string   `json:"state"`
-	Reasons    []string `json:"reasons"`
-	Unread     bool     `json:"unread"`
-	Excerpt    string   `json:"excerpt,omitempty" jsonschema:"The most recent human comment that needs attention"`
-	WaitingFor int      `json:"waiting_days"`
+	ID            uint              `json:"id" jsonschema:"Identifier to pass to the follow-up tools"`
+	Version       uint64            `json:"version" jsonschema:"Pass this back when changing the follow-up; a mismatch means new activity arrived"`
+	Repository    string            `json:"repository"`
+	Number        int               `json:"number"`
+	Title         string            `json:"title"`
+	URL           string            `json:"url"`
+	Author        string            `json:"author,omitempty"`
+	Role          string            `json:"role"`
+	State         string            `json:"state"`
+	Reasons       []string          `json:"reasons"`
+	Unread        bool              `json:"unread"`
+	Draft         bool              `json:"draft"`
+	Conflict      bool              `json:"conflict"`
+	Checks        string            `json:"checks,omitempty" jsonschema:"success, failure, pending, inconclusive or unknown. inconclusive means every run that did not pass was cancelled or superseded, so nothing is known to be broken"`
+	FailingChecks []checkRunSummary `json:"failing_checks,omitempty" jsonschema:"The named check runs behind a non-green summary, failures first"`
+	ReviewState   string            `json:"review_state,omitempty"`
+	Excerpt       string            `json:"excerpt,omitempty" jsonschema:"The most recent human comment that needs attention, truncated; get_follow_up returns the full thread"`
+	WaitingFor    int               `json:"waiting_days" jsonschema:"Days since the last human progress on this pull request, not days since it was opened"`
+	SnoozedUntil  string            `json:"snoozed_until,omitempty"`
+	UpdatedAt     string            `json:"updated_at,omitempty" jsonschema:"GitHub activity time, not the time PR Desk last polled"`
 }
 
 type listFollowUpsOutput struct {
@@ -78,10 +92,51 @@ type listFollowUpsOutput struct {
 	Total     int              `json:"total" jsonschema:"Number of follow-ups matching the filter before the limit was applied"`
 }
 
+// waitingDays is the age of the waiting clock, which advanceFacts moves on human
+// progress only. A zero means someone acted today, not that the row is new.
+func waitingDays(row followUpView, now time.Time) int {
+	if row.WaitingSince.IsZero() {
+		return 0
+	}
+	if days := int(now.Sub(row.WaitingSince).Hours() / 24); days > 0 {
+		return days
+	}
+	return 0
+}
+
+func describeFollowUp(row followUpView, now time.Time) followUpOutput {
+	out := followUpOutput{
+		ID: row.ID, Version: row.Version, Repository: row.PR.Repo, Number: row.PR.Number, Title: row.PR.Title,
+		URL: row.PR.URL, Author: row.PR.Author, Role: row.Role, State: row.State, Reasons: row.Reasons,
+		Unread: row.Unread, Draft: row.PR.Draft, Conflict: row.PR.HasConflicts, Checks: row.PR.ChecksStatus,
+		FailingChecks: row.PR.checks(), ReviewState: row.PR.ReviewStatus, Excerpt: row.Excerpt,
+		WaitingFor: waitingDays(row, now),
+	}
+	if row.SnoozedUntil != nil {
+		out.SnoozedUntil = row.SnoozedUntil.UTC().Format(time.RFC3339)
+	}
+	if !row.PR.UpdatedAt.IsZero() {
+		out.UpdatedAt = row.PR.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	return out
+}
+
+func matchesReason(reasons []string, reason string) bool {
+	for _, value := range reasons {
+		if strings.EqualFold(value, reason) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, in listFollowUpsInput) (*mcp.CallToolResult, listFollowUpsOutput, error) {
 	session, err := sessionFromContext(ctx)
 	if err != nil {
 		return nil, listFollowUpsOutput{}, err
+	}
+	if in.Sort != "" && in.Sort != "waiting" && in.Sort != "activity" {
+		return nil, listFollowUpsOutput{}, errors.New("sort has to be waiting or activity")
 	}
 	rows, err := s.accountFollowUps(ctx, session.sessionID)
 	if err != nil {
@@ -95,7 +150,7 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 		limit = 200
 	}
 	now := time.Now()
-	out := listFollowUpsOutput{FollowUps: []followUpOutput{}}
+	matched := []followUpOutput{}
 	for _, row := range rows {
 		if in.State != "" && row.State != in.State {
 			continue
@@ -106,23 +161,104 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 		if in.Repository != "" && !strings.EqualFold(row.PR.Repo, in.Repository) {
 			continue
 		}
-		out.Total++
-		if len(out.FollowUps) >= limit {
+		if in.Reason != "" && !matchesReason(row.Reasons, in.Reason) {
 			continue
 		}
-		waiting := 0
-		if !row.WaitingSince.IsZero() {
-			if days := int(now.Sub(row.WaitingSince).Hours() / 24); days > 0 {
-				waiting = days
-			}
+		if in.Unread && !row.Unread {
+			continue
 		}
-		out.FollowUps = append(out.FollowUps, followUpOutput{
-			ID: row.ID, Version: row.Version, Repository: row.PR.Repo, Number: row.PR.Number, Title: row.PR.Title,
-			URL: row.PR.URL, Role: row.Role, State: row.State, Reasons: row.Reasons, Unread: row.Unread,
-			Excerpt: row.Excerpt, WaitingFor: waiting,
-		})
+		if in.MinWaitingDays > 0 && waitingDays(row, now) < in.MinWaitingDays {
+			continue
+		}
+		matched = append(matched, describeFollowUp(row, now))
+	}
+	// The default order is the state ranking collectFollowUps already applied;
+	// sorting by wait is a stable reordering of that same list.
+	if in.Sort == "waiting" {
+		sort.SliceStable(matched, func(i, j int) bool { return matched[i].WaitingFor > matched[j].WaitingFor })
+	}
+	out := listFollowUpsOutput{FollowUps: matched, Total: len(matched)}
+	if len(matched) > limit {
+		out.FollowUps = matched[:limit]
 	}
 	return toolResult(fmt.Sprintf("%d follow-ups match; returning %d.", out.Total, len(out.FollowUps))), out, nil
+}
+
+type getFollowUpInput struct {
+	ID       uint `json:"id" jsonschema:"The follow-up identifier returned by list_follow_ups"`
+	Comments int  `json:"comments,omitempty" jsonschema:"How many of the most recent comments to include (default 20, maximum 100, 0 for none)"`
+}
+
+type commentOutput struct {
+	Author    string `json:"author"`
+	Body      string `json:"body"`
+	URL       string `json:"url,omitempty"`
+	Kind      string `json:"kind" jsonschema:"review for an inline code comment, conversation for a discussion comment"`
+	CreatedAt string `json:"created_at"`
+}
+
+type getFollowUpOutput struct {
+	FollowUp followUpOutput  `json:"follow_up"`
+	Comments []commentOutput `json:"comments"`
+	Total    int             `json:"total_comments"`
+}
+
+// The listing carries a 240 character excerpt of one comment, which is enough to
+// decide whether to look and never enough to answer the question. This returns
+// the stored thread so an agent does not have to reach for GitHub directly.
+func (s *Server) mcpGetFollowUp(ctx context.Context, _ *mcp.CallToolRequest, in getFollowUpInput) (*mcp.CallToolResult, getFollowUpOutput, error) {
+	session, err := sessionFromContext(ctx)
+	if err != nil {
+		return nil, getFollowUpOutput{}, err
+	}
+	rows, err := s.accountFollowUps(ctx, session.sessionID)
+	if err != nil {
+		return nil, getFollowUpOutput{}, errors.New("unable to load follow-ups")
+	}
+	var found *followUpView
+	for i := range rows {
+		if rows[i].ID == in.ID {
+			found = &rows[i]
+			break
+		}
+	}
+	if found == nil {
+		return nil, getFollowUpOutput{}, errors.New("no such follow-up for this account")
+	}
+	limit := in.Comments
+	if limit == 0 {
+		limit = 20
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	out := getFollowUpOutput{FollowUp: describeFollowUp(*found, time.Now()), Comments: []commentOutput{}}
+	var total int64
+	scope := s.db.WithContext(ctx).Model(&ReviewComment{}).Where("session_id = ? AND pull_request_id = ?", session.sessionID, found.PullRequestID)
+	if err := scope.Count(&total).Error; err != nil {
+		return nil, getFollowUpOutput{}, errors.New("unable to load comments")
+	}
+	out.Total = int(total)
+	if limit > 0 {
+		var comments []ReviewComment
+		if err := scope.Order("created_at DESC, id DESC").Limit(limit).Find(&comments).Error; err != nil {
+			return nil, getFollowUpOutput{}, errors.New("unable to load comments")
+		}
+		for _, comment := range comments {
+			kind := comment.CommentType
+			if kind == "" {
+				kind = "conversation"
+			}
+			out.Comments = append(out.Comments, commentOutput{
+				Author: comment.Author, Body: comment.Body, URL: comment.URL, Kind: kind,
+				CreatedAt: comment.CreatedAt.UTC().Format(time.RFC3339),
+			})
+		}
+	}
+	return toolResult(fmt.Sprintf("%s #%d: %s, %d comments stored.", found.PR.Repo, found.PR.Number, found.State, out.Total)), out, nil
 }
 
 type summaryOutput struct {
@@ -169,21 +305,27 @@ func (s *Server) mcpFollowUpSummary(ctx context.Context, _ *mcp.CallToolRequest,
 type pullRequestInput struct {
 	Repository string `json:"repository,omitempty" jsonschema:"Only return pull requests in this owner/name repository"`
 	Query      string `json:"query,omitempty" jsonschema:"Case-insensitive match against the title"`
+	State      string `json:"state,omitempty" jsonschema:"Only return pull requests that are open, closed or merged"`
+	Role       string `json:"role,omitempty" jsonschema:"Only return pull requests you authored or are a reviewer on"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum number of pull requests to return (default 30, maximum 200)"`
 }
 
 type pullRequestOutput struct {
-	ID          uint   `json:"id"`
-	Repository  string `json:"repository"`
-	Number      int    `json:"number"`
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	State       string `json:"state"`
-	ReviewState string `json:"review_state,omitempty"`
-	Checks      string `json:"checks,omitempty"`
-	Draft       bool   `json:"draft"`
-	Conflict    bool   `json:"conflict"`
-	UpdatedAt   string `json:"updated_at" jsonschema:"GitHub activity time, not the time PR Desk last polled"`
+	ID            uint              `json:"id"`
+	Repository    string            `json:"repository"`
+	Number        int               `json:"number"`
+	Title         string            `json:"title"`
+	URL           string            `json:"url"`
+	Author        string            `json:"author,omitempty"`
+	Role          string            `json:"role,omitempty"`
+	State         string            `json:"state"`
+	ReviewState   string            `json:"review_state,omitempty"`
+	Checks        string            `json:"checks,omitempty" jsonschema:"success, failure, pending, inconclusive or unknown"`
+	FailingChecks []checkRunSummary `json:"failing_checks,omitempty"`
+	Draft         bool              `json:"draft"`
+	Conflict      bool              `json:"conflict"`
+	Merged        bool              `json:"merged"`
+	UpdatedAt     string            `json:"updated_at" jsonschema:"GitHub activity time, not the time PR Desk last polled"`
 }
 
 type pullRequestListOutput struct {
@@ -208,12 +350,33 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	if limit > 200 {
 		limit = 200
 	}
+	switch in.State {
+	case "", "open", "closed", "merged":
+	default:
+		return nil, pullRequestListOutput{}, errors.New("state has to be open, closed or merged")
+	}
+	if in.Role != "" && in.Role != "authored" && in.Role != "reviewer" {
+		return nil, pullRequestListOutput{}, errors.New("role has to be authored or reviewer")
+	}
 	query := s.db.WithContext(ctx).Model(&PullRequest{}).Where("session_id = ?", session.sessionID)
 	if in.Repository != "" {
 		query = query.Where("LOWER(repo) = LOWER(?)", in.Repository)
 	}
 	if in.Query != "" {
 		query = query.Where("title ILIKE ? ESCAPE '\\'", "%"+escapeLike(in.Query)+"%")
+	}
+	if in.Role != "" {
+		query = query.Where("role = ?", in.Role)
+	}
+	// GitHub reports a merged pull request as closed, so merged is a filter on
+	// the merge timestamp rather than on the state column.
+	switch in.State {
+	case "open":
+		query = query.Where("state = ? AND merged_at IS NULL", "open")
+	case "closed":
+		query = query.Where("state = ? AND merged_at IS NULL", "closed")
+	case "merged":
+		query = query.Where("merged_at IS NOT NULL")
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -227,7 +390,9 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	for _, row := range rows {
 		out.PullRequests = append(out.PullRequests, pullRequestOutput{
 			ID: row.ID, Repository: row.Repo, Number: row.Number, Title: row.Title, URL: row.URL,
-			State: row.State, ReviewState: row.ReviewStatus, Checks: row.ChecksStatus, Draft: row.Draft, Conflict: row.HasConflicts, UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339),
+			Author: row.Author, Role: row.Role, State: row.State, ReviewState: row.ReviewStatus,
+			Checks: row.ChecksStatus, FailingChecks: row.checks(), Draft: row.Draft, Conflict: row.HasConflicts,
+			Merged: row.MergedAt != nil, UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	return toolResult(fmt.Sprintf("%d pull requests match; returning %d.", out.Total, len(out.PullRequests))), out, nil
@@ -279,6 +444,62 @@ func (s *Server) mcpListRepositories(ctx context.Context, _ *mcp.CallToolRequest
 	return toolResult(fmt.Sprintf("%d repositories are tracked.", len(out.Repositories))), out, nil
 }
 
+type syncStatusOutput struct {
+	Status         string `json:"status" jsonschema:"idle, running, complete, interrupted or failed"`
+	Phase          string `json:"phase,omitempty"`
+	Completed      int    `json:"completed"`
+	Total          int    `json:"total"`
+	LastSyncedAt   string `json:"last_synced_at,omitempty" jsonschema:"When the last full synchronization finished; absent until the first one completes"`
+	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive"`
+	NextAutoSyncAt string `json:"next_auto_sync_at,omitempty"`
+	Baseline       bool   `json:"baseline_complete" jsonschema:"False while the first inventory is still importing"`
+	ErrorCode      string `json:"error_code,omitempty" jsonschema:"reconnect means the GitHub authorization lapsed and nothing can refresh until it is renewed"`
+}
+
+// Freshness is read-only on purpose: an agent should be able to say how old the
+// answer is without being able to spend the account's GitHub rate limit. Nothing
+// here exposes the stored credential.
+func (s *Server) mcpSyncStatus(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, syncStatusOutput, error) {
+	session, err := sessionFromContext(ctx)
+	if err != nil {
+		return nil, syncStatusOutput{}, err
+	}
+	var token OAuthToken
+	if err := s.db.WithContext(ctx).Where("session_id = ?", session.sessionID).First(&token).Error; err != nil {
+		return nil, syncStatusOutput{}, errors.New("this account is no longer connected to GitHub")
+	}
+	settings, err := loadFollowUpSettings(s.db, session.sessionID)
+	if err != nil {
+		return nil, syncStatusOutput{}, errors.New("unable to load preferences")
+	}
+	now := time.Now().UTC()
+	progress := syncProgress{Status: "idle", Phase: "history"}
+	if token.SyncProgress != "" {
+		if json.Unmarshal([]byte(token.SyncProgress), &progress) != nil {
+			return nil, syncStatusOutput{}, errors.New("unable to read sync progress")
+		}
+	}
+	// A run that stopped reporting is not still running, however it was left.
+	if progress.Status == "running" && now.Sub(progress.UpdatedAt) > 20*time.Minute {
+		progress.Status = "interrupted"
+	}
+	out := syncStatusOutput{
+		Status: progress.Status, Phase: progress.Phase, Completed: progress.Completed, Total: progress.Total,
+		Baseline: settings.BaselineAt != nil, ErrorCode: progress.ErrorCode,
+	}
+	if token.HistorySyncedAt != nil {
+		out.LastSyncedAt = token.HistorySyncedAt.UTC().Format(time.RFC3339)
+		out.StaleMinutes = int(now.Sub(*token.HistorySyncedAt).Minutes())
+	}
+	if next := nextAutoSyncAt(token, now); !next.IsZero() {
+		out.NextAutoSyncAt = next.UTC().Format(time.RFC3339)
+	}
+	if token.GitHubID > 0 && (token.AuthorizationError != "" || token.Token == "") {
+		out.Status, out.ErrorCode = "failed", "reconnect"
+	}
+	return toolResult(fmt.Sprintf("Sync is %s; data is %d minutes old.", out.Status, out.StaleMinutes)), out, nil
+}
+
 type followUpActionInput struct {
 	ID      uint   `json:"id" jsonschema:"The follow-up identifier returned by list_follow_ups"`
 	Version uint64 `json:"version" jsonschema:"The version returned alongside the follow-up; the call is refused if newer activity arrived"`
@@ -326,13 +547,16 @@ func (s *Server) followUpAction(action string) mcp.ToolHandlerFor[followUpAction
 
 func (s *Server) newMCPServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: mcpServerVersion, Title: "PR Desk"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, unread or minimum waiting days, and sort by longest wait.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
+	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up", Description: "Read one follow-up in full, including the stored comment thread rather than the truncated excerpt the listing carries.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpGetFollowUp)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpFollowUpSummary)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository or title.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
+	mcp.AddTool(server, &mcp.Tool{Name: "get_sync_status", Description: "Report how fresh the synchronized data is and whether the first inventory finished, so an empty result can be judged.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpSyncStatus)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state or role.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
 	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize tracked repositories with their open, attention-needing and conflicting pull request counts.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_read", Description: "Mark a follow-up as read. This does not mark the work as handled and does not touch GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("read"))
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("handled"))
 	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("snooze"))
+	mcp.AddTool(server, &mcp.Tool{Name: "unsnooze_follow_up", Description: "Cancel a snooze and let the follow-up surface again. Read and handled state are left alone.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("unsnooze"))
 	return server
 }
 

@@ -37,15 +37,28 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 
 | Tool | Scope | Notes |
 |------|-------|-------|
-| `list_follow_ups` | read | Filter by state, role or repository |
+| `list_follow_ups` | read | Filter by state, role, repository, reason, unread or minimum waiting days; sort by longest wait |
+| `get_follow_up` | read | One follow-up with its stored comment thread rather than the truncated excerpt |
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
-| `list_pull_requests` | read | Search synchronized pull requests by repository or title |
+| `get_sync_status` | read | How old the data is, so an empty result can be judged |
+| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state or role |
 | `list_repositories` | read | Per-repository open, attention and conflict counts |
 | `mark_follow_up_read` | write | Does not mark the work handled |
 | `mark_follow_up_handled` | write | Restarts the waiting clock |
 | `snooze_follow_up` | write | Suppresses reminders for 1–365 days |
+| `unsnooze_follow_up` | write | Cancels a snooze without touching read or handled state |
 
-Every write tool takes the `version` returned by the listing. If new activity arrived in between, the call is refused rather than applied, so an agent cannot mark away something it never saw. Nothing in this surface posts to GitHub.
+Every write tool takes the `version` returned by the listing. If new activity arrived in between, the call is refused rather than applied, so an agent cannot mark away something it never saw. Nothing in this surface posts to GitHub, and there is deliberately no tool that starts a synchronization: an agent can see how stale the data is without being able to spend the account's GitHub rate limit.
+
+### Reading the check state
+
+`checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names the runs behind anything that is not green, failures first.
+
+`inconclusive` means every run that did not pass was cancelled or marked stale — superseded by a newer push, stopped by a concurrency group, or otherwise abandoned. GitHub renders those as a red cross and its own API reports them next to real failures, but they decided nothing about the code, so they do not raise a `checks_failed` follow-up. A genuine failure, a timeout, a startup failure or a run awaiting manual action all still count as `failure`.
+
+## Waiting time
+
+`waiting_days` is the age of the waiting clock, which only human progress moves: a comment, a review, or a revision while you are waiting on an author. It is not the age of the pull request and not the time since PR Desk last polled. A `0` therefore means somebody acted today, not that the row just arrived.
 
 ## Command line
 
@@ -53,10 +66,16 @@ Build it with `make cli`, which produces `dist/prdesk`.
 
 ```
 prdesk login --host https://prdesk.example.com   # add --write to allow state changes
-prdesk followups --state action --limit 20
-prdesk followups --json | jq '.follow_ups[] | select(.waiting_days > 14)'
+prdesk followups --state action --sort waiting   # longest wait first
+prdesk followups --reason checks_failed --url    # everything red, with links
+prdesk followups --min-waiting 14 --unread       # stale and still unseen
+prdesk show 41                                   # one row in full, with its comments
+prdesk sync                                      # how old the answer is
 prdesk handled 41 7                              # id and version from the listing
+prdesk unsnooze 41 7                             # let a snoozed row surface again
 ```
+
+`followups` and `prs` accept different filters, and a flag that does not apply to the command is refused locally rather than by the server's schema. `--json` prints the tool's structured output unchanged, which is the right input for `jq`.
 
 `login` opens a browser against the consent page and receives the code on a loopback port it opens for the occasion (RFC 8252). The token is written to `credentials.json` under the user configuration directory with mode `0600`; `PR_DESK_CONFIG_DIR` overrides the location. `logout` deletes the local file, which does not end the grant. To stop a token that leaked, revoke it on the server: `GET /api/v1/api-tokens` lists the account's tokens and `DELETE /api/v1/api-tokens/{id}` revokes one, both with the browser session. A revoked token stops verifying on its next call. There is no UI for this yet.
 

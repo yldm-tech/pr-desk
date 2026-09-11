@@ -60,6 +60,7 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 		return err
 	}
 	checksStatus := "unknown"
+	recordedChecks := "[]"
 	if detail.Head.SHA != "" {
 		combined, _, err := githubClient(token).Repositories.GetCombinedStatus(ctx, parts[0], parts[1], detail.Head.SHA, nil)
 		if err != nil {
@@ -76,6 +77,11 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 			state = ""
 		}
 		checksStatus = checkSummary(runs, state)
+		// Recorded from the same snapshot as the summary, so the names always
+		// explain the state stored beside them.
+		if encoded, err := json.Marshal(unhealthyChecks(runs)); err == nil {
+			recordedChecks = string(encoded)
+		}
 	}
 	inline, err := fetchPages[activityComment](ctx, token, endpoint+"/comments")
 	if err != nil {
@@ -156,7 +162,7 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 			return err
 		}
 		// UpdatedAt is GitHub activity time, not the time our poll ran.
-		updates := map[string]any{"comments_count": detail.Comments + detail.ReviewComments, "merged_at": detail.MergedAt, "review_status": reviewStatus, "checks_status": checksStatus, "updated_at": pr.UpdatedAt, "draft": detail.Draft}
+		updates := map[string]any{"comments_count": detail.Comments + detail.ReviewComments, "merged_at": detail.MergedAt, "review_status": reviewStatus, "checks_status": checksStatus, "checks_detail": recordedChecks, "updated_at": pr.UpdatedAt, "draft": detail.Draft}
 		if detail.Title != "" {
 			updates["title"] = detail.Title
 		}

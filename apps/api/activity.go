@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -191,6 +192,25 @@ func fetchChecks(ctx context.Context, token, base, sha string) ([]checkRun, erro
 	return nil, fmt.Errorf("too many check runs")
 }
 
+// A run that a newer push superseded, that a concurrency group stopped, or that
+// GitHub marked stale did not decide anything about the code. Reporting those
+// as a failure is what makes a green branch look broken, so they get their own
+// state: visible, named, but not the same alarm as a red test.
+func inconclusiveCheck(conclusion string) bool {
+	return conclusion == "cancelled" || conclusion == "stale"
+}
+
+func failingCheck(conclusion string) bool {
+	switch conclusion {
+	case "failure", "timed_out", "action_required", "startup_failure":
+		return true
+	}
+	return false
+}
+
+// Precedence is failure, pending, inconclusive, success. A single red check
+// outranks everything; an inconclusive one only shows through when nothing is
+// actually failing or still running.
 func checkSummary(runs []checkRun, combined string) string {
 	state := combined
 	if state == "error" {
@@ -199,6 +219,7 @@ func checkSummary(runs []checkRun, combined string) string {
 	if state == "" {
 		state = "unknown"
 	}
+	inconclusive := false
 	for _, r := range runs {
 		if r.Status != "completed" {
 			if state != "failure" {
@@ -206,12 +227,14 @@ func checkSummary(runs []checkRun, combined string) string {
 			}
 			continue
 		}
-		switch r.Conclusion {
-		case "success", "neutral", "skipped":
+		switch {
+		case r.Conclusion == "success" || r.Conclusion == "neutral" || r.Conclusion == "skipped":
 			if state == "unknown" {
 				state = "success"
 			}
-		case "failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale":
+		case inconclusiveCheck(r.Conclusion):
+			inconclusive = true
+		case failingCheck(r.Conclusion):
 			state = "failure"
 		default:
 			if state != "failure" {
@@ -219,7 +242,57 @@ func checkSummary(runs []checkRun, combined string) string {
 			}
 		}
 	}
+	if inconclusive && state != "failure" && state != "pending" {
+		return "inconclusive"
+	}
 	return state
+}
+
+// The maximum number of check runs recorded alongside a pull request. A branch
+// with more unhealthy checks than this has a problem the list already conveys.
+const maxRecordedChecks = 20
+
+// checks reads back what the last successful detail sync recorded. A row stored
+// before this column existed simply has nothing to report.
+func (pr PullRequest) checks() []checkRunSummary {
+	if pr.ChecksJSON == "" {
+		return nil
+	}
+	var runs []checkRunSummary
+	if json.Unmarshal([]byte(pr.ChecksJSON), &runs) != nil {
+		return nil
+	}
+	return runs
+}
+
+type checkRunSummary struct {
+	Name       string `json:"name"`
+	Conclusion string `json:"conclusion" jsonschema:"The GitHub conclusion: failure, cancelled, stale, timed_out, action_required or pending while still running"`
+	URL        string `json:"url,omitempty"`
+}
+
+// unhealthyChecks names the runs behind a non-green summary, failures first, so
+// a caller can tell a broken test from a superseded run without asking GitHub
+// again. Passing and skipped runs are left out: they are not why anyone looked.
+func unhealthyChecks(runs []checkRun) []checkRunSummary {
+	failures, others := []checkRunSummary{}, []checkRunSummary{}
+	for _, r := range runs {
+		summary := checkRunSummary{Name: r.Name, Conclusion: r.Conclusion, URL: r.URL}
+		switch {
+		case r.Status != "completed":
+			summary.Conclusion = "pending"
+			others = append(others, summary)
+		case failingCheck(r.Conclusion):
+			failures = append(failures, summary)
+		case inconclusiveCheck(r.Conclusion):
+			others = append(others, summary)
+		}
+	}
+	combined := append(failures, others...)
+	if len(combined) > maxRecordedChecks {
+		combined = combined[:maxRecordedChecks]
+	}
+	return combined
 }
 
 func (s *Server) activity(c *gin.Context) {

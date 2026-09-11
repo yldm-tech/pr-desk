@@ -15,23 +15,40 @@ Usage:
   prdesk logout                         forget the stored token
   prdesk status                         show who is signed in
   prdesk followups [filters]            list tracked pull requests needing attention
+  prdesk show <id> [--comments N]       one follow-up in full, with its comment thread
   prdesk prs [filters]                  search synchronized pull requests
   prdesk repos                          per-repository counts
   prdesk summary                        counts by follow-up state
+  prdesk sync                           how fresh the synchronized data is
   prdesk read <id> <version>            mark a follow-up read
   prdesk handled <id> <version>         mark a follow-up handled
   prdesk snooze <id> <version> <days>   stop reminders for a while
+  prdesk unsnooze <id> <version>        let a snoozed follow-up surface again
 
-Filters:
+Filters for followups:
   --state action|waiting|follow_up|draft|archived
   --role authored|reviewer
   --repo owner/name
-  --query text        (prs only)
+  --reason checks_failed|conflict|human_feedback|review_requested|overdue|…
+  --unread            only rows with activity you have not read
+  --min-waiting N     only rows waiting at least N days
+  --sort waiting      longest wait first (default: by state, then activity)
+  --limit N
+
+Filters for prs:
+  --state open|closed|merged
+  --role authored|reviewer
+  --repo owner/name
+  --query text
   --limit N
 
 Global:
   --json              print raw JSON instead of a table
+  --url               add the pull request URL to the table
   --host URL          server to talk to (default: stored host, then http://localhost:8080)
+
+A checks state of "inconclusive" means nothing failed: every run that did not
+pass was cancelled or superseded. Use show to see which runs those were.
 
 The identifier and version come from the listing; passing a stale version is
 refused so that nothing is marked away after new activity arrived.
@@ -51,9 +68,11 @@ func main() {
 		err = runLogout()
 	case "status":
 		err = runStatus(args)
-	case "followups", "prs", "repos", "summary":
+	case "followups", "prs", "repos", "summary", "sync":
 		err = runList(command, args)
-	case "read", "handled", "snooze":
+	case "show":
+		err = runShow(args)
+	case "read", "handled", "snooze", "unsnooze":
 		err = runAction(command, args)
 	case "help", "-h", "--help":
 		fmt.Print(usage)
