@@ -1,11 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/gin-gonic/gin"
+	github "github.com/google/go-github/v68/github"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
-	"strings"
 )
 
 func (s *Server) ensureRepositoryVisibility(c *gin.Context) error {
@@ -33,8 +37,19 @@ func (s *Server) ensureRepositoryVisibility(c *gin.Context) error {
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid repository")
 			}
-			result, _, err := gh.Repositories.Get(ctx, parts[0], parts[1])
+			result, response, err := gh.Repositories.Get(ctx, parts[0], parts[1])
 			if err != nil {
+				// A repository that was deleted, made private or blocked must not
+				// fail the whole overview: its rows stay NULL and are reported in
+				// the existing unknown-visibility bucket. Rate limiting also
+				// answers 403, so it is separated out first — treating a throttled
+				// response as "unknown" would hide a real failure and freeze the
+				// visibility of every repository behind it.
+				var limited *github.RateLimitError
+				var abuse *github.AbuseRateLimitError
+				if !errors.As(err, &limited) && !errors.As(err, &abuse) && response != nil && (response.StatusCode == http.StatusNotFound || response.StatusCode == http.StatusForbidden || response.StatusCode == http.StatusUnavailableForLegalReasons) {
+					return nil
+				}
 				return err
 			}
 			if result.Private == nil {

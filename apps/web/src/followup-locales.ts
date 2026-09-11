@@ -117,6 +117,8 @@ export const followupLocales = {
     remove: "Remove",
     cancel: "Cancel",
     confirmRemove: "Remove this destination?",
+    nameTooLong: "Use 100 characters or fewer.",
+    tooManyRecipients: "Enter at most twenty recipients.",
   },
   "zh-CN": {
     title: "PR 跟进",
@@ -236,6 +238,8 @@ export const followupLocales = {
     remove: "删除",
     cancel: "取消",
     confirmRemove: "确认删除该通知目标？",
+    nameTooLong: "名称不能超过 100 个字符。",
+    tooManyRecipients: "最多填写 20 个收件人。",
   },
   ja: {
     title: "PR のフォロー",
@@ -355,6 +359,8 @@ export const followupLocales = {
     remove: "削除",
     cancel: "キャンセル",
     confirmRemove: "この通知先を削除しますか？",
+    nameTooLong: "100 文字以内で入力してください。",
+    tooManyRecipients: "宛先は 20 件までです。",
   },
   ko: {
     title: "PR 후속 관리",
@@ -474,6 +480,8 @@ export const followupLocales = {
     remove: "삭제",
     cancel: "취소",
     confirmRemove: "이 대상을 삭제할까요?",
+    nameTooLong: "100자 이내로 입력하세요.",
+    tooManyRecipients: "받는 사람은 최대 20명입니다.",
   },
   es: {
     title: "Seguimiento de PR",
@@ -593,5 +601,7 @@ export const followupLocales = {
     remove: "Eliminar",
     cancel: "Cancelar",
     confirmRemove: "¿Eliminar este destino?",
+    nameTooLong: "Usa 100 caracteres o menos.",
+    tooManyRecipients: "Añade veinte destinatarios como máximo.",
   },
 };

@@ -14,6 +14,9 @@ type Destination = { id: number; name: string; kind: Channel; enabled: boolean }
 const emptyDraft = { kind: "telegram" as Channel, name: "", token: "", chat_id: "", url: "", secret: "", host: "", port: "587", username: "", password: "", from: "", to: "" };
 type Draft = typeof emptyDraft;
 const channelLabel = (kind: string) => `followup.channel${kind.charAt(0).toUpperCase()}${kind.slice(1)}`;
+// Mirrors destinationNameLimit and destinationRecipientLimit on the server.
+const nameLimit = 100;
+const recipientLimit = 20;
 // The server parses addresses with net/mail, which accepts a display name. The
 // browser check stays deliberately narrower than RFC 5322 but has to allow the
 // same two spellings so the form does not reject what the server stores.
@@ -47,6 +50,7 @@ function isPrivateHost(value: string) {
 function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string> {
   const found: Record<string, string> = {};
   if (!draft.name.trim()) found.name = "followup.required";
+  else if (Array.from(draft.name.trim()).length > nameLimit) found.name = "followup.nameTooLong";
   if (draft.kind === "telegram") {
     if (!draft.token.trim()) found.token = "followup.required";
     if (!/^-?\d+$/.test(draft.chat_id.trim())) found.chat_id = "followup.chatIdInvalid";
@@ -64,6 +68,7 @@ function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string
     if (!emailPattern.test(draft.from.trim())) found.from = "followup.invalidEmail";
     const recipients = recipientList(draft.to);
     if (!recipients.length || recipients.some((entry) => !emailPattern.test(entry))) found.to = "followup.invalidEmail";
+    else if (recipients.length > recipientLimit) found.to = "followup.tooManyRecipients";
   }
   return found;
 }
@@ -132,6 +137,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const [days, setDays] = useState(settings.wait_days);
   const [language, setLanguage] = useState(settings.language);
   const [selected, setSelected] = useState(settings.teams || []);
+  const [saved] = useState(() => settings.teams || []);
   const [overrides, setOverrides] = useState(
     Object.entries(settings.repository_days || {})
       .map(([repo, value]) => `${repo}=${value}`)
@@ -151,13 +157,18 @@ function SettingsForm({ settings }: { settings: Settings }) {
     retry: false,
   });
   const mutation = useMutation({
-    mutationFn: (repository_days: Record<string, number>) => ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", json: { timezone: timezone.trim(), digest_time: time, wait_days: days, language, teams: selected, repository_days } }),
+    mutationFn: (repository_days: Record<string, number>) => ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", retry: 0, json: { timezone: timezone.trim(), digest_time: time, wait_days: days, language, teams: selected, repository_days } }),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["follow-up-settings"] });
       void client.invalidateQueries({ queryKey: ["follow-ups"] });
     },
   });
-  const teamOptions = teams.data?.data || selected.map((id) => ({ id, name: id }));
+  // A saved team stays listed even when GitHub no longer returns it — losing
+  // read:org or leaving the team would otherwise hide the subscription while
+  // the form kept posting it back, with no way to remove it. The saved ids are
+  // captured once so that clearing a checkbox does not remove its own row.
+  const fetched = teams.data?.data || [];
+  const teamOptions = [...fetched, ...saved.filter((id) => !fetched.some((team) => team.id === id)).map((id) => ({ id, name: id }))];
   return (
     <form
       className="followup-settings"
@@ -293,7 +304,7 @@ function NotificationDestinations() {
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
   const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[]; allow_private_hosts?: boolean }>(), retry: false });
   const addDestination = useMutation({
-    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", json: destinationPayload(draft) }),
+    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", retry: 0, json: destinationPayload(draft) }),
     onSuccess: () => {
       setDraft({ ...emptyDraft, kind: draft.kind });
       invalidate();
@@ -306,9 +317,9 @@ function NotificationDestinations() {
       if (errors[key]) setErrors({ ...errors, [key]: "" });
     },
   });
-  const updateDestination = useMutation({ mutationFn: (d: Destination) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", json: { name: d.name, enabled: !d.enabled } }), onSuccess: invalidate });
+  const updateDestination = useMutation({ mutationFn: (d: Destination) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", retry: 0, json: { name: d.name, enabled: !d.enabled } }), onSuccess: invalidate });
   const deleteDestination = useMutation({
-    mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include" }),
+    mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include", retry: 0 }),
     onSuccess: () => {
       setConfirming(0);
       invalidate();
@@ -467,7 +478,7 @@ export function FollowUpSettings() {
     queryKey: ["follow-up-settings"],
     queryFn: ({ signal }) =>
       ky
-        .get(apiURL + "/api/v1/follow-up-settings", { credentials: "include", signal })
+        .get(apiURL + "/api/v1/follow-up-settings", { credentials: "include", signal, retry: 0 })
         .json()
         .then((data) => settingsSchema.parse(data)),
     retry: false,

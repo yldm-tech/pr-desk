@@ -11,6 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Shared with the settings form so both sides reject the same input.
+const (
+	destinationNameLimit      = 100
+	destinationRecipientLimit = 20
+)
+
 type destinationInput struct {
 	Kind     string   `json:"kind"`
 	Name     string   `json:"name"`
@@ -114,7 +120,7 @@ func destinationConfigFor(kind string, in destinationInput, stored destinationCo
 		if _, err := netmail.ParseAddress(config.From); err != nil {
 			return config, errors.New("The sender address is not a valid email address")
 		}
-		if len(config.To) == 0 || len(config.To) > 20 {
+		if len(config.To) == 0 || len(config.To) > destinationRecipientLimit {
 			return config, errors.New("Enter between one and twenty recipients")
 		}
 		recipients := make([]string, 0, len(config.To))
@@ -142,8 +148,12 @@ func (s *Server) saveNotificationDestination(c *gin.Context) {
 		return
 	}
 	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" || len(in.Name) > 100 {
+	if in.Name == "" {
 		c.JSON(400, gin.H{"error": "A name is required"})
+		return
+	}
+	if len([]rune(in.Name)) > destinationNameLimit {
+		c.JSON(400, gin.H{"error": "The name is too long"})
 		return
 	}
 	if in.Enabled == nil {

@@ -227,7 +227,7 @@
   "aboutGettingStartedDescription": "Connect your GitHub account to import your pull requests. Grant the relevant organization and repository access when needed, then use the dashboard to explore your contributions and follow up on reviews.",
   "filterRepository": "Filter by repository",
   "allRepositories": "All repositories",
-  "clearRepositoryFilter": "Clear repository filter",
+  "clearRepositoryFilter": "Clear the {{repo}} filter",
   "repositoryScope": "Repository status",
   "activeRepositories": "Active repositories",
   "attentionRepositories": "Need attention",
@@ -256,5 +256,7 @@
   "welcomeExploreTitle": "See the bigger picture",
   "welcomeExploreDescription": "Explore contribution trends and the repositories you contribute to.",
   "welcomeUpdateTitle": "Keep your place",
-  "welcomeUpdateDescription": "Background sync keeps updates together, even when this tab is closed."
+  "welcomeUpdateDescription": "Background sync keeps updates together, even when this tab is closed.",
+  "publicRepositories": "Public repositories",
+  "openStatus": "Open"
 }

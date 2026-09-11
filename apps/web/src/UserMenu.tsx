@@ -18,7 +18,7 @@ export function UserMenu({ connected, username, onDisconnect, disconnecting, dis
     enabled: connected && open,
     queryFn: ({ signal }) =>
       ky
-        .get(apiURL + "/api/v1/profile", { credentials: "include", signal })
+        .get(apiURL + "/api/v1/profile", { credentials: "include", signal, retry: 0 })
         .json()
         .then((data) => profileSchema.parse(data)),
     staleTime: 300000,
@@ -89,7 +89,7 @@ export function UserMenu({ connected, username, onDisconnect, disconnecting, dis
                   {[
                     [user.followers, "followers", "?tab=followers"],
                     [user.following, "following", "?tab=following"],
-                    [user.public_repos, "publicOnly", "?tab=repositories"],
+                    [user.public_repos, "publicRepositories", "?tab=repositories"],
                   ].map(([count, key, suffix]) => (
                     <a key={key} href={href + suffix} target="_blank" rel="noopener noreferrer">
                       <strong>{Number(count).toLocaleString(i18n.resolvedLanguage)}</strong>

@@ -227,7 +227,7 @@
   "aboutGettingStartedDescription": "Conecta tu cuenta de GitHub para importar tus pull requests. Autoriza el acceso a organizaciones y repositorios cuando sea necesario y usa el panel para consultar tus contribuciones y dar seguimiento a las revisiones.",
   "filterRepository": "Filtrar por repositorio",
   "allRepositories": "Todos los repositorios",
-  "clearRepositoryFilter": "Quitar filtro de repositorio",
+  "clearRepositoryFilter": "Quitar el filtro de {{repo}}",
   "repositoryScope": "Estado de los repositorios",
   "activeRepositories": "Repositorios activos",
   "attentionRepositories": "Requieren atención",
@@ -256,5 +256,7 @@
   "welcomeExploreTitle": "Mira el panorama completo",
   "welcomeExploreDescription": "Explora las tendencias y los repositorios a los que contribuyes.",
   "welcomeUpdateTitle": "Mantente al día",
-  "welcomeUpdateDescription": "La sincronización continúa en segundo plano, incluso al cerrar esta pestaña."
+  "welcomeUpdateDescription": "La sincronización continúa en segundo plano, incluso al cerrar esta pestaña.",
+  "publicRepositories": "Repositorios públicos",
+  "openStatus": "Abierto"
 }

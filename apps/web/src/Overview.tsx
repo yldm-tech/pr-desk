@@ -256,7 +256,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   const states = useMemo(
     () => [
       { label: t("merged"), value: s.merged, color: "var(--accent)", share: percentage(s.merged) },
-      { label: t("openCount"), value: s.open, color: "var(--warning)", share: percentage(s.open) },
+      { label: t("openStatus"), value: s.open, color: "var(--warning)", share: percentage(s.open) },
       { label: t("closed"), value: s.closed, color: "var(--chart-other)", share: percentage(s.closed) },
     ],
     [s, t, i18n.resolvedLanguage],

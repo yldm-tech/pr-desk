@@ -227,7 +227,7 @@
   "aboutGettingStartedDescription": "GitHub 계정을 연결해 풀 리퀘스트를 가져오세요. 필요에 따라 조직과 저장소 접근 권한을 허용한 뒤 대시보드에서 기여와 리뷰를 확인하세요.",
   "filterRepository": "저장소로 필터링",
   "allRepositories": "모든 저장소",
-  "clearRepositoryFilter": "저장소 필터 해제",
+  "clearRepositoryFilter": "{{repo}} 필터 해제",
   "repositoryScope": "저장소 상태",
   "activeRepositories": "활성 저장소",
   "attentionRepositories": "대응 필요",
@@ -256,5 +256,7 @@
   "welcomeExploreTitle": "기여 전체 보기",
   "welcomeExploreDescription": "기여 추이와 저장소별 분포를 살펴보세요.",
   "welcomeUpdateTitle": "소식 놓치지 않기",
-  "welcomeUpdateDescription": "탭을 닫아도 백그라운드 동기화로 업데이트를 이어갑니다."
+  "welcomeUpdateDescription": "탭을 닫아도 백그라운드 동기화로 업데이트를 이어갑니다.",
+  "publicRepositories": "공개 저장소",
+  "openStatus": "열림"
 }

@@ -227,7 +227,7 @@
   "aboutGettingStartedDescription": "连接 GitHub 账号即可导入你的 Pull Request。按需授予组织和仓库访问权限，然后在面板中查看贡献、跟进评审。",
   "filterRepository": "按仓库筛选",
   "allRepositories": "全部仓库",
-  "clearRepositoryFilter": "清除仓库筛选",
+  "clearRepositoryFilter": "清除 {{repo}} 筛选",
   "repositoryScope": "仓库状态",
   "activeRepositories": "活跃仓库",
   "attentionRepositories": "待办仓库",
@@ -256,5 +256,7 @@
   "welcomeExploreTitle": "看见贡献全貌",
   "welcomeExploreDescription": "查看贡献趋势与仓库分布，回顾每一份积累。",
   "welcomeUpdateTitle": "持续跟进动态",
-  "welcomeUpdateDescription": "后台同步最新进展，关闭页面后也会继续更新。"
+  "welcomeUpdateDescription": "后台同步最新进展，关闭页面后也会继续更新。",
+  "publicRepositories": "公开仓库",
+  "openStatus": "进行中"
 }
