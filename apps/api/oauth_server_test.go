@@ -420,3 +420,65 @@ func TestConsentSucceedsWithoutOriginAndFailsWithoutItsToken(t *testing.T) {
 		t.Fatal("consent was accepted without the cookie", w.Code)
 	}
 }
+
+// The consent page submits with fetch, because a top-level form post is refused
+// by the edge in front of this deployment before it reaches the server. The
+// endpoint therefore has to answer the destination as JSON when asked, while
+// still redirecting for a plain form post.
+func TestConsentAnswersTheRedirectAsJSONWhenAsked(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	t.Setenv("WEB_ORIGIN", "https://prdesk.example.com")
+	db := integrationDB(t)
+	s := &Server{db: db}
+	if _, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "json-a", Username: "j", Token: "encrypted"}, 9901, "json-browser"); err != nil {
+		t.Fatal(err)
+	}
+	r := oauthRouter(s)
+	verifier := "json-verifier-long-enough"
+	query := url.Values{
+		"response_type": {"code"}, "client_id": {cliClientID}, "redirect_uri": {"http://127.0.0.1:9/callback"},
+		"code_challenge": {pkcePair(verifier)}, "code_challenge_method": {"S256"}, "state": {"keep"}, "scope": {scopeFollowUpsRead},
+	}
+	get := httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+query.Encode(), nil)
+	get.AddCookie(&http.Cookie{Name: "pr_session", Value: "json-browser"})
+	page := httptest.NewRecorder()
+	r.ServeHTTP(page, get)
+	if page.Code != http.StatusOK {
+		t.Fatal("consent page did not render", page.Code)
+	}
+	// The page has to carry the script that avoids the navigation.
+	if !strings.Contains(page.Body.String(), "fetch(form.action") {
+		t.Fatal("the consent page still relies on a plain form post")
+	}
+	token := ""
+	for _, cookie := range page.Result().Cookies() {
+		if cookie.Name == consentCookie {
+			token = cookie.Value
+		}
+	}
+	form := url.Values{}
+	for key, values := range query {
+		form.Set(key, values[0])
+	}
+	form.Set(consentField, token)
+	post := httptest.NewRequest(http.MethodPost, "/oauth/authorize", strings.NewReader(form.Encode()))
+	post.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	post.Header.Set("Accept", "application/json")
+	post.AddCookie(&http.Cookie{Name: "pr_session", Value: "json-browser"})
+	post.AddCookie(&http.Cookie{Name: consentCookie, Value: token})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, post)
+	if w.Code != http.StatusOK {
+		t.Fatal("the fetch submission was not accepted", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Redirect string `json:"redirect"`
+	}
+	if json.Unmarshal(w.Body.Bytes(), &payload) != nil || payload.Redirect == "" {
+		t.Fatal("no redirect was returned", w.Body.String())
+	}
+	target, err := url.Parse(payload.Redirect)
+	if err != nil || target.Query().Get("code") == "" || target.Query().Get("state") != "keep" {
+		t.Fatal("the returned destination is not a usable callback", payload.Redirect)
+	}
+}
