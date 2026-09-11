@@ -68,13 +68,16 @@ func requireMutationOrigin(c *gin.Context) {
 		c.Next()
 		return
 	}
-	// The consent page is served by the API itself, so its form submission
-	// carries the API's own origin rather than the UI's. Accepting a same-origin
-	// submission keeps the forgery protection — a cross-site origin is still
-	// refused — while letting the flow work when the UI has its own origin.
-	if c.Request.URL.Path == "/api/v1/oauth/authorize" && sameOriginRequest(c) {
-		c.Next()
-		return
+	// The consent form protects itself with a token held in both a Lax cookie
+	// and a hidden field, which does not depend on the browser sending Origin —
+	// something it does inconsistently for a same-origin form post, and the
+	// reason authorization used to fail with 403 here. A declared origin is
+	// still checked: if the browser sends one, it has to be this server.
+	if c.Request.URL.Path == "/api/v1/oauth/authorize" {
+		if c.GetHeader("Origin") == "" || sameOriginRequest(c) {
+			c.Next()
+			return
+		}
 	}
 	if c.GetHeader("Origin") != webOrigin() {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Request origin is not allowed"})

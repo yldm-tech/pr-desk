@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"html/template"
 	"net/http"
@@ -25,6 +26,20 @@ import (
 // cannot keep a secret, so PKCE is mandatory and its redirect is restricted to
 // the loopback interface (RFC 8252).
 const cliClientID = "prdesk"
+
+// The consent form carries a token in both a Lax cookie and a hidden field.
+const (
+	consentCookie = "oauth_consent"
+	consentField  = "consent"
+)
+
+func randomToken() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
 
 type OAuthClient struct {
 	ID           uint   `gorm:"primaryKey"`
@@ -254,6 +269,14 @@ func (s *Server) authorizeEndpoint(c *gin.Context) {
 		return
 	}
 	if c.Request.Method == http.MethodPost {
+		presented := c.Request.Form.Get(consentField)
+		stored, err := c.Cookie(consentCookie)
+		if err != nil || stored == "" || subtle.ConstantTimeCompare([]byte(stored), []byte(presented)) != 1 {
+			c.String(http.StatusForbidden, "This authorization form expired. Start again from your client.")
+			return
+		}
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie(consentCookie, "", -1, "/", "", secureCookies(c), true)
 		s.completeAuthorization(c, request, account.SessionID)
 		return
 	}
@@ -261,10 +284,21 @@ func (s *Server) authorizeEndpoint(c *gin.Context) {
 	for _, scope := range request.scopes {
 		descriptions = append(descriptions, scopeDescriptions[scope])
 	}
+	// Whether a browser sends Origin on a same-origin form post is not something
+	// to build a defence on, so consent carries its own token: the same value in
+	// a Lax cookie and in a hidden field. A cross-site post cannot read the
+	// cookie and does not get it attached, so the two cannot match.
+	consent, err := randomToken()
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Unable to start authorization")
+		return
+	}
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(consentCookie, consent, 600, "/", "", secureCookies(c), true)
 	fields := map[string]string{
 		"client_id": request.client.ClientID, "redirect_uri": request.redirect, "response_type": "code",
 		"code_challenge": request.challenge, "code_challenge_method": "S256", "state": request.state,
-		"scope": strings.Join(request.scopes, " "), "resource": request.resource,
+		"scope": strings.Join(request.scopes, " "), "resource": request.resource, consentField: consent,
 	}
 	cancel := cancelURL(request)
 	c.Status(http.StatusOK)
