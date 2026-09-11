@@ -124,7 +124,7 @@ test("telegram destination validates the chat ID before calling the API", async 
   expect(posted).toBe(false);
   await page.getByLabel("Chat ID", { exact: true }).fill("-1001234567890");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator(".followup-destination")).toContainText("Team channel");
+  await expect(page.getByTestId("destination")).toContainText("Team channel");
   await page.screenshot({ path: testInfo.outputPath("followup-settings.png"), fullPage: true });
 });
 
@@ -142,7 +142,7 @@ test("channel selection swaps the destination fields and posts the channel", asy
   const posted = page.waitForRequest((request) => request.url().endsWith("/notification-destinations") && request.method() === "POST");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   expect((await posted).postDataJSON()).toMatchObject({ kind: "lark", name: "Feishu group", url: "https://open.feishu.cn/open-apis/bot/v2/hook/abc", secret: "sign" });
-  await expect(page.locator(".followup-destination")).toContainText("Lark / Feishu");
+  await expect(page.getByTestId("destination")).toContainText("Lark / Feishu");
 
   await channel.selectOption("email");
   await expect(page.getByLabel("Webhook URL", { exact: true })).toHaveCount(0);
@@ -222,7 +222,7 @@ test("the settings page documents MCP and CLI access", async ({ page }, testInfo
   await expect(page.getByRole("group", { name: "Sign in" })).toContainText("prdesk login --host");
 
   // An authorized client can be revoked without leaving the page.
-  const token = page.locator(".access-token").filter({ hasText: "PR Desk CLI" });
+  const token = page.getByTestId("issued-token").filter({ hasText: "PR Desk CLI" });
   await expect(token).toContainText("Read and write");
   const revoked = page.waitForRequest((request) => request.url().includes("/api-tokens/1") && request.method() === "DELETE");
   await token.getByRole("button", { name: "Revoke" }).click();

@@ -33,6 +33,9 @@ const invisible = (prop, a, b, rowA, rowB) => {
     }
   }
   if (["top", "right", "bottom", "left"].includes(prop)) return rowA.position === "static" && rowB.position === "static";
+  // A data URI cannot carry a literal space inside an arbitrary value, so the
+  // same image arrives percent-encoded. It draws the same glyph.
+  if (prop === "backgroundImage") return a.replaceAll("%20", " ") === b.replaceAll("%20", " ");
   if (["alignItems", "alignContent", "justifyItems", "justifyContent", "alignSelf", "justifySelf"].includes(prop)) {
     const spell = (v) => v.replace(/^flex-/, "");
     return spell(a) === spell(b);

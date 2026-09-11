@@ -8,7 +8,31 @@ import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 import { AccessSettings } from "./AccessSettings";
-import { primaryAction } from "./action-styles";
+import { compactAction, dangerAction, primaryAction, secondaryAction } from "./action-styles";
+import {
+  destinationActions,
+  destinationForm,
+  rowConfirm,
+  rowFailing,
+  rowList,
+  rowNarrow,
+  rowState,
+  rowTag,
+  settingsActions,
+  settingsCard,
+  settingsEmptyNote,
+  settingsField,
+  settingsFieldError,
+  settingsFieldWide,
+  settingsFields,
+  settingsGroup,
+  settingsHeading,
+  settingsNote,
+  settingsSaveStatus,
+  settingsWarning,
+  teamList,
+  teamOption,
+} from "./settings-styles";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
@@ -120,12 +144,12 @@ function Field({ label, hint, error, wide, children }: { label: string; hint?: s
   const id = useId();
   const describedBy = [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ");
   return (
-    <div className={wide ? "followup-field followup-field-wide" : "followup-field"}>
+    <div className={wide ? `${settingsField} ${settingsFieldWide}` : settingsField}>
       <label htmlFor={id}>{label}</label>
       {children({ id, "aria-describedby": describedBy || undefined, "aria-invalid": error ? true : undefined })}
       {hint && <small id={`${id}-hint`}>{hint}</small>}
       {error && (
-        <p className="followup-field-error" id={`${id}-error`} role="alert">
+        <p className={settingsFieldError} id={`${id}-error`} role="alert">
           {error}
         </p>
       )}
@@ -175,7 +199,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const teamOptions = [...fetched, ...saved.filter((id) => !fetched.some((team) => team.id === id)).map((id) => ({ id, name: id }))];
   return (
     <form
-      className="followup-settings"
+      className={settingsCard}
       onChange={() => {
         if (mutation.isSuccess || mutation.isError) mutation.reset();
       }}
@@ -189,12 +213,12 @@ function SettingsForm({ settings }: { settings: Settings }) {
         mutation.mutate(parsed.days);
       }}
     >
-      <div className="followup-settings-group">
-        <div className="followup-settings-heading">
+      <div className={settingsGroup}>
+        <div className={settingsHeading}>
           <h2>{t("followup.schedule")}</h2>
           <p>{t("followup.scheduleHelp")}</p>
         </div>
-        <div className="followup-setting-fields">
+        <div className={settingsFields}>
           <Field label={t("followup.notificationLanguage")} hint={t("followup.notificationLanguageHelp")}>
             {(props) => (
               <select {...props} value={language} onChange={(e) => setLanguage(e.target.value as "en" | "zh-CN")}>
@@ -235,22 +259,22 @@ function SettingsForm({ settings }: { settings: Settings }) {
           </Field>
         </div>
       </div>
-      <fieldset className="followup-settings-group">
+      <fieldset className={settingsGroup}>
         <legend>{t("followup.teams")}</legend>
-        <p className="followup-settings-note">{t("followup.teamsHelp")}</p>
+        <p className={settingsNote}>{t("followup.teamsHelp")}</p>
         {teams.isError && (
-          <p className="followup-settings-warning" role="alert">
+          <p className={settingsWarning} role="alert">
             <span>{t("followup.teamsError")}</span>
-            <button className="secondary-action" type="button" onClick={() => teams.refetch()}>
+            <button className={secondaryAction} type="button" onClick={() => teams.refetch()}>
               {t("followup.retry")}
             </button>
           </p>
         )}
-        {teams.isPending && <p className="followup-settings-note">{t("loading")}</p>}
+        {teams.isPending && <p className={settingsNote}>{t("loading")}</p>}
         {teamOptions.length > 0 ? (
-          <div className="followup-team-list">
+          <div className={teamList}>
             {teamOptions.map((team) => (
-              <label key={team.id} className="followup-team">
+              <label key={team.id} className={teamOption}>
                 <input type="checkbox" checked={selected.includes(team.id)} onChange={(e) => setSelected((current) => (e.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id)))} />
                 <span>
                   {team.name}
@@ -260,10 +284,10 @@ function SettingsForm({ settings }: { settings: Settings }) {
             ))}
           </div>
         ) : (
-          !teams.isPending && !teams.isError && <p className="followup-empty-note">{t("followup.teamsEmpty")}</p>
+          !teams.isPending && !teams.isError && <p className={settingsEmptyNote}>{t("followup.teamsEmpty")}</p>
         )}
       </fieldset>
-      <div className="followup-settings-group">
+      <div className={settingsGroup}>
         <Field label={t("followup.overrides")} hint={t("followup.overridesHelp")} error={invalidLine ? t("followup.overridesInvalid", { line: invalidLine }) : undefined} wide>
           {(props) => (
             <textarea
@@ -279,17 +303,17 @@ function SettingsForm({ settings }: { settings: Settings }) {
           )}
         </Field>
       </div>
-      <div className="followup-settings-actions">
+      <div className={settingsActions}>
         <button className={primaryAction} type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t("followup.saving") : t("followup.save")}
         </button>
         {mutation.isError && (
-          <p className="followup-field-error" role="alert">
+          <p className={settingsFieldError} role="alert">
             {t("followup.saveError")}
           </p>
         )}
         {mutation.isSuccess && !mutation.isPending && (
-          <p className="followup-save-status" role="status">
+          <p className={settingsSaveStatus} role="status">
             <Check size={14} aria-hidden="true" />
             {t("followup.saved")}
           </p>
@@ -339,17 +363,17 @@ function NotificationDestinations() {
   });
   const rows = destinations.data?.data || [];
   return (
-    <section className="followup-settings" aria-labelledby="notification-destinations-heading">
-      <div className="followup-settings-group" ref={region} tabIndex={-1}>
+    <section className={settingsCard} aria-labelledby="notification-destinations-heading">
+      <div className={settingsGroup} ref={region} tabIndex={-1}>
         <p className="sr-only" role="status" aria-live="polite">
           {announcement.text}
         </p>
-        <div className="followup-settings-heading">
+        <div className={settingsHeading}>
           <h2 id="notification-destinations-heading">{t("followup.notifications")}</h2>
           <p>{t("followup.notificationsHelp")}</p>
         </div>
         <form
-          className="followup-destination-form"
+          className={destinationForm}
           onChange={() => {
             if (addDestination.isError) addDestination.reset();
           }}
@@ -382,7 +406,7 @@ function NotificationDestinations() {
           <Field label={t("followup.destinationName")} hint={t("followup.destinationNameHelp")} error={errors.name ? t(errors.name) : undefined}>
             {(props) => <input {...props} {...field("name")} />}
           </Field>
-          <p className="followup-settings-note followup-field-wide">{t(`followup.${draft.kind}Help`)}</p>
+          <p className={`${settingsNote} ${settingsFieldWide}`}>{t(`followup.${draft.kind}Help`)}</p>
           {draft.kind === "telegram" && (
             <>
               <Field label={t("followup.chatId")} hint={t("followup.chatIdHelp")} error={errors.chat_id ? t(errors.chat_id) : undefined}>
@@ -423,53 +447,53 @@ function NotificationDestinations() {
               </Field>
             </>
           )}
-          <div className="followup-destination-actions">
-            <button className="secondary-action" type="submit" disabled={addDestination.isPending}>
+          <div className={destinationActions}>
+            <button className={compactAction} type="submit" disabled={addDestination.isPending}>
               <Plus size={15} aria-hidden="true" />
               {addDestination.isPending ? t("followup.adding") : t("followup.add")}
             </button>
             {addDestination.isError && (
-              <p className="followup-field-error" role="alert">
+              <p className={settingsFieldError} role="alert">
                 {t("followup.addError")}
               </p>
             )}
           </div>
         </form>
         {destinations.isError ? (
-          <p className="followup-settings-warning" role="alert">
+          <p className={settingsWarning} role="alert">
             <span>{t("followup.destinationsError")}</span>
-            <button className="secondary-action" type="button" onClick={() => destinations.refetch()}>
+            <button className={secondaryAction} type="button" onClick={() => destinations.refetch()}>
               {t("followup.retry")}
             </button>
           </p>
         ) : rows.length === 0 && !destinations.isPending ? (
-          <p className="followup-empty-note">{t("followup.destinationsEmpty")}</p>
+          <p className={settingsEmptyNote}>{t("followup.destinationsEmpty")}</p>
         ) : (
-          <ul className="followup-destination-list">
+          <ul className={rowList}>
             {rows.map((destination) => (
-              <li key={destination.id} className="followup-destination">
+              <li key={destination.id} className={rowNarrow} data-testid="destination">
                 <strong>{destination.name}</strong>
-                <span className="followup-destination-kind">{t(channelLabel(destination.kind || "telegram"))}</span>
-                {destination.failing && <span className="followup-destination-failing">{t("followup.destinationFailing")}</span>}
+                <span className={rowTag}>{t(channelLabel(destination.kind || "telegram"))}</span>
+                {destination.failing && <span className={rowFailing}>{t("followup.destinationFailing")}</span>}
                 {confirming === destination.id ? (
                   <>
-                    <span className="followup-destination-confirm">{t("followup.confirmRemove")}</span>
-                    <button className="secondary-action followup-destination-danger" type="button" disabled={deleteDestination.isPending} onClick={() => deleteDestination.mutate(destination.id)}>
+                    <span className={rowConfirm}>{t("followup.confirmRemove")}</span>
+                    <button className={dangerAction} type="button" disabled={deleteDestination.isPending} onClick={() => deleteDestination.mutate(destination.id)}>
                       {t("followup.remove")}
                     </button>
-                    <button className="secondary-action" type="button" onClick={() => setConfirming(0)}>
+                    <button className={compactAction} type="button" onClick={() => setConfirming(0)}>
                       {t("followup.cancel")}
                     </button>
                   </>
                 ) : (
                   <>
-                    <span className="followup-destination-state" data-state={destination.enabled ? "enabled" : "disabled"}>
+                    <span className={rowState} data-state={destination.enabled ? "enabled" : "disabled"}>
                       {t(destination.enabled ? "followup.destinationEnabled" : "followup.destinationDisabled")}
                     </span>
-                    <button className="secondary-action" type="button" disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
+                    <button className={compactAction} type="button" disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
                       {t(destination.enabled ? "followup.disable" : "followup.enable")}
                     </button>
-                    <button className="secondary-action followup-destination-danger" type="button" onClick={() => setConfirming(destination.id)}>
+                    <button className={dangerAction} type="button" onClick={() => setConfirming(destination.id)}>
                       {t("followup.remove")}
                     </button>
                   </>
@@ -479,7 +503,7 @@ function NotificationDestinations() {
           </ul>
         )}
         {(updateDestination.isError || deleteDestination.isError) && (
-          <p className="followup-field-error" role="alert">
+          <p className={settingsFieldError} role="alert">
             {t("followup.destinationActionError")}
           </p>
         )}
@@ -530,7 +554,7 @@ export function FollowUpSettings() {
   return (
     // Radix carries the roving tab order and the arrow-key handling that a
     // tablist is expected to have, and only mounts the open panel.
-    <Tabs.Root className="followup-settings-page grid items-start gap-5" value={active} onValueChange={select}>
+    <Tabs.Root className="grid items-start gap-5" value={active} onValueChange={select}>
       {/* The strip runs the full width of the content area so it lines up with
           whatever the page puts above it; the panels keep a readable measure. */}
       <Tabs.List className="flex gap-1 overflow-x-auto border-b border-[var(--border)] [overscroll-behavior-x:contain] [scrollbar-width:thin]" aria-label={t("followup.settings")}>

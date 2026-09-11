@@ -5,6 +5,8 @@ import { Check, Copy } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
+import { compactAction, copyAction, dangerAction, secondaryAction } from "./action-styles";
+import { row, rowConfirm, rowList, rowTag, settingsCard, settingsEmptyNote, settingsField, settingsFieldError, settingsGroup, settingsHeading, settingsNote, settingsWarning } from "./settings-styles";
 
 // The endpoint an agent connects to is this deployment's own origin. apiURL is
 // empty in production because the Go server serves the app, so the browser's
@@ -20,7 +22,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <button
       type="button"
-      className="secondary-action access-copy"
+      className={copyAction}
       aria-label={label}
       onClick={() => {
         void navigator.clipboard?.writeText(value).then(
@@ -41,11 +43,15 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 function Snippet({ title, value, hint, copyLabel }: { title: string; value: string; hint: string; copyLabel: string }) {
   const id = useId();
   return (
-    <div className="followup-field">
-      <span className="access-label" id={id}>
+    <div className={settingsField}>
+      <span className="text-[12px] font-medium" id={id}>
         {title}
       </span>
-      <div className="access-snippet" role="group" aria-labelledby={id}>
+      <div
+        className="flex min-w-0 items-start gap-2 [@media(max-width:640px)]:flex-col [@media(max-width:640px)]:[&_pre]:w-full [&_code]:font-[family-name:ui-monospace,SFMono-Regular,Menlo,monospace] [&_code]:text-[12px] [&_code]:leading-[1.7] [&_code]:whitespace-pre [&_pre]:m-0 [&_pre]:min-w-0 [&_pre]:flex-1 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-[var(--border)] [&_pre]:bg-[var(--surface-muted)] [&_pre]:px-3 [&_pre]:py-2.5"
+        role="group"
+        aria-labelledby={id}
+      >
         <pre>
           <code>{value}</code>
         </pre>
@@ -79,39 +85,39 @@ function IssuedTokens() {
   const when = (value: string | null) => (value ? new Date(value).toLocaleDateString(i18n.resolvedLanguage) : t("access.never"));
   const rows = tokens.data?.data || [];
   return (
-    <div className="followup-settings-group">
-      <div className="followup-settings-heading">
+    <div className={settingsGroup}>
+      <div className={settingsHeading}>
         <h2 id="authorized-clients-heading">{t("access.tokens")}</h2>
         <p>{t("access.tokensHelp")}</p>
       </div>
       {tokens.isError ? (
-        <p className="followup-settings-warning" role="alert">
+        <p className={settingsWarning} role="alert">
           <span>{t("access.tokensError")}</span>
-          <button className="secondary-action" type="button" onClick={() => tokens.refetch()}>
+          <button className={secondaryAction} type="button" onClick={() => tokens.refetch()}>
             {t("followup.retry")}
           </button>
         </p>
       ) : rows.length === 0 && !tokens.isPending ? (
-        <p className="followup-empty-note">{t("access.noTokens")}</p>
+        <p className={settingsEmptyNote}>{t("access.noTokens")}</p>
       ) : (
-        <ul className="access-token-list">
+        <ul className={rowList}>
           {rows.map((token: IssuedToken) => (
-            <li key={token.id} className="access-token">
+            <li key={token.id} className={row} data-testid="issued-token">
               <strong>{token.name}</strong>
-              <span className="access-token-scope">{token.scopes.includes("followups:write") ? t("access.scopeWrite") : t("access.scopeRead")}</span>
-              <span className="access-token-dates">{t("access.lastUsed", { date: when(token.last_used_at) })}</span>
+              <span className={rowTag}>{token.scopes.includes("followups:write") ? t("access.scopeWrite") : t("access.scopeRead")}</span>
+              <span className="text-[12px] whitespace-nowrap text-[var(--muted)] [@media(max-width:640px)]:basis-full">{t("access.lastUsed", { date: when(token.last_used_at) })}</span>
               {confirming === token.id ? (
                 <>
-                  <span className="access-token-confirm">{t("access.confirmRevoke")}</span>
-                  <button className="secondary-action followup-destination-danger" type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(token.id)}>
+                  <span className={rowConfirm}>{t("access.confirmRevoke")}</span>
+                  <button className={dangerAction} type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(token.id)}>
                     {t("access.revoke")}
                   </button>
-                  <button className="secondary-action" type="button" onClick={() => setConfirming(0)}>
+                  <button className={compactAction} type="button" onClick={() => setConfirming(0)}>
                     {t("followup.cancel")}
                   </button>
                 </>
               ) : (
-                <button className="secondary-action followup-destination-danger" type="button" onClick={() => setConfirming(token.id)}>
+                <button className={dangerAction} type="button" onClick={() => setConfirming(token.id)}>
                   {t("access.revoke")}
                 </button>
               )}
@@ -120,7 +126,7 @@ function IssuedTokens() {
         </ul>
       )}
       {revoke.isError && (
-        <p className="followup-field-error" role="alert">
+        <p className={settingsFieldError} role="alert">
           {t("access.revokeError")}
         </p>
       )}
@@ -139,21 +145,21 @@ export function AccessSettings() {
   // and as one card they outweighed every other section on the page.
   return (
     <>
-      <section className="followup-settings" aria-labelledby="programmatic-access-heading">
-        <div className="followup-settings-group">
-          <div className="followup-settings-heading">
+      <section className={settingsCard} aria-labelledby="programmatic-access-heading">
+        <div className={settingsGroup}>
+          <div className={settingsHeading}>
             <h2 id="programmatic-access-heading">{t("access.mcp")}</h2>
             <p>{t("access.mcpHelp")}</p>
           </div>
           <Snippet title={t("access.endpoint")} value={endpoint} hint={t("access.endpointHelp")} copyLabel={t("access.copyEndpoint")} />
           <Snippet title={t("access.clientConfig")} value={clientConfig} hint={t("access.clientConfigHelp")} copyLabel={t("access.copyConfig")} />
-          <p className="followup-settings-note">{t("access.scopesHelp")}</p>
+          <p className={settingsNote}>{t("access.scopesHelp")}</p>
         </div>
       </section>
 
-      <section className="followup-settings" aria-labelledby="command-line-access-heading">
-        <div className="followup-settings-group">
-          <div className="followup-settings-heading">
+      <section className={settingsCard} aria-labelledby="command-line-access-heading">
+        <div className={settingsGroup}>
+          <div className={settingsHeading}>
             <h2 id="command-line-access-heading">{t("access.cli")}</h2>
             <p>{t("access.cliHelp")}</p>
           </div>
@@ -162,7 +168,7 @@ export function AccessSettings() {
         </div>
       </section>
 
-      <section className="followup-settings" aria-labelledby="authorized-clients-heading">
+      <section className={settingsCard} aria-labelledby="authorized-clients-heading">
         <IssuedTokens />
       </section>
     </>
