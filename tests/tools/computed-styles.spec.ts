@@ -138,6 +138,17 @@ test("capture computed styles", async ({ page }) => {
     }
   }
 
+  // The welcome page only exists for a visitor who has not connected an account,
+  // so the status endpoint is answered differently for this pass.
+  await page.route("**/api/v1/auth/status", (route) => route.fulfill({ json: { connected: false, username: "", sync_paused: false } }));
+  for (const width of [1280, 900, 800, 760, 640, 480, 400]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#/");
+    await settle();
+    await walk(`${width}/disconnected`);
+  }
+  await page.unroute("**/api/v1/auth/status");
+
   // Anything that only exists once opened is captured separately.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/#/");

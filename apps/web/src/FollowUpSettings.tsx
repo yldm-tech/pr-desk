@@ -8,6 +8,7 @@ import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 import { AccessSettings } from "./AccessSettings";
+import { primaryAction } from "./action-styles";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
@@ -279,7 +280,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
         </Field>
       </div>
       <div className="followup-settings-actions">
-        <button className="primary-action" type="submit" disabled={mutation.isPending}>
+        <button className={primaryAction} type="submit" disabled={mutation.isPending}>
           {mutation.isPending ? t("followup.saving") : t("followup.save")}
         </button>
         {mutation.isError && (
