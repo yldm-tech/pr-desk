@@ -81,7 +81,7 @@ function IssuedTokens() {
   return (
     <div className="followup-settings-group">
       <div className="followup-settings-heading">
-        <h2>{t("access.tokens")}</h2>
+        <h2 id="authorized-clients-heading">{t("access.tokens")}</h2>
         <p>{t("access.tokensHelp")}</p>
       </div>
       {tokens.isError ? (
@@ -134,28 +134,37 @@ export function AccessSettings() {
   const endpoint = origin + "/api/v1/mcp";
   // The shape every MCP client asks for: a named remote server and its URL.
   const clientConfig = JSON.stringify({ mcpServers: { "pr-desk": { url: endpoint } } }, null, 2);
+  // Three cards rather than three rules inside one: an MCP endpoint, a terminal
+  // command and the list of what currently holds a token are separate concerns,
+  // and as one card they outweighed every other section on the page.
   return (
-    <section className="followup-settings" aria-labelledby="programmatic-access-heading">
-      <div className="followup-settings-group">
-        <div className="followup-settings-heading">
-          <h2 id="programmatic-access-heading">{t("access.mcp")}</h2>
-          <p>{t("access.mcpHelp")}</p>
+    <>
+      <section className="followup-settings" aria-labelledby="programmatic-access-heading">
+        <div className="followup-settings-group">
+          <div className="followup-settings-heading">
+            <h2 id="programmatic-access-heading">{t("access.mcp")}</h2>
+            <p>{t("access.mcpHelp")}</p>
+          </div>
+          <Snippet title={t("access.endpoint")} value={endpoint} hint={t("access.endpointHelp")} copyLabel={t("access.copyEndpoint")} />
+          <Snippet title={t("access.clientConfig")} value={clientConfig} hint={t("access.clientConfigHelp")} copyLabel={t("access.copyConfig")} />
+          <p className="followup-settings-note">{t("access.scopesHelp")}</p>
         </div>
-        <Snippet title={t("access.endpoint")} value={endpoint} hint={t("access.endpointHelp")} copyLabel={t("access.copyEndpoint")} />
-        <Snippet title={t("access.clientConfig")} value={clientConfig} hint={t("access.clientConfigHelp")} copyLabel={t("access.copyConfig")} />
-        <p className="followup-settings-note">{t("access.scopesHelp")}</p>
-      </div>
+      </section>
 
-      <div className="followup-settings-group">
-        <div className="followup-settings-heading">
-          <h2>{t("access.cli")}</h2>
-          <p>{t("access.cliHelp")}</p>
+      <section className="followup-settings" aria-labelledby="command-line-access-heading">
+        <div className="followup-settings-group">
+          <div className="followup-settings-heading">
+            <h2 id="command-line-access-heading">{t("access.cli")}</h2>
+            <p>{t("access.cliHelp")}</p>
+          </div>
+          <Snippet title={t("access.cliSignIn")} value={`prdesk login --host ${origin} --write`} hint={t("access.cliSignInHelp")} copyLabel={t("access.copyCommand")} />
+          <Snippet title={t("access.cliCommon")} value={["prdesk followups --state action", "prdesk followups --json | jq '.follow_ups[]'", "prdesk handled <id> <version>"].join("\n")} hint={t("access.cliCommonHelp")} copyLabel={t("access.copyCommand")} />
         </div>
-        <Snippet title={t("access.cliSignIn")} value={`prdesk login --host ${origin} --write`} hint={t("access.cliSignInHelp")} copyLabel={t("access.copyCommand")} />
-        <Snippet title={t("access.cliCommon")} value={["prdesk followups --state action", "prdesk followups --json | jq '.follow_ups[]'", "prdesk handled <id> <version>"].join("\n")} hint={t("access.cliCommonHelp")} copyLabel={t("access.copyCommand")} />
-      </div>
+      </section>
 
-      <IssuedTokens />
-    </section>
+      <section className="followup-settings" aria-labelledby="authorized-clients-heading">
+        <IssuedTokens />
+      </section>
+    </>
   );
 }
