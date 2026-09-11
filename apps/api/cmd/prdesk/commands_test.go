@@ -137,6 +137,29 @@ func TestPrintSyncStatusExplainsALapsedAuthorization(t *testing.T) {
 	}
 }
 
+// Reading a failure without knowing when it was decided is what sends someone
+// investigating a run that ended before the last restart.
+func TestPrintSyncStatusDatesTheVerdict(t *testing.T) {
+	body := []byte(`{"status":"failed","error_code":"storage","reported_at":"2026-09-11T14:00:00Z","reported_age_minutes":180,"last_synced_at":"2026-09-11T16:00:00Z","stale_minutes":60,"baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if !strings.Contains(out, "reported 3h0m ago") {
+		t.Fatalf("the verdict was printed without its age:\n%s", out)
+	}
+	if !strings.Contains(out, "1h0m ago") {
+		t.Fatalf("the data age is missing:\n%s", out)
+	}
+}
+
+// A status with no timestamp must not render an age of zero, which would read
+// as "decided just now".
+func TestPrintSyncStatusOmitsTheAgeWhenItIsUnknown(t *testing.T) {
+	body := []byte(`{"status":"idle","baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if strings.Contains(out, "reported") {
+		t.Fatalf("an unknown verdict age was rendered anyway:\n%s", out)
+	}
+}
+
 func TestHumanMinutes(t *testing.T) {
 	for _, tc := range []struct {
 		minutes int
