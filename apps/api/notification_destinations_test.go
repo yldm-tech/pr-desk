@@ -10,6 +10,7 @@ import (
 )
 
 func TestNotificationDestinationsAreAccountScoped(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
 	db := integrationDB(t)
 	s := &Server{db: db}
 	_, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "dest-a", Username: "a", Token: "encrypted"}, 7001, "dest-browser-a")
