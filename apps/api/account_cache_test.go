@@ -32,15 +32,27 @@ func TestReconnectCacheRequiresVerifiedAccount(t *testing.T) {
 	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"id":42,"login":"fixture"}`)), Request: r}, nil
 	})}
-	if err := restoreAccountCache(context.Background(), db, current, 99); err != nil {
+	// A mismatched GitHub identity yields no donor, so nothing is copied.
+	donor, err := findCacheDonor(context.Background(), db, current, 99)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if donor != "" {
+		t.Fatal("another GitHub account was offered as a cache donor", donor)
 	}
 	var count int64
 	db.Model(&PullRequest{}).Where("session_id = ?", current.SessionID).Count(&count)
 	if count != 0 {
 		t.Fatal("copied another GitHub account's cache")
 	}
-	if err := restoreAccountCache(context.Background(), db, current, 42); err != nil {
+	donor, err = findCacheDonor(context.Background(), db, current, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if donor != old.SessionID {
+		t.Fatal("the matching account was not offered as a donor", donor)
+	}
+	if err := copySessionCache(db, donor, current.SessionID); err != nil {
 		t.Fatal(err)
 	}
 	var restored PullRequest
@@ -57,8 +69,14 @@ func TestReconnectCacheRequiresVerifiedAccount(t *testing.T) {
 	if comment.PullRequestID != restored.ID || comment.GitHubID != 88 {
 		t.Fatal("comment association was not restored")
 	}
-	if err := restoreAccountCache(context.Background(), db, current, 42); err != nil {
+	// Now that the cache exists, no donor is offered. That is what keeps a
+	// second sign-in from copying the same rows again.
+	donor, err = findCacheDonor(context.Background(), db, current, 42)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if donor != "" {
+		t.Fatal("a donor was offered although the cache is already populated", donor)
 	}
 	db.Model(&PullRequest{}).Where("session_id = ?", current.SessionID).Count(&count)
 	if count != 1 {

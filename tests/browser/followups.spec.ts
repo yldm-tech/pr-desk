@@ -310,3 +310,24 @@ test("the settings page documents MCP and CLI access", async ({ page }, testInfo
   await revoked;
   await page.screenshot({ path: testInfo.outputPath("access-settings.png"), fullPage: true });
 });
+
+test("a card action is announced and does not strand the focus", async ({ page }) => {
+  await page.goto("/#/attention?role=authored&status=action");
+  const card = page.locator(".followup-card");
+  await expect(card).toHaveCount(1);
+  const handled = card.getByRole("button", { name: "Handled · wait for others", exact: true });
+  await handled.focus();
+  await handled.click();
+  // The card is removed, so the button that had the focus is gone.
+  await expect(card).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Handle timezone boundaries" })).toBeAttached();
+  // Focus must land somewhere in the workspace rather than on the body.
+  const stranded = await page.evaluate(() => document.activeElement === document.body);
+  expect(stranded).toBe(false);
+});
+
+test("the sync dismiss button is not named after the activity panel", async ({ page }) => {
+  await page.goto("/#/attention");
+  // Both buttons used to be announced as "Close activity".
+  await expect(page.getByRole("button", { name: "Close activity" })).toHaveCount(0);
+});

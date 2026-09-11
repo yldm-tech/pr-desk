@@ -258,5 +258,6 @@
   "welcomeUpdateTitle": "Keep your place",
   "welcomeUpdateDescription": "Background sync keeps updates together, even when this tab is closed.",
   "publicRepositories": "Public repositories",
-  "openStatus": "Open"
+  "openStatus": "Open",
+  "dismissMessage": "Dismiss this message"
 }

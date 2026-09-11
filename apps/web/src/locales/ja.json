@@ -258,5 +258,6 @@
   "welcomeUpdateTitle": "更新を見逃さない",
   "welcomeUpdateDescription": "タブを閉じてもバックグラウンドで更新を続けます。",
   "publicRepositories": "公開リポジトリ",
-  "openStatus": "オープン"
+  "openStatus": "オープン",
+  "dismissMessage": "このメッセージを閉じる"
 }

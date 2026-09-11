@@ -210,3 +210,42 @@ func TestOutboxOnlyMaterializesConnectedAccounts(t *testing.T) {
 		t.Fatal("a disconnected account would still be sent notifications", sessions)
 	}
 }
+
+// A destination that never recovers must not stay in the queue forever: the
+// message is parked, and the destination is reported as failing so it is
+// visible instead of silently dropped.
+func TestDeliveryGivesUpAfterRepeatedFailures(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+	cipher, err := crypt(mustJSON(destinationConfig{URL: "https://example.test/hook"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := NotificationDestination{SessionID: "give-up", Name: "broken", Kind: destinationWebhook, Enabled: true, ConfigCipher: cipher}
+	if err := db.Create(&destination).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&NotificationDelivery{SessionID: "give-up", DestinationID: destination.ID, MessageKey: "k:0", Body: "body", AvailableAt: now, Attempts: deliveryAttemptLimit - 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	failing := func(context.Context, NotificationDestination, NotificationDelivery) error {
+		return errors.New("endpoint is gone")
+	}
+	claimed, err := s.deliverOneNotification(context.Background(), now.Add(time.Hour), failing)
+	if err != nil || !claimed {
+		t.Fatal("the delivery was not attempted", claimed, err)
+	}
+	var row NotificationDelivery
+	if err := db.Where("destination_id = ?", destination.ID).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.SkippedAt == nil || row.LastError != "gave_up" {
+		t.Fatal("a permanently failing delivery is still queued", row.SkippedAt, row.LastError)
+	}
+	// It must not be claimed again on the next tick.
+	if claimed, err := s.deliverOneNotification(context.Background(), now.Add(2*time.Hour), failing); err != nil || claimed {
+		t.Fatal("a parked delivery was retried", claimed, err)
+	}
+}

@@ -43,9 +43,20 @@ func (s *Server) listNotificationDestinations(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Unable to load notification destinations"})
 		return
 	}
+	// A destination that gave up would otherwise fail in silence: nothing in the
+	// UI distinguishes "nothing to send" from "everything was dropped".
+	var abandoned []uint
+	if err := s.db.Model(&NotificationDelivery{}).Where("session_id = ? AND last_error = ?", account.SessionID, "gave_up").Distinct("destination_id").Pluck("destination_id", &abandoned).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Unable to load notification destinations"})
+		return
+	}
+	failing := map[uint]bool{}
+	for _, id := range abandoned {
+		failing[id] = true
+	}
 	out := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, gin.H{"id": r.ID, "name": r.Name, "kind": destinationKind(r.Kind), "enabled": r.Enabled})
+		out = append(out, gin.H{"id": r.ID, "name": r.Name, "kind": destinationKind(r.Kind), "enabled": r.Enabled, "failing": failing[r.ID]})
 	}
 	// The form mirrors the outbound address policy, so it has to know whether this
 	// deployment opted into private addresses.

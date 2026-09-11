@@ -41,6 +41,11 @@ type NotificationDelivery struct {
 	CreatedAt     time.Time
 }
 
+// Twelve attempts with the capped exponential backoff spans a little over a
+// day. A destination that has accepted nothing in that window is broken, not
+// briefly unavailable.
+const deliveryAttemptLimit = 12
+
 type notificationSender func(context.Context, NotificationDestination, NotificationDelivery) error
 
 // A failed delivery records only a fixed classification, so that an upstream
@@ -61,6 +66,19 @@ func deliveryErrorSummary(err error) string {
 		return string(runes[:200])
 	}
 	return summary
+}
+
+// Only the pull requests a follow-up points at are ever looked up.
+func trackedPullRequestIDs(follows []FollowUp) []uint {
+	seen := map[uint]bool{}
+	ids := make([]uint, 0, len(follows))
+	for _, follow := range follows {
+		if !seen[follow.PullRequestID] {
+			seen[follow.PullRequestID] = true
+			ids = append(ids, follow.PullRequestID)
+		}
+	}
+	return ids
 }
 
 func digestDue(settings FollowUpSettings, now time.Time) (string, bool) {
@@ -158,12 +176,14 @@ func (s *Server) queueAccountNotifications(ctx context.Context, sid string, now 
 			return nil
 		}
 		var follows []FollowUp
-		var prs []PullRequest
 		if err := tx.Where("session_id = ?", sid).Find(&follows).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("session_id = ?", sid).Find(&prs).Error; err != nil {
-			return err
+		var prs []PullRequest
+		if tracked := trackedPullRequestIDs(follows); len(tracked) > 0 {
+			if err := tx.Where("session_id = ? AND id IN ?", sid, tracked).Find(&prs).Error; err != nil {
+				return err
+			}
 		}
 		byID := map[uint]PullRequest{}
 		for _, pr := range prs {
@@ -326,6 +346,14 @@ func (s *Server) deliverOneNotification(ctx context.Context, now time.Time, send
 	if err == nil {
 		updates["sent_at"] = now
 		updates["last_error"] = ""
+	} else if delivery.Attempts >= deliveryAttemptLimit {
+		// By now the backoff is an hour and the destination has been failing for
+		// about a day. Retrying forever keeps a dead endpoint in the queue and
+		// hides it, so the message is parked and the destination is reported as
+		// failing where the account holder can see it.
+		updates["skipped_at"] = now
+		updates["last_error"] = "gave_up"
+		log.Printf("Notification outbox: destination %d gave up after %d attempts: %s", destination.ID, delivery.Attempts, deliveryErrorSummary(err))
 	} else {
 		delay := time.Minute * time.Duration(1<<min(delivery.Attempts-1, 6))
 		updates["available_at"] = now.Add(delay)

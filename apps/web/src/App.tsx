@@ -365,7 +365,7 @@ export default function App() {
         {filter !== "About" && syncFeedback && !remoteSyncing && (
           <div className={`sync-feedback ${syncFeedback.error ? "sync-feedback-error" : ""}`} role={syncFeedback.error ? "alert" : "status"}>
             <span>{syncFeedback.message}</span>
-            <button aria-label={t("close")} onClick={() => setSyncFeedback(null)}>
+            <button aria-label={t("dismissMessage")} onClick={() => setSyncFeedback(null)}>
               ×
             </button>
           </div>
