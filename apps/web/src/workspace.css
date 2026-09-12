@@ -364,92 +364,6 @@
   .secondary-action:hover {
     background: var(--surface-muted);
   }
-  .achievement-top,
-  .achievement-bottom {
-    gap: 18px;
-  }
-  .achievement-bottom {
-    margin-top: 18px;
-  }
-  .achievement-score,
-  .achievement-outcomes,
-  .achievement-panel {
-    border-radius: 12px;
-  }
-  .achievement-score {
-    background: var(--surface);
-    color: var(--foreground);
-    border: 1px solid var(--border);
-    --hero-muted: var(--muted);
-    --hero-text: var(--foreground);
-    --hero-border: var(--border-subtle);
-    --skeleton-hero-base: var(--skeleton-base);
-    --skeleton-hero-highlight: var(--skeleton-highlight);
-  }
-  .score-label svg {
-    color: var(--accent-text);
-  }
-  .score-watermark {
-    display: none;
-  }
-  .score-number {
-    color: var(--accent-text);
-  }
-  .score-number {
-    font-size: 60px;
-  }
-  .score-label {
-    font-size: 13px;
-  }
-  .score-number > span {
-    letter-spacing: 0;
-  }
-  .panel-heading h2 {
-    font-size: 14px;
-    letter-spacing: 0;
-  }
-  .panel-description {
-    line-height: 1.7;
-  }
-  .visibility-tabs {
-    margin-bottom: 12px;
-  }
-  .visibility-feedback {
-    margin-bottom: 12px;
-  }
-  .overview-year-tabs {
-    margin-bottom: 20px;
-    scrollbar-color: var(--border) transparent;
-  }
-  .distribution-details {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-  .distribution-details tr:hover td {
-    background: var(--surface-muted);
-  }
-  .distribution-details th,
-  .distribution-details td {
-    padding: 12px 8px;
-  }
-  .distribution-details th {
-    background: var(--surface-muted);
-  }
-  .trend-header {
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .trend-repo-trigger {
-    max-width: 100%;
-    flex: 1;
-    min-width: 160px;
-    width: auto;
-    background: var(--surface);
-  }
-  .trend-header .panel-heading {
-    flex: 1;
-    min-width: 130px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -485,9 +399,6 @@
   .access-skeleton {
     margin-bottom: 16px;
   }
-  .access-skeleton .authorized-accounts {
-    margin-bottom: 0;
-  }
   .skeleton-sync-note {
     display: block;
     width: 260px;
@@ -514,9 +425,7 @@
     background: var(--surface);
     z-index: 2;
   }
-  .filters button,
-  .visibility-tabs button,
-  .overview-year-tab {
+  .filters button {
     min-height: 36px;
   }
   button:disabled {
@@ -566,10 +475,6 @@
   .activity-footer .secondary-action {
     font-size: 12px;
     padding: 9px 12px;
-  }
-  .panel-kicker {
-    white-space: normal;
-    text-align: right;
   }
 }
 

@@ -1,5 +1,6 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
+import { achievementBottom, achievementOutcomes, achievementPanel, achievementScore, achievementTop, authorizedAccounts, outcomesContent, scoreSecondary } from "./overview-styles";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
 import { repositoryAction, repositoryControls, repositoryIdentity, repositoryListCaption, repositoryListPanel, repositoryNumber, repositoryRow, repositoryRows, repositorySummary, repositorySummaryItem } from "./repository-styles";
 import { accountTrigger, profileBio, profileIdentity, profileMetadata, profileStats } from "./profile-styles";
@@ -23,23 +24,23 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               </div>
             </div>
           )}
-          <div className="achievement-top grid grid-cols-1 @[800px]/overview:grid-cols-2">
-            <article className="achievement-score">
+          <div className={`${achievementTop} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+            <article className={`${achievementScore} pt-7`}>
               <SkeletonTheme baseColor="var(--skeleton-hero-base)" highlightColor="var(--skeleton-hero-highlight)">
                 <Skeleton width="36%" height={15} />
                 <div className="skeleton-score">
                   <Skeleton width="65%" height={66} />
                 </div>
                 <Skeleton width="32%" height={14} />
-                <div className="score-secondary">
+                <div className={scoreSecondary}>
                   <Skeleton height={20} />
                   <Skeleton height={20} />
                 </div>
               </SkeletonTheme>
             </article>
-            <article className="achievement-outcomes">
+            <article className={achievementOutcomes}>
               <Skeleton width="35%" height={17} />
-              <div className="outcomes-content">
+              <div className={outcomesContent}>
                 <Skeleton circle width={150} height={150} />
                 <div className="skeleton-legend">
                   <Skeleton count={3} height={18} />
@@ -47,8 +48,8 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               </div>
             </article>
           </div>
-          <div className="achievement-bottom grid grid-cols-1 @[800px]/overview:grid-cols-2">
-            <article className="achievement-panel">
+          <div className={`${achievementBottom} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+            <article className={achievementPanel}>
               <Skeleton width="30%" height={17} />
               <div className="mt-3">
                 <Skeleton width="55%" height={12} />
@@ -59,9 +60,9 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               </div>
               <Skeleton height={280} />
             </article>
-            <article className="achievement-panel">
+            <article className={achievementPanel}>
               <Skeleton width="35%" height={17} />
-              <div className="outcomes-content">
+              <div className={outcomesContent}>
                 <Skeleton circle width={130} height={130} />
                 <div className="skeleton-legend">
                   <Skeleton count={4} height={14} />
@@ -230,7 +231,7 @@ export function ActivitySkeleton() {
 export function AccessSkeleton() {
   return (
     <LoadingFrame className="access-skeleton">
-      <div className="authorized-accounts">
+      <div className={`${authorizedAccounts} mb-0`}>
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} width={160} height={30} />
         ))}

@@ -24,8 +24,20 @@ const paintedShadow = (value) =>
     .filter((s) => !transparent.test(s))
     .join(", ") || "none";
 
+const parentOf = (key, snapshot) => {
+  const [label, path] = key.split("|");
+  const parts = path.split("/");
+  return snapshot[`${label}|${parts.slice(0, -1).join("/")}`];
+};
+
 const SIDES = ["Top", "Right", "Bottom", "Left"];
-const invisible = (prop, a, b, rowA, rowB) => {
+const invisible = (prop, a, b, rowA, rowB, key) => {
+  // Grid placement on a child of something that is not a grid is carried but
+  // never used.
+  if (prop === "gridColumn" || prop === "gridRow") {
+    const grid = (row) => row && /grid/.test(row.display);
+    return !grid(parentOf(key, before)) && !grid(parentOf(key, after));
+  }
   if (prop === "boxShadow") return paintedShadow(a) === paintedShadow(b);
   for (const side of SIDES) {
     if (prop === `border${side}Style` || prop === `border${side}Color`) {
@@ -44,12 +56,24 @@ const invisible = (prop, a, b, rowA, rowB) => {
   return false;
 };
 
+// An element whose parent was skipped is inside something the layout hides.
+// Its own computed style is still readable, and still cannot be seen.
+const hidden = (key, snapshot) => {
+  const [label, path] = key.split("|");
+  const parts = path.split("/");
+  // The walk records the descendants of body, not body itself, so the first
+  // component of a path never has a record and must not be read as hidden.
+  for (let i = 2; i < parts.length; i++) if (!snapshot[`${label}|${parts.slice(0, i).join("/")}`]) return true;
+  return false;
+};
+
 let changed = 0;
 let missing = 0;
 let added = 0;
 const byProp = new Map();
 
 for (const key of Object.keys(before)) {
+  if (hidden(key, before)) continue;
   if (!after[key]) {
     missing++;
     if (showAll) console.log(`GONE  ${key}`);
@@ -58,7 +82,7 @@ for (const key of Object.keys(before)) {
   for (const prop of Object.keys(before[key])) {
     const a = before[key][prop];
     const b = after[key][prop];
-    if (a === b || invisible(prop, a, b, before[key], after[key])) continue;
+    if (a === b || invisible(prop, a, b, before[key], after[key], key)) continue;
     changed++;
     if (!byProp.has(prop)) byProp.set(prop, []);
     byProp.get(prop).push(`${key}\n      ${a}\n   -> ${b}`);

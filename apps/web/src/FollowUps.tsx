@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { inlineAction, secondaryAction } from "./action-styles";
+import { panelHeading } from "./overview-styles";
 import { followUpActions, followUpCard, followUpCardHeading, followUpCounts, followUpExcerpt, followUpFilters, followUpPriority, followUpPriorityReasons, followUpReason, followUpReasonCompact, followUpReasons, followUpSnooze, followUpSummary, followUpWait, followUpWorkspace } from "./followup-styles";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -130,7 +131,7 @@ export function FollowUpSummary() {
           </Link>
         ))}
       </div>
-      <div className="panel-heading">
+      <div className={panelHeading}>
         <h2>{t("followup.priority")}</h2>
         <Link to="/attention">{t("followup.viewAll")}</Link>
       </div>
@@ -203,7 +204,7 @@ export function FollowUpWorkspace() {
         {announcement.text}
       </p>
       {query.data && !query.data.baseline_complete && <p role="status">{t("followup.baseline")}</p>}
-      <div className="panel-heading">
+      <div className={panelHeading}>
         <h2>{t("followup.title")}</h2>
         <Link to="/settings">{t("followup.goSettings")}</Link>
       </div>
