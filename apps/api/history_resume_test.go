@@ -40,6 +40,67 @@ func TestHistoryRecordsACursorForEachCompletedInterval(t *testing.T) {
 	}
 }
 
+// A resumed walk finishes reading records the interrupted run left behind, but
+// everything before the cursor was read by that earlier run. Stamping the
+// finished walk with the resuming run's clock means the incremental query and the
+// still-open search that follow it never look at the interruption window again,
+// so a pull request merged while the walk was down stays open in the dashboard
+// forever.
+func TestResumedWalkKeepsTheClockOfTheRunThatStartedIt(t *testing.T) {
+	db := integrationDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	encrypted, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"total_count":0,"incomplete_results":false,"items":[]}`)), Request: req}, nil
+	})}
+	s := &Server{db: db}
+	walkStarted := time.Now().UTC().Add(-72 * time.Hour).Truncate(time.Second)
+	cursor := walkStarted.Add(time.Hour)
+	interrupted := OAuthToken{SessionID: "resumed-walk", Token: encrypted, HistoryCursor: &cursor, HistoryWalkStartedAt: &walkStarted}
+	if err := db.Create(&interrupted).Error; err != nil {
+		t.Fatal(err)
+	}
+	if result := s.syncSession(context.Background(), interrupted.SessionID, false, false); result.status != 200 {
+		t.Fatal(result.body)
+	}
+	var stored OAuthToken
+	if err := db.First(&stored, interrupted.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.HistoryWalkedAt == nil || !stored.HistoryWalkedAt.UTC().Equal(walkStarted) {
+		t.Fatalf("the resumed walk claims to have read everything up to %v, not %v", stored.HistoryWalkedAt, walkStarted)
+	}
+	// The incremental query asks GitHub about everything changed since this one, so it has to move back with the walk.
+	if stored.HistorySyncedAt == nil || !stored.HistorySyncedAt.UTC().Equal(walkStarted) {
+		t.Fatalf("the next incremental run would start from %v, skipping the interruption window", stored.HistorySyncedAt)
+	}
+	if stored.HistoryCursor != nil || stored.HistoryWalkStartedAt != nil {
+		t.Fatal("a finished walk left its resume state behind")
+	}
+
+	// An uninterrupted walk still stamps its own start, and records where it began so its own resume can use it.
+	fresh := OAuthToken{SessionID: "fresh-walk", Token: encrypted}
+	if err := db.Create(&fresh).Error; err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now().UTC()
+	if result := s.syncSession(context.Background(), fresh.SessionID, false, false); result.status != 200 {
+		t.Fatal(result.body)
+	}
+	var refreshed OAuthToken
+	if err := db.First(&refreshed, fresh.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if refreshed.HistoryWalkedAt == nil || refreshed.HistoryWalkedAt.UTC().Before(started) {
+		t.Fatalf("a walk that resumed nothing did not stamp its own run: %v", refreshed.HistoryWalkedAt)
+	}
+}
+
 // The cursor has to advance in creation-time order, otherwise resuming from it
 // would skip records that were never fetched.
 func TestHistoryCursorAdvancesInOrderAcrossSplitIntervals(t *testing.T) {

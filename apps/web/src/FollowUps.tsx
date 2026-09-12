@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { inlineAction, secondaryAction } from "./action-styles";
+import { inlineAction, linkAction, secondaryAction } from "./action-styles";
 import { panelHeading } from "./overview-styles";
+import { syncStatusError } from "./status-styles";
 import { linkButton, searchChip } from "./app-styles";
 import { followUpActions, followUpCard, followUpCardHeading, followUpCounts, followUpExcerpt, followUpFilters, followUpPriority, followUpPriorityReasons, followUpReason, followUpReasonCompact, followUpReasons, followUpSnooze, followUpSummary, followUpWait, followUpWorkspace } from "./followup-styles";
 import { Link, useSearchParams } from "react-router-dom";
@@ -119,7 +120,9 @@ export function FollowUpSummary() {
   const { t } = useTranslation();
   const query = useFollowUps();
   if (query.isPending) return <p role="status">{t("loading")}</p>;
-  if (query.isError)
+  // One failed poll out of a minute's worth is not a reason to blank counts
+  // that are at most a minute old; only an empty cache leaves nothing to show.
+  if (query.isError && !query.data)
     return (
       <p role="alert">
         {t("followup.unavailable")} <button onClick={() => query.refetch()}>{t("followup.retry")}</button>
@@ -128,6 +131,14 @@ export function FollowUpSummary() {
   const priority = query.data.data.filter((item) => item.state === "action" || item.state === "follow_up").slice(0, 5);
   return (
     <section className={followUpSummary} aria-label={t("followup.title")}>
+      {query.isError && (
+        <div className={syncStatusError} role="status">
+          <span>{t("refreshFailedKeepData")}</span>
+          <button className={linkAction} onClick={() => query.refetch()}>
+            {t("retry")}
+          </button>
+        </div>
+      )}
       {!query.data.baseline_complete && <p role="status">{t("followup.baseline")}</p>}
       <div className={followUpCounts}>
         {["authored", "reviewer", "follow_up", "recent_merged"].map((key) => (
@@ -222,6 +233,14 @@ export function FollowUpWorkspace() {
           </button>
         </p>
       )}
+      {query.isError && query.data && (
+        <div className={syncStatusError} role="status">
+          <span>{t("refreshFailedKeepData")}</span>
+          <button className={linkAction} onClick={() => query.refetch()}>
+            {t("retry")}
+          </button>
+        </div>
+      )}
       <div className={followUpFilters}>
         <div role="group" aria-label={t("followup.title")}>
           {["all", "authored", "reviewer"].map((value) => (
@@ -241,7 +260,7 @@ export function FollowUpWorkspace() {
       {status === "draft" && <p>{t("followup.draftHelp")}</p>}
       {query.isPending ? (
         <p role="status">{t("loading")}</p>
-      ) : query.isError ? (
+      ) : query.isError && !query.data ? (
         <p role="alert">
           {t("followup.unavailable")} <button onClick={() => query.refetch()}>{t("followup.retry")}</button>
         </p>

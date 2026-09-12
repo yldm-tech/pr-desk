@@ -25,6 +25,7 @@ playwright-report/
 
 # Go build output
 apps/api/api
+apps/api/prdesk
 apps/api/cmd/prdesk/prdesk
 
 # GitNexus code index, rebuilt locally by `npx gitnexus analyze`

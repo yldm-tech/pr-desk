@@ -30,7 +30,7 @@ import { RepositorySkeleton } from "./LoadingSkeleton";
 import type { RepositorySummary } from "./pr-model";
 
 export function Repositories({ repositories, loading, error, retry }: { repositories: RepositorySummary[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") || "";
   const owner = params.get("owner") || "";
@@ -76,7 +76,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                 <Icon size={17} aria-hidden="true" />
                 {t(label)}
               </span>
-              <strong>{loading || !repositories ? "—" : counts[value].toLocaleString()}</strong>
+              <strong>{loading || !repositories ? "—" : counts[value].toLocaleString(i18n.resolvedLanguage)}</strong>
             </Tabs.Trigger>
           ))}
         </Tabs.List>
@@ -186,13 +186,13 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                           <GitPullRequest size={13} />
                           {t("open")}
                         </span>
-                        {repo.open.toLocaleString()}
+                        {repo.open.toLocaleString(i18n.resolvedLanguage)}
                       </Link>
                       <div className={repositoryNumber}>
                         <span className={repositoryMobileLabel}>{t("navAttention")}</span>
                         {repo.needs_attention > 0 ? (
                           <Link className={repositoryAttention} to={"/attention?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
-                            {repo.needs_attention.toLocaleString()}
+                            {repo.needs_attention.toLocaleString(i18n.resolvedLanguage)}
                           </Link>
                         ) : (
                           <span className={repositoryZero}>0</span>
@@ -200,11 +200,11 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                       </div>
                       <div className={repositoryNumber}>
                         <span className={repositoryMobileLabel}>{t("conflicts")}</span>
-                        <span className={repo.conflicts ? repositoryConflicts : repositoryZero}>{repo.conflicts.toLocaleString()}</span>
+                        <span className={repo.conflicts ? repositoryConflicts : repositoryZero}>{repo.conflicts.toLocaleString(i18n.resolvedLanguage)}</span>
                       </div>
                       <div className={repositoryNumber}>
                         <span className={repositoryMobileLabel}>{t("checksFailing")}</span>
-                        <span className={repo.checks_failing ? repositoryConflicts : repositoryZero}>{repo.checks_failing.toLocaleString()}</span>
+                        <span className={repo.checks_failing ? repositoryConflicts : repositoryZero}>{repo.checks_failing.toLocaleString(i18n.resolvedLanguage)}</span>
                       </div>
                       <Link className={repositoryAction} to={prURL}>
                         {repo.needs_attention === 0 && <Check size={14} className="opacity-60" aria-hidden="true" />}

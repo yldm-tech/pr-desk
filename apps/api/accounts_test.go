@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +37,26 @@ func TestAccountReconnectAndBrowserIsolation(t *testing.T) {
 	r := gin.New()
 	r.Use(s.resolveBrowserSession)
 	r.GET("/prs", s.listPRs)
+	r.GET("/settings", s.getFollowUpSettings)
 	r.POST("/logout", s.logout)
+	visible := func(cookie string) int {
+		req := httptest.NewRequest("GET", "/prs", nil)
+		req.AddCookie(&http.Cookie{Name: "pr_session", Value: cookie})
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		var response struct{ Total int }
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		return response.Total
+	}
+	settingsStatus := func(cookie string) int {
+		req := httptest.NewRequest("GET", "/settings", nil)
+		req.AddCookie(&http.Cookie{Name: "pr_session", Value: cookie})
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
 	for _, cookie := range []string{"browser-a", "browser-b", "browser-other", "durable-a", "forged", ""} {
 		req := httptest.NewRequest("GET", "/prs", nil)
 		req.AddCookie(&http.Cookie{Name: "pr_session", Value: cookie})
@@ -71,6 +92,64 @@ func TestAccountReconnectAndBrowserIsolation(t *testing.T) {
 	db.Model(&PullRequest{}).Where("session_id = ?", first.SessionID).Count(&count)
 	if count != 1 {
 		t.Fatal("logout deleted history")
+	}
+	// Disconnect is the only sign-out control and it pauses the account everywhere, so the browser on the machine that was signed out of must lose it too.
+	var sessions int64
+	db.Model(&BrowserSession{}).Where("account_id = ?", first.ID).Count(&sessions)
+	if sessions != 0 {
+		t.Fatalf("disconnect left %d browser sessions holding the account", sessions)
+	}
+	if total := visible("browser-b"); total != 0 {
+		t.Fatalf("a browser that was not the one signing out still reads %d pull requests", total)
+	}
+	if status := settingsStatus("browser-b"); status != 401 {
+		t.Fatalf("a browser that was not the one signing out still reaches account settings: %d", status)
+	}
+	// Reconnecting must not revive it either: the old row is gone, and only the browser that reconnected holds the account.
+	if _, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "unused-reconnect", Username: "fixture", Token: "encrypted-d"}, 1234, "browser-c"); err != nil {
+		t.Fatal(err)
+	}
+	if total := visible("browser-b"); total != 0 {
+		t.Fatalf("reconnecting revived an abandoned browser session: %d pull requests", total)
+	}
+	if total := visible("browser-c"); total != 1 {
+		t.Fatalf("the reconnected browser cannot read its own account: %d pull requests", total)
+	}
+}
+
+// Every sign-in mints a fresh partition, so the cache donor search can only ever
+// matter for a first login. For a returning user it decrypted the account's own
+// stored token and asked GitHub to confirm an identity the caller already knew,
+// then threw the answer away — a GitHub round trip inside the sign-in request.
+func TestReturningLoginDoesNotAskGitHubForACacheDonor(t *testing.T) {
+	db := integrationDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	encrypted, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{db: db}
+	first, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "donor-storage", Username: "fixture", Token: encrypted}, 1234, "donor-browser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&PullRequest{SessionID: first.SessionID, State: "open", Title: "cached", Number: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	calls := 0
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"id":1234,"login":"fixture"}`)), Request: r}, nil
+	})}
+	// The same login name as the stored account: a renamed one matches no candidate and would not exercise the donor search at all.
+	second, err := s.connectAccount(context.Background(), OAuthToken{SessionID: "unused-partition", Username: "fixture", Token: encrypted}, 1234, "donor-browser-2")
+	if err != nil || second.ID != first.ID || second.SessionID != first.SessionID {
+		t.Fatalf("reconnect did not preserve identity: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("a returning sign-in made %d GitHub requests to resolve a cache donor it then discarded", calls)
 	}
 }
 

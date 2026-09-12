@@ -5,6 +5,7 @@ import { FollowUpSummary, FollowUpWorkspace, useFollowUps } from "./FollowUps";
 import { FollowUpSettings } from "./FollowUpSettings";
 import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
+import { isChunkLoadError } from "./chunk-error";
 import { checkToneClass } from "./activity-model";
 import { emptyState, linkAction, secondaryAction } from "./action-styles";
 import {
@@ -72,22 +73,58 @@ import { ActivityDialog } from "./ActivityDialog";
 import { ActivityPanel } from "./ActivityPanel";
 import { activitySchema } from "./activity-model";
 import React from "react";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation, keepPreviousData } from "@tanstack/react-query";
 
 import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ExternalLink, Settings2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
-import { parsePRPage, listParameters, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
+import { parsePRPage, listParameters, oauthBanner, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
 const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
 function statusKey(status: string) {
   return ({ Open: "openStatus", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
 }
+function CrashFallback() {
+  const { t } = useTranslation();
+  return (
+    <section className={emptyState} role="alert">
+      <AlertTriangle size={28} />
+      <h2>{t("appCrashed")}</h2>
+      <button className={secondaryAction} onClick={() => location.reload()}>
+        {t("reloadApp")}
+      </button>
+    </section>
+  );
+}
+// React 19 unmounts the whole root on an uncaught render error, which leaves a blank page with no way back.
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    // React does not log an error a boundary handled, and the stack is what makes a report actionable.
+    console.error(error);
+    // An upgraded server serves new chunk hashes, so an open tab asks for a file that is gone; one reload adopts the new build, and the flag keeps a permanently broken deploy from looping.
+    if (isChunkLoadError(error) && !sessionStorage.getItem("prdesk-chunk-reload")) {
+      sessionStorage.setItem("prdesk-chunk-reload", "1");
+      location.reload();
+    }
+  }
+  render() {
+    return this.state.failed ? <CrashFallback /> : this.props.children;
+  }
+}
 export default function App() {
   const { t } = useTranslation();
-  const oauthError = new URLSearchParams(location.search).get("oauth_error");
+  const [oauthError, setOauthError] = React.useState(() => oauthBanner(location.search).error);
+  React.useEffect(() => {
+    // HashRouter only ever rewrites the fragment, so the OAuth query flag would outlive every navigation and reload.
+    const { cleanedSearch } = oauthBanner(location.search);
+    if (cleanedSearch !== location.search) window.history.replaceState(window.history.state, "", location.pathname + cleanedSearch + location.hash);
+  }, []);
   const queryClient = useQueryClient();
   const route = useLocation();
   const navigate = useNavigate();
@@ -219,7 +256,7 @@ export default function App() {
     },
     staleTime: 30000,
   });
-  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  const { data, isLoading, isError, isFetching, isPlaceholderData, refetch } = useQuery({
     queryKey: ["prs", filter, page, search, repository],
     retry: 1,
     enabled: !!auth?.connected && !["Overview", "Repositories", "About", "Settings", "Needs attention"].includes(filter),
@@ -230,6 +267,8 @@ export default function App() {
     },
     staleTime: 30000,
     refetchInterval: 60000,
+    // Paging and filtering mint a new key: keep the rows and the pagination row on screen instead of replacing them with a skeleton under the cursor.
+    placeholderData: keepPreviousData,
   });
   const shown = data?.items || [];
   const {
@@ -403,8 +442,11 @@ export default function App() {
             </h1>
 
             {oauthError && (
-              <p className="text-[var(--danger)]" role="alert">
+              <p className="flex items-center gap-2 text-[var(--danger)]" role="alert">
                 {t("oauthCancelled")}
+                <button className="cursor-pointer border-0 bg-transparent p-0 text-[18px] leading-none text-inherit" aria-label={t("dismissMessage")} onClick={() => setOauthError(null)}>
+                  ×
+                </button>
               </p>
             )}
           </div>
@@ -451,10 +493,12 @@ export default function App() {
         ) : filter === "Repositories" ? (
           <Repositories repositories={repositoryData} loading={repositoriesLoading} error={repositoriesError} retry={() => void refetchRepositories()} />
         ) : filter === "Overview" ? (
-          <React.Suspense fallback={<OverviewSkeleton controls />}>
-            <FollowUpSummary />
-            <Overview onAccessGranted={() => syncMutation.mutate(true)} />
-          </React.Suspense>
+          <ErrorBoundary>
+            <React.Suspense fallback={<OverviewSkeleton controls />}>
+              <FollowUpSummary />
+              <Overview onAccessGranted={() => syncMutation.mutate(true)} />
+            </React.Suspense>
+          </ErrorBoundary>
         ) : (
           <>
             {summaryError && (
@@ -642,13 +686,14 @@ export default function App() {
                       ))}
                     </div>
                     <div className={`${pagination} flex-wrap`}>
-                      <button disabled={page === 0 || isLoading} onClick={() => setPage(page - 1)}>
+                      {/* Disabled only while a page is actually on its way: a paused fetch, offline or otherwise, would otherwise leave both controls dead with no way back. */}
+                      <button disabled={page === 0 || (isPlaceholderData && isFetching)} onClick={() => setPage(page - 1)}>
                         {t("previous")}
                       </button>
                       <span>
                         {t("page")} {page + 1} · {data?.total ?? 0} {t("results")}
                       </span>
-                      <button disabled={isLoading || isError || (page + 1) * 50 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>
+                      <button disabled={(isPlaceholderData && isFetching) || isError || (page + 1) * 50 >= (data?.total ?? 0)} onClick={() => setPage(page + 1)}>
                         {t("next")}
                       </button>
                     </div>

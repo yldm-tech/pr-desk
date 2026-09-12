@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { Activity } from "./activity-model";
-import { checkTone, checkToneClass, safeGitHubLink } from "./activity-model";
+import { activityWarningKeys, checkTone, checkToneClass, safeGitHubLink } from "./activity-model";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
 
 export function ActivityPanel({ data }: { data: Activity }) {
@@ -13,9 +13,15 @@ export function ActivityPanel({ data }: { data: Activity }) {
         <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[13px] text-[var(--warning)] [&_ul]:pl-5" role="status">
           <strong>{tr("activityLoadFailed")}</strong>
           <ul>
-            {data.warnings.map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
+            {data.warnings.map((w, i) => {
+              const { sectionKey, reasonKey, section, reason } = activityWarningKeys(w);
+              return (
+                <li key={i}>
+                  {section ? `${sectionKey ? tr(sectionKey) : section}: ` : ""}
+                  {reasonKey ? tr(reasonKey) : reason}
+                </li>
+              );
+            })}
           </ul>
           <p>{tr("availableResults")}</p>
         </div>
@@ -99,7 +105,7 @@ export function ActivityPanel({ data }: { data: Activity }) {
                 )}
               </span>
               <span className={`ml-2 inline-flex items-center text-[11px] capitalize ${checkToneClass(checkTone(c.status, c.conclusion))}`}>
-                {c.status === "completed" ? tr((c.conclusion || "unknown").toLowerCase(), { defaultValue: c.conclusion || tr("unknown") }) : tr(c.status.replaceAll("_", ""), { defaultValue: c.status.replaceAll("_", " ") })}
+                {c.status === "completed" ? tr((c.conclusion || "unknown").toLowerCase(), { defaultValue: c.conclusion ? c.conclusion.replaceAll("_", " ") : tr("unknown") }) : tr(c.status.replaceAll("_", ""), { defaultValue: c.status.replaceAll("_", " ") })}
               </span>
             </div>
           ))

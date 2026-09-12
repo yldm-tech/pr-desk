@@ -118,7 +118,8 @@ type followUpListPayload struct {
 			Conclusion string `json:"conclusion"`
 		} `json:"failing_checks"`
 	} `json:"follow_ups"`
-	Total int `json:"total"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"has_more"`
 }
 
 // Triage is the whole point of the listing: narrowing 39 rows to the ones with a
@@ -346,6 +347,45 @@ func TestSyncStatusDatesTheVerdictSeparatelyFromTheData(t *testing.T) {
 	}
 }
 
+// A lapsed GitHub authorization used to fail the token lookup itself, so the endpoint answered 401 before any tool ran and the one status that explains the cause could never be returned. A client reads a 401 as "get a new token" and re-authorizes in a loop; the CLI reports it as an unreachable host.
+func TestLapsedAuthorizationStillServesStoredDataAndSaysWhy(t *testing.T) {
+	s, _, _ := mcpFixture(t, "mcp-lapsed")
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-lapsed").Update("authorization_error", "reconnect").Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	token, _, err := issueAPIToken(s.db, "mcp-lapsed", cliClientID, "lapsed", []string{scopeFollowUpsRead}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lookupAPIToken(context.Background(), s.db, token, now); err != nil {
+		t.Fatal("a lapsed authorization rejected the token, so nothing can report the cause", err)
+	}
+	// A fresh connection, so the initialize POST goes through the bearer middleware with the account already lapsed.
+	session := mcpConnect(t, mcpHarness(t, s).URL+"/api/v1/mcp", token)
+	var status struct {
+		Status    string `json:"status"`
+		ErrorCode string `json:"error_code"`
+	}
+	callStructured(t, session, "get_sync_status", map[string]any{}, &status)
+	if status.Status != "failed" || status.ErrorCode != "reconnect" {
+		t.Fatalf("the lapsed authorization was not reported: %+v", status)
+	}
+	var listed followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{}, &listed)
+	if listed.Total != 3 {
+		t.Fatalf("the data already synchronized became unreadable: %+v", listed)
+	}
+
+	// Logging out blanks the credential, and that does still end the token.
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-lapsed").Update("token", "").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lookupAPIToken(context.Background(), s.db, token, now); err == nil {
+		t.Fatal("a token outlived the account it belongs to")
+	}
+}
+
 // A run still reporting is not stale, and its verdict is current.
 func TestSyncStatusReportsARunningSyncAsCurrent(t *testing.T) {
 	s, session, _ := mcpFixture(t, "mcp-running")
@@ -420,7 +460,135 @@ type numberedPullRequests struct {
 		Number int    `json:"number"`
 		Checks string `json:"checks"`
 	} `json:"pull_requests"`
-	Total int `json:"total"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"has_more"`
+}
+
+// A page is capped at 200 rows whatever the limit says, so before offset existed an account with more pull requests than that had no argument that could reach the rest: list_pull_requests reported the real total and then withheld it.
+func TestListPullRequestsPagesPastTheServerCap(t *testing.T) {
+	s, session, _ := mcpFixture(t, "mcp-paging")
+	now := time.Now().UTC()
+	bulk := make([]PullRequest, 0, 205)
+	for i := 0; i < 205; i++ {
+		bulk = append(bulk, PullRequest{SessionID: "mcp-paging", Repo: "fixture/bulk", Number: 1000 + i, Title: fmt.Sprintf("Bulk %d", i), State: "open", UpdatedAt: now.Add(-time.Duration(i) * time.Minute), Role: "authored", Author: "someone", URL: fmt.Sprintf("https://github.com/fixture/bulk/pull/%d", 1000+i)})
+	}
+	if err := s.db.CreateInBatches(&bulk, 100).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var first numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"repository": "fixture/bulk", "limit": 1000}, &first)
+	if first.Total != 205 || len(first.PullRequests) != 200 {
+		t.Fatalf("the cap moved: total=%d returned=%d", first.Total, len(first.PullRequests))
+	}
+	if !first.HasMore {
+		t.Fatal("a page that withheld five rows reported itself as complete")
+	}
+
+	var second numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"repository": "fixture/bulk", "limit": 1000, "offset": 200}, &second)
+	if second.Total != 205 || len(second.PullRequests) != 5 {
+		t.Fatalf("the second page is wrong: total=%d returned=%d", second.Total, len(second.PullRequests))
+	}
+	if second.HasMore {
+		t.Fatal("the last page claims there is another")
+	}
+	seen := map[int]bool{}
+	for _, row := range first.PullRequests {
+		seen[row.Number] = true
+	}
+	for _, row := range second.PullRequests {
+		if seen[row.Number] {
+			t.Fatalf("pull request %d came back on both pages", row.Number)
+		}
+		seen[row.Number] = true
+	}
+	if len(seen) != 205 {
+		t.Fatalf("paging reached %d of 205 rows", len(seen))
+	}
+
+	// Walking off the end is how a caller discovers the end, not a mistake.
+	var past numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"repository": "fixture/bulk", "offset": 5000}, &past)
+	if len(past.PullRequests) != 0 || past.Total != 205 || past.HasMore {
+		t.Fatalf("an offset past the end did not return an empty page: %+v", past)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_pull_requests", Arguments: map[string]any{"offset": -1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("a negative offset was accepted silently")
+	}
+}
+
+func TestListFollowUpsPagesWithOffset(t *testing.T) {
+	_, session, _ := mcpFixture(t, "mcp-followup-paging")
+
+	var all followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{}, &all)
+	if all.Total != 3 || len(all.FollowUps) != 3 || all.HasMore {
+		t.Fatalf("the unpaged listing changed: %+v", all)
+	}
+
+	var page followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"limit": 2}, &page)
+	if len(page.FollowUps) != 2 || !page.HasMore {
+		t.Fatalf("a limited page did not report the remainder: %+v", page)
+	}
+
+	var rest followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"limit": 2, "offset": 2}, &rest)
+	if rest.Total != 3 || len(rest.FollowUps) != 1 || rest.HasMore {
+		t.Fatalf("the second page is wrong: %+v", rest)
+	}
+	if rest.FollowUps[0].Number == page.FollowUps[0].Number || rest.FollowUps[0].Number == page.FollowUps[1].Number {
+		t.Fatalf("the second page repeated a row from the first: %+v", rest)
+	}
+
+	var past followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"offset": 99}, &past)
+	if len(past.FollowUps) != 0 || past.Total != 3 || past.HasMore {
+		t.Fatalf("an offset past the end did not return an empty page: %+v", past)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_follow_ups", Arguments: map[string]any{"offset": -1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.IsError {
+		t.Fatal("a negative offset was accepted silently")
+	}
+}
+
+// The listing used to carry the pull request primary key as "id", a different sequence from the follow-up ids every tool taking an id resolves against, so get_follow_up would answer with an unrelated row of the same account rather than an error. The key never leaves the server now.
+func TestListPullRequestsCarriesNoFollowUpLookingID(t *testing.T) {
+	_, session, _ := mcpFixture(t, "mcp-idspace")
+	var rows struct {
+		PullRequests []map[string]any `json:"pull_requests"`
+	}
+	callStructured(t, session, "list_pull_requests", map[string]any{}, &rows)
+	if len(rows.PullRequests) != 4 {
+		t.Fatalf("expected the fixture's pull requests, got %d", len(rows.PullRequests))
+	}
+	for _, row := range rows.PullRequests {
+		if _, ok := row["id"]; ok {
+			t.Fatalf("a pull request row carries an id the follow-up tools would misresolve: %+v", row)
+		}
+	}
+	tools, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range tools.Tools {
+		if tool.Name != "list_pull_requests" {
+			continue
+		}
+		if strings.Contains(mustJSON(tool.OutputSchema), `"id"`) {
+			t.Fatalf("the output schema still declares an id: %s", mustJSON(tool.OutputSchema))
+		}
+	}
 }
 
 // The checks_failed reason is authored-only by design, so asking for it never

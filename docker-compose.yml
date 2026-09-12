@@ -13,6 +13,8 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      NOTIFY_ALLOW_PRIVATE_HOSTS: ${NOTIFY_ALLOW_PRIVATE_HOSTS:-}
+      DATABASE_MAX_OPEN_CONNS: ${DATABASE_MAX_OPEN_CONNS:-}
     ports: ["127.0.0.1:${PORT:-8080}:${PORT:-8080}"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${PORT:-8080}/health >/dev/null || exit 1"]

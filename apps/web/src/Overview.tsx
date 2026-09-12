@@ -78,7 +78,7 @@ type Data = z.infer<typeof schema>;
 const overviewCache = { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 };
 export default function Overview({ onAccessGranted }: { onAccessGranted: () => void }) {
   const previousAccess = useRef<string | undefined>(undefined);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [params, setParams] = useSearchParams();
   const currentYear = new Date().getUTCFullYear();
   const requestedYear = Number(params.get("year"));
@@ -148,10 +148,11 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
         <Tabs.List className={visibilityTabs} aria-label={t("visibilityScope")}>
           <Tabs.Trigger value="all">{t("allContributions")}</Tabs.Trigger>
           <Tabs.Trigger value="public">
-            {t("publicOnly")} <span>{query.isPlaceholderData || (!query.data.history_complete && !counts.public_repositories) ? "—" : (counts.public_repositories?.toLocaleString() ?? "—")}</span>
+            {t("publicOnly")} <span>{query.isPlaceholderData || (!query.data.history_complete && !counts.public_repositories) ? "—" : (counts.public_repositories?.toLocaleString(i18n.resolvedLanguage) ?? "—")}</span>
           </Tabs.Trigger>
           <Tabs.Trigger value="private">
-            {t("privateOnly")} <span>{access.data?.can_read_private === false || access.data?.has_installations === false ? t("notAuthorized") : query.isPlaceholderData || (!query.data.history_complete && !counts.private_repositories) ? "—" : (counts.private_repositories?.toLocaleString() ?? "—")}</span>
+            {t("privateOnly")}{" "}
+            <span>{access.data?.can_read_private === false || access.data?.has_installations === false ? t("notAuthorized") : query.isPlaceholderData || (!query.data.history_complete && !counts.private_repositories) ? "—" : (counts.private_repositories?.toLocaleString(i18n.resolvedLanguage) ?? "—")}</span>
           </Tabs.Trigger>
         </Tabs.List>
       </Tabs.Root>

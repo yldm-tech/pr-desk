@@ -91,9 +91,29 @@ func saveCredentials(stored credentials) error {
 	if err != nil {
 		return err
 	}
-	// 0600: the token is a credential, and the home directory is shared with
-	// every other process running as this user.
-	return os.WriteFile(path, append(raw, '\n'), 0o600)
+	// 0600: the token is a credential, and the home directory is shared with every other process running as this user. The mode has to be asserted on a fresh inode, because os.WriteFile would apply it only when creating the file and leave a credentials.json restored from a backup or copied from another machine at whatever mode it arrived with. Renaming into place also keeps the old token readable if this write fails halfway.
+	staged, err := os.CreateTemp(filepath.Dir(path), ".credentials-*")
+	if err != nil {
+		return err
+	}
+	if _, err := staged.Write(append(raw, '\n')); err != nil {
+		staged.Close()
+		os.Remove(staged.Name())
+		return err
+	}
+	if err := staged.Close(); err != nil {
+		os.Remove(staged.Name())
+		return err
+	}
+	if err := os.Chmod(staged.Name(), 0o600); err != nil {
+		os.Remove(staged.Name())
+		return err
+	}
+	if err := os.Rename(staged.Name(), path); err != nil {
+		os.Remove(staged.Name())
+		return err
+	}
+	return nil
 }
 
 func runLogout() error {
@@ -124,7 +144,7 @@ func runLogin(args []string) error {
 	flags := flag.NewFlagSet("login", flag.ContinueOnError)
 	host := flags.String("host", "", "PR Desk server URL")
 	write := flags.Bool("write", false, "also request permission to change follow-up state")
-	if err := flags.Parse(args); err != nil {
+	if _, err := parseWithPositionals(flags, args, "usage: prdesk login [--host URL] [--write]", 0, 0); err != nil {
 		return err
 	}
 	target := strings.TrimRight(*host, "/")
@@ -268,7 +288,7 @@ func openBrowser(target string) {
 func runStatus(args []string) error {
 	flags := flag.NewFlagSet("status", flag.ContinueOnError)
 	asJSON := flags.Bool("json", false, "print raw JSON")
-	if err := flags.Parse(args); err != nil {
+	if _, err := parseWithPositionals(flags, args, "usage: prdesk status [--json]", 0, 0); err != nil {
 		return err
 	}
 	stored, err := loadCredentials()

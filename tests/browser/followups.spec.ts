@@ -232,7 +232,7 @@ test("the settings page documents MCP and CLI access", async ({ page }, testInfo
   await page.screenshot({ path: testInfo.outputPath("access-settings.png"), fullPage: true });
 });
 
-test("the settings tabs are addressable and only render the open one", async ({ page }) => {
+test("the settings tabs are addressable and only display the open one", async ({ page }) => {
   await page.goto("/#/settings");
   // The first tab is the default and says so without a parameter of its own.
   await expect(page.getByRole("tab", { name: "Reminders" })).toHaveAttribute("aria-selected", "true");
@@ -241,7 +241,9 @@ test("the settings tabs are addressable and only render the open one", async ({ 
 
   await page.getByRole("tab", { name: "Agent access" }).click();
   await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toHaveCount(0);
+  // The panel left behind keeps what was typed into it, so it stays mounted and hidden rather than being torn down.
+  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeHidden();
+  await expect(page.locator('[role="tabpanel"][hidden]').locator("h2", { hasText: "Reminder schedule" })).toHaveCount(1);
   // Opening a tab has to survive a reload and be worth linking to.
   expect(new URL(page.url()).hash).toContain("tab=access");
   await page.reload();
@@ -254,6 +256,61 @@ test("the settings tabs are addressable and only render the open one", async ({ 
     return Math.round(open.top - strip.bottom);
   });
   expect(gap).toBeLessThanOrEqual(24);
+});
+
+test("a half-filled destination survives a trip to another settings tab", async ({ page }) => {
+  await page.goto("/#/settings?tab=notifications");
+  await page.getByLabel("Channel", { exact: true }).selectOption("email");
+  await page.getByLabel("Name", { exact: true }).fill("Inbox");
+  await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
+  await page.getByLabel("Password", { exact: true }).fill("fixture-secret");
+  await page.getByRole("tab", { name: "Reminders" }).click();
+  await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
+  await page.getByRole("tab", { name: "Notifications" }).click();
+  // Everything typed, including the password the browser will not refill, is still there.
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Inbox");
+  await expect(page.getByLabel("SMTP host", { exact: true })).toHaveValue("smtp.example.com");
+  await expect(page.getByLabel("Password", { exact: true })).toHaveValue("fixture-secret");
+});
+
+test("a failed refresh keeps the settings on screen instead of replacing them", async ({ page }) => {
+  await page.goto("/#/settings");
+  await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue("Asia/Tokyo");
+  await page.route("**/api/v1/follow-up-settings", (route) => (route.request().method() === "GET" ? route.fulfill({ status: 502, json: { error: "bad gateway" } }) : route.fulfill({ json: { saved: true } })));
+  await page.getByLabel("Timezone", { exact: true }).fill("Europe/Madrid");
+  // Saving refetches the settings, and that refetch is the one that fails here.
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Update failed" })).toBeVisible();
+  await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue("Europe/Madrid");
+  await expect(page.getByText("Follow-ups could not be loaded")).toHaveCount(0);
+});
+
+test("a rejected destination reports the field the server refused", async ({ page }) => {
+  await page.route("**/api/v1/notification-destinations", (route) => (route.request().method() === "POST" ? route.fulfill({ status: 400, json: { error: "The sender address is not a valid email address" } }) : route.fulfill({ json: { data: [] } })));
+  await page.goto("/#/settings?tab=notifications");
+  await page.getByLabel("Channel", { exact: true }).selectOption("email");
+  await page.getByLabel("Name", { exact: true }).fill("Inbox");
+  await page.getByLabel("From address", { exact: true }).fill("desk@example.com");
+  await page.getByLabel("Recipients", { exact: true }).fill("ops@example.com");
+  // A pasted host and port is refused by the server, so the form says which field it is.
+  await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com:587");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter the host name on its own" })).toBeVisible();
+  await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "The sender address is not a valid email address" })).toBeVisible();
+});
+
+test("the revoke confirmation takes the focus and hands it back on Escape", async ({ page }) => {
+  await page.goto("/#/settings?tab=access");
+  const token = page.getByTestId("issued-token").filter({ hasText: "PR Desk CLI" });
+  await token.getByRole("button", { name: "Revoke" }).click();
+  // The button that had the focus is replaced, so the focus moves to the one that confirms.
+  await expect(token.getByRole("button", { name: "Revoke" })).toBeFocused();
+  await expect(token.getByRole("button", { name: "Revoke" })).toHaveAccessibleDescription("Revoke this access?");
+  await page.keyboard.press("Escape");
+  await expect(token.getByText("Revoke this access?")).toHaveCount(0);
+  await expect(token.getByRole("button", { name: "Revoke" })).toBeFocused();
 });
 
 test("a card action is announced and does not strand the focus", async ({ page }) => {

@@ -39,9 +39,17 @@ func releaseBase() string {
 	return "https://github.com"
 }
 
+// Where the release is looked up, which is a separate redirect from where its assets are fetched: GitHub Enterprise serves its API from <host>/api/v3 while the downloads stay under <host>/<repo>/releases/download, so neither base can be derived from the other. Without this, a mirror-only network fails at the first step and PRDESK_RELEASE_BASE never gets a chance to matter.
+func releaseAPIBase() string {
+	if base := os.Getenv("PRDESK_RELEASE_API"); base != "" {
+		return strings.TrimSuffix(base, "/")
+	}
+	return "https://api.github.com"
+}
+
 func latestRelease() (string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	response, err := client.Get("https://api.github.com/repos/" + releaseRepo() + "/releases/latest")
+	response, err := client.Get(releaseAPIBase() + "/repos/" + releaseRepo() + "/releases/latest")
 	if err != nil {
 		return "", errors.New("cannot reach GitHub to look for a newer release")
 	}
@@ -103,7 +111,7 @@ func parseVersion(value string) ([]int, bool) {
 func runUpdate(args []string) error {
 	flags := flag.NewFlagSet("update", flag.ContinueOnError)
 	check := flags.Bool("check", false, "report whether a newer release exists without installing it")
-	if err := flags.Parse(args); err != nil {
+	if _, err := parseWithPositionals(flags, args, "usage: prdesk update [--check]", 0, 0); err != nil {
 		return err
 	}
 	latest, err := latestRelease()

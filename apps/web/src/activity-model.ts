@@ -16,6 +16,24 @@ export function safeGitHubLink(raw: string): string | undefined {
     return undefined;
   }
 }
+// The API still reports partial activity as English prose ("Checks: too many check runs"), built from two closed first-party sets. Split it so each half can be translated; anything unrecognised is shown as it arrived.
+const warningSections: Record<string, string> = { Conversation: "activityWarningSection_conversation", "Review comments": "activityWarningSection_review_comments", "Review status": "activityWarningSection_review_status", Checks: "activityWarningSection_checks" };
+const warningReasons: Record<string, string> = {
+  "GitHub request unavailable": "activityWarningReason_unavailable",
+  "invalid GitHub request": "activityWarningReason_invalid_request",
+  "too many results; open GitHub for full activity": "activityWarningReason_too_many_results",
+  "review thread status unavailable; check GitHub App permissions": "activityWarningReason_thread_permissions",
+  "invalid GitHub pagination": "activityWarningReason_invalid_pagination",
+  "too many review threads": "activityWarningReason_too_many_threads",
+  "too many check runs": "activityWarningReason_too_many_checks",
+};
+export function activityWarningKeys(warning: string): { sectionKey?: string; reasonKey?: string; section: string; reason: string } {
+  const split = warning.indexOf(": ");
+  const section = split < 0 ? "" : warning.slice(0, split);
+  const reason = split < 0 ? warning : warning.slice(split + 2);
+  return { sectionKey: warningSections[section], reasonKey: warningReasons[reason], section, reason };
+}
+
 // The colour a check result is shown in. It used to be a class name the
 // stylesheet turned into a colour; the mapping lives here now.
 export function checkToneClass(tone: string) {

@@ -27,7 +27,7 @@ Publishing uses the repository `GITHUB_TOKEN` with `packages: write` and `conten
 
 Configure application secrets in the deployment environment, never in build arguments. The Go process serves both the embedded frontend and `/api` on `PORT` (default 8080). PostgreSQL must be reachable from the application. Set `WEB_ORIGIN` to the browser-facing URL and register its `/api/v1/auth/github/callback` as the GitHub App callback.
 
-The production frontend uses same-origin `/api` requests, so the image works at different hostnames without rebuilding. There is no separate web image or Nginx service. `VITE_API_URL` can override this for custom builds; local Vite development defaults to `http://localhost:8081`. `make production` runs this architecture locally.
+The production frontend uses same-origin `/api` requests, so the image works at different hostnames without rebuilding. There is no separate web image or Nginx service. `VITE_API_URL` can override this for custom builds; local Vite development defaults to `http://localhost:8080`. `make production` runs this architecture locally.
 
 ## Deployment
 

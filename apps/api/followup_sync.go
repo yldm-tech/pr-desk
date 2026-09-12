@@ -26,6 +26,10 @@ type reviewTimelineEvent struct {
 func snapshotHumanFacts(facts *FollowUpFacts, username string, comments []activityComment, reviews []githubReview) {
 	latestKey := ""
 	add := func(at time.Time, key, body string) {
+		// A submitted review with no prose still counts as human activity — an approval usually carries none — but it must not displace the excerpt of something said at the same instant. That tie is the ordinary shape of a review whose words are all in its inline comments, which are added before this loop reaches the review that carried them.
+		if at.Equal(facts.HumanAt) && body == "" && facts.HumanExcerpt != "" {
+			return
+		}
 		if at.After(facts.HumanAt) || (at.Equal(facts.HumanAt) && key > latestKey) {
 			facts.HumanAt = at
 			latestKey = key
@@ -51,7 +55,7 @@ func snapshotHumanFacts(facts *FollowUpFacts, username string, comments []activi
 				}
 			}
 		} else if r.State != "PENDING" && humanActor(r.User.Login, r.User.Type) {
-			add(r.SubmittedAt, fmt.Sprintf("review:%d:%s", r.ID, r.State), r.Body)
+			add(r.SubmittedAt, fmt.Sprintf("review:%d:%s", r.ID, r.State), strings.TrimSpace(r.Body))
 		}
 	}
 	facts.MyReview, facts.MyReviewID = myReview.State, myReview.ID

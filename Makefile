@@ -23,3 +23,4 @@ backup:
 test:
 	cd apps/api && go test ./...
 	cd apps/web && bun run test && bun run build
+	./scripts/backup-postgres-test.sh

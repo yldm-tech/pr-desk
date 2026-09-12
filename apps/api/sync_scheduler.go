@@ -43,11 +43,13 @@ func (s *Server) startSyncScheduler(ctx context.Context, schedule string) (*cron
 		return nil, err
 	}
 	// Abandoned authorization flows leave a short-lived row behind; an hourly
-	// sweep keeps the table from growing without bound.
+	// sweep keeps the table from growing without bound. Delivered notifications
+	// and dispatched follow-up events are append-only in the same way.
 	if _, err := scheduler.AddFunc("@every 1h", func() {
 		now := time.Now().UTC()
 		s.purgeExpiredOAuthCodes(now)
 		s.purgeUnusedOAuthClients(now)
+		s.purgeDeliveredNotifications(now)
 	}); err != nil {
 		return nil, err
 	}
@@ -85,6 +87,10 @@ func (s *Server) processNotificationOutbox(ctx context.Context) {
 			continue
 		}
 		for i := 0; i < 100; i++ {
+			// Shutdown must not claim another message: the claim would fail on the cancelled context and be logged as a delivery that could not be recorded.
+			if ctx.Err() != nil {
+				return
+			}
 			claimed, err := s.deliverOneNotification(ctx, time.Now().UTC(), sendNotification)
 			if err != nil {
 				log.Printf("Notification outbox: delivery could not be recorded: %v", err)

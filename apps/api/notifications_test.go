@@ -248,4 +248,184 @@ func TestDeliveryGivesUpAfterRepeatedFailures(t *testing.T) {
 	if claimed, err := s.deliverOneNotification(context.Background(), now.Add(2*time.Hour), failing); err != nil || claimed {
 		t.Fatal("a parked delivery was retried", claimed, err)
 	}
+	var flagged NotificationDestination
+	if err := db.Where("id = ?", destination.ID).First(&flagged).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !flagged.Failing {
+		t.Fatal("a destination that gave up is not reported as failing")
+	}
+	// A destination that accepts a message again is working, whatever became of the parked one.
+	if err := db.Create(&NotificationDelivery{SessionID: "give-up", DestinationID: destination.ID, MessageKey: "k:1", Body: "body", AvailableAt: now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	accepted := func(context.Context, NotificationDestination, NotificationDelivery) error { return nil }
+	if claimed, err := s.deliverOneNotification(context.Background(), now.Add(3*time.Hour), accepted); err != nil || !claimed {
+		t.Fatal("the recovery message was not delivered", claimed, err)
+	}
+	var recovered NotificationDestination
+	if err := db.Where("id = ?", destination.ID).First(&recovered).Error; err != nil {
+		t.Fatal(err)
+	}
+	if recovered.Failing {
+		t.Fatal("the warning outlived the outage it was about")
+	}
+}
+
+// A message the upstream already accepted must not be sent again because the
+// process was asked to stop before its outcome was written.
+func TestDeliveryOutcomeSurvivesShutdown(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Now().UTC()
+	target := NotificationDestination{SessionID: "shutdown", Name: "accepting", Enabled: true}
+	db.Create(&target)
+	if err := queueMessage(db, []NotificationDestination{target}, "shutdown", "synthetic notification", now); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	claimed, err := s.deliverOneNotification(ctx, now, func(context.Context, NotificationDestination, NotificationDelivery) error { cancel(); return nil })
+	if err != nil || !claimed {
+		t.Fatal("the delivery outcome was not recorded", claimed, err)
+	}
+	var row NotificationDelivery
+	if err := db.First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.SentAt == nil || row.LeasedUntil != nil {
+		t.Fatal("a sent message stayed claimable", row.SentAt, row.LeasedUntil)
+	}
+	called := false
+	// The lease is two minutes, so the next tick past it would send it a second time.
+	if claimed, err := s.deliverOneNotification(context.Background(), now.Add(3*time.Minute), func(context.Context, NotificationDestination, NotificationDelivery) error { called = true; return nil }); err != nil || claimed || called {
+		t.Fatal("a delivered message was sent again after the restart", claimed, err)
+	}
+}
+
+// The write that records a delivery has to be given its budget after the send, not before it: a slow upstream is exactly the case where the message lands and the outcome must still be storable, and an expired handle would send it again on the next tick.
+func TestASlowSendStillLeavesRoomToRecordItsOutcome(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Now().UTC()
+	target := NotificationDestination{SessionID: "slow", Name: "accepting", Enabled: true}
+	db.Create(&target)
+	if err := queueMessage(db, []NotificationDestination{target}, "slow", "synthetic notification", now); err != nil {
+		t.Fatal(err)
+	}
+	previous := outcomeWriteBudget
+	outcomeWriteBudget = 50 * time.Millisecond
+	t.Cleanup(func() { outcomeWriteBudget = previous })
+	claimed, err := s.deliverOneNotification(context.Background(), now, func(context.Context, NotificationDestination, NotificationDelivery) error {
+		time.Sleep(80 * time.Millisecond)
+		return nil
+	})
+	if err != nil || !claimed {
+		t.Fatal("a slow send lost its outcome", claimed, err)
+	}
+	var row NotificationDelivery
+	if err := db.First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.SentAt == nil {
+		t.Fatal("the message would be sent again on the next tick")
+	}
+}
+
+// Deselecting a team while its events wait out the aggregation window used to
+// leave them pending until the team came back, when they were announced as news.
+func TestEventsOfAnExcludedFollowUpAreRetired(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+	settings := FollowUpSettings{SessionID: "teams", Timezone: "UTC", DigestTime: "09:00", WaitDays: 7, TeamsJSON: `["org/platform"]`, BaselineAt: &now, InventoryAt: &now}
+	db.Create(&settings)
+	db.Create(&NotificationDestination{SessionID: "teams", Name: "one", Enabled: true})
+	pr := PullRequest{SessionID: "teams", Repo: "fixture/repo", Number: 1, Title: "Synthetic", URL: "https://github.com/fixture/repo/pull/1"}
+	db.Create(&pr)
+	facts := FollowUpFacts{Role: "reviewer", ReviewTeams: []string{"org/platform"}, CreatedAt: now}
+	if err := persistFollowUp(db, pr, facts, now); err != nil {
+		t.Fatal(err)
+	}
+	facts.HumanVersion = "new-comment"
+	facts.HumanAt = now.Add(time.Minute)
+	if err := persistFollowUp(db, pr, facts, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	var pending int64
+	db.Model(&FollowUpEvent{}).Where("dispatched_at IS NULL").Count(&pending)
+	if pending == 0 {
+		t.Fatal("the fixture produced no event to strand")
+	}
+	if err := db.Model(&FollowUpSettings{}).Where("session_id = ?", "teams").Update("teams_json", "[]").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.queueAccountNotifications(context.Background(), "teams", now.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	var count int64
+	db.Model(&NotificationDelivery{}).Count(&count)
+	if count != 0 {
+		t.Fatal("an excluded follow-up was announced", count)
+	}
+	db.Model(&FollowUpEvent{}).Where("dispatched_at IS NULL").Count(&pending)
+	if pending != 0 {
+		t.Fatal("an excluded follow-up left its events waiting forever", pending)
+	}
+	if err := db.Model(&FollowUpSettings{}).Where("session_id = ?", "teams").Update("teams_json", `["org/platform"]`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.queueAccountNotifications(context.Background(), "teams", now.Add(20*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&NotificationDelivery{}).Count(&count)
+	if count != 0 {
+		t.Fatal("retired events were replayed when the team was selected again", count)
+	}
+}
+
+// The claim reads the backlog in id order on every tick, so without an index
+// restricted to rows that are neither sent nor parked it walks the primary key
+// past every message the deployment ever delivered.
+func TestOutboxClaimIsIndexedOverPendingRows(t *testing.T) {
+	db := integrationDB(t)
+	if !db.Migrator().HasIndex(&NotificationDelivery{}, "notification_outbox_pending") {
+		t.Fatal("the outbox claim has no index over the pending deliveries")
+	}
+	var definition string
+	if err := db.Raw("SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'notification_outbox_pending'").Scan(&definition).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(definition, "sent_at IS NULL") || !strings.Contains(definition, "skipped_at IS NULL") {
+		t.Fatal("the index covers delivered rows too", definition)
+	}
+}
+
+// The sweep may only take history: a queued message or an undispatched event is
+// still work, and a delivery row that any dedupe key still needs is not history.
+func TestPurgeKeepsQueuedNotificationsAndPendingEvents(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	now := time.Now().UTC()
+	old := now.Add(-notificationRetention - time.Hour)
+	recent := now.Add(-time.Hour)
+	destination := NotificationDestination{SessionID: "retention", Name: "one", Enabled: true}
+	db.Create(&destination)
+	db.Create(&NotificationDelivery{SessionID: "retention", DestinationID: destination.ID, MessageKey: "digest:2020-01-01:0", Body: "sent long ago", AvailableAt: old, SentAt: &old})
+	db.Create(&NotificationDelivery{SessionID: "retention", DestinationID: destination.ID, MessageKey: "event:1:1:0", Body: "parked long ago", AvailableAt: old, SkippedAt: &old})
+	db.Create(&NotificationDelivery{SessionID: "retention", DestinationID: destination.ID, MessageKey: "digest:today:0", Body: "sent an hour ago", AvailableAt: recent, SentAt: &recent})
+	db.Create(&NotificationDelivery{SessionID: "retention", DestinationID: destination.ID, MessageKey: "digest:today:1", Body: "still queued", AvailableAt: old})
+	db.Create(&FollowUpEvent{SessionID: "retention", FollowUpID: 1, Version: 1, ReasonsJSON: "[]", CreatedAt: old, AvailableAt: old, DispatchedAt: &old})
+	db.Create(&FollowUpEvent{SessionID: "retention", FollowUpID: 2, Version: 1, ReasonsJSON: "[]", CreatedAt: old, AvailableAt: old})
+	s.purgeDeliveredNotifications(now)
+	var kept []NotificationDelivery
+	db.Order("id").Find(&kept)
+	if len(kept) != 2 || kept[0].MessageKey != "digest:today:0" || kept[1].MessageKey != "digest:today:1" {
+		t.Fatalf("the sweep did not keep exactly the recent and queued rows: %v", kept)
+	}
+	var events []FollowUpEvent
+	db.Order("id").Find(&events)
+	if len(events) != 1 || events[0].DispatchedAt != nil {
+		t.Fatalf("the sweep did not keep exactly the undispatched event: %v", events)
+	}
 }

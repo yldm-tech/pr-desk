@@ -6,6 +6,7 @@ type githubReview struct {
 	ID          int64     `json:"id"`
 	State       string    `json:"state"`
 	Body        string    `json:"body"`
+	HTMLURL     string    `json:"html_url"`
 	SubmittedAt time.Time `json:"submitted_at"`
 	User        struct {
 		Login string `json:"login"`

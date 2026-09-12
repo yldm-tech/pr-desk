@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -58,6 +61,64 @@ func TestSyncFailedDetailsPreserveStoredState(t *testing.T) {
 	}
 	if stored.MergedAt == nil || !stored.MergedAt.Equal(merged) || !stored.HasConflicts || stored.ReviewStatus != "approved" || stored.CommentsCount != 9 {
 		t.Fatal("failed request overwrote stored detail state")
+	}
+}
+
+// A failing pull request must not stop its siblings — one unreadable repository
+// cannot cost every other pull request its details — but a rate limit is the
+// account's whole quota, so every queued request after it is rejected anyway and
+// only prolongs GitHub's block. Nothing used to stop the phase, so a limit hit at
+// the first pull request still fired a request for each of the rest.
+func TestDetailPhaseStopsOnARateLimitInsteadOfFloodingGitHub(t *testing.T) {
+	db := integrationPoolDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	token, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&OAuthToken{SessionID: "limited-session", Token: token}).Error; err != nil {
+		t.Fatal(err)
+	}
+	const open = 12
+	items := make([]string, 0, open)
+	for number := 1; number <= open; number++ {
+		items = append(items, fmt.Sprintf(`{"number":%d,"title":"pr %d","state":"open","html_url":"https://github.com/o/r/pull/%d","repository_url":"https://api.github.com/repos/o/r"}`, number, number, number))
+	}
+	search := fmt.Sprintf(`{"total_count":%d,"incomplete_results":false,"items":[%s]}`, open, strings.Join(items, ","))
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	var details atomic.Int32
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		// A request whose context is already cancelled never leaves the machine, so it is not one GitHub sees.
+		if req.Context().Err() != nil {
+			return nil, req.Context().Err()
+		}
+		if req.URL.Path == "/search/issues" {
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(search)), Request: req}, nil
+		}
+		details.Add(1)
+		body := `{"message":"You have exceeded a secondary rate limit","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#secondary-rate-limits"}`
+		return &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+	})}
+	s := &Server{db: db}
+	if result := s.syncSession(context.Background(), "limited-session", false, false); result.status != 502 {
+		t.Fatalf("got %d, want 502: %v", result.status, result.body)
+	}
+	// Four details run at a time, so at most the ones already in flight when the limit landed may have asked.
+	if attempted := details.Load(); attempted > 5 {
+		t.Fatalf("%d pull requests were asked about after GitHub refused the first one", attempted)
+	}
+	var stored OAuthToken
+	if err := db.Where("session_id = ?", "limited-session").First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	var progress syncProgress
+	if err := json.Unmarshal([]byte(stored.SyncProgress), &progress); err != nil {
+		t.Fatal(err)
+	}
+	// Cancelling the siblings must not turn a rate limit into an ordinary interruption, which carries no cooldown.
+	if progress.ErrorCode != "rate_limited" {
+		t.Fatalf("the run was recorded as %q, not rate_limited: %s", progress.ErrorCode, stored.SyncProgress)
 	}
 }
 

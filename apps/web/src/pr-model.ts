@@ -44,6 +44,17 @@ export function parseRepositoryList(body: unknown): RepositorySummary[] {
     .data.map((item) => ({ ...item, repo: item.repo.replace(/^https:\/\/api\.github\.com\/repos\//, "").replace(/\/$/, "") }));
 }
 
+// The OAuth callback answers with a real query string while the app routes on the fragment, so the flag has to be read once and then stripped by hand. A search without either flag comes back untouched, so no reason exists to rewrite the URL.
+export function oauthBanner(search: string): { error: string | null; cleanedSearch: string } {
+  const params = new URLSearchParams(search);
+  if (!params.has("oauth_error") && !params.has("connected")) return { error: null, cleanedSearch: search };
+  const error = params.get("oauth_error");
+  params.delete("oauth_error");
+  params.delete("connected");
+  const rest = params.toString();
+  return { error, cleanedSearch: rest ? "?" + rest : "" };
+}
+
 export function parsePRPage(body: unknown) {
   const parsed = listSchema.parse(body);
   return { items: parsePRList(parsed), total: parsed.total };

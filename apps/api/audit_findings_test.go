@@ -137,6 +137,58 @@ func TestEveryNotifiableReasonHasALabelInBothLanguages(t *testing.T) {
 	}
 }
 
+// Review discovery searches other people's pull requests. Reusing the authored
+// walk's lower bound floored those queries at the reviewer's own GitHub account
+// creation date, so somebody on a work account created this year never saw a
+// review request on a long-lived pull request opened before it — and no later
+// query could recover it, because the refresh loop only revisits rows already
+// stored.
+func TestReviewDiscoveryReachesPullRequestsOlderThanTheAccount(t *testing.T) {
+	db := integrationDB(t)
+	t.Setenv("TOKEN_ENCRYPTION_KEY", testKey)
+	encrypted, err := crypt("test-only-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := OAuthToken{SessionID: "newcomer-session", GitHubID: 77, Username: "newcomer", Token: encrypted}
+	if err := db.Create(&account).Error; err != nil {
+		t.Fatal(err)
+	}
+	opened := time.Date(2022, 5, 1, 0, 0, 0, 0, time.UTC)
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		answer := func(body string) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+		}
+		switch req.URL.Path {
+		case "/user":
+			return answer(`{"id":77,"login":"newcomer","created_at":"2024-01-01T00:00:00Z"}`)
+		case "/search/issues":
+			query := req.URL.Query().Get("q")
+			// GitHub only returns a pull request when the query's creation window contains it, which is the whole point of the lower bound.
+			lower, _, _ := strings.Cut(strings.TrimPrefix(query[strings.Index(query, "created:"):], "created:"), "..")
+			since, parseErr := time.Parse(time.RFC3339, lower)
+			if parseErr != nil {
+				t.Errorf("unparsable creation window: %q", query)
+			}
+			if strings.Contains(query, "review-requested:newcomer") && !since.After(opened) {
+				return answer(`{"total_count":1,"incomplete_results":false,"items":[{"number":3,"title":"long lived","state":"open","html_url":"https://github.com/o/r/pull/3","repository_url":"https://api.github.com/repos/o/r","created_at":"2022-05-01T00:00:00Z","user":{"login":"someone-else","type":"User"}}]}`)
+			}
+			return answer(`{"total_count":0,"incomplete_results":false,"items":[]}`)
+		}
+		// The details of a discovered pull request are not what this is about; the row is stored before they are fetched.
+		return &http.Response{StatusCode: 404, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"message":"not found"}`)), Request: req}, nil
+	})}
+	s := &Server{db: db}
+	s.syncSession(context.Background(), account.SessionID, false, false)
+	var discovered int64
+	db.Model(&PullRequest{}).Where("session_id = ? AND role = ? AND url = ?", account.SessionID, "reviewer", "https://github.com/o/r/pull/3").Count(&discovered)
+	if discovered != 1 {
+		t.Fatal("a review request on a pull request older than the reviewer's account was never discovered")
+	}
+}
+
 // The review-inbox queries persist nothing, so they must not move the cursor the
 // authored walk resumes from. While the cursor was attached, each review query
 // marked it at its own end, so a successful full sync left history_cursor
