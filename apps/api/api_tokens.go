@@ -124,10 +124,9 @@ func lookupAPIToken(ctx context.Context, db *gorm.DB, token string, now time.Tim
 	if record.RevokedAt != nil || !record.ExpiresAt.After(now) {
 		return APIToken{}, errTokenRejected
 	}
-	// The account has to still be connected: a disconnected GitHub account can
-	// no longer refresh its data, and its tokens stop working with it.
+	// Logging out blanks the stored credential and ends the account's tokens with it. A lapsed GitHub authorization deliberately does not: the data already synchronized is still there to read, and rejecting the token here would answer every MCP call with a 401 that reads as a server outage instead of letting get_sync_status report the reconnect. This is why the check is spelled out rather than reusing connectionQuery, which the sync workers need to keep excluding a lapsed account from calling GitHub.
 	var account OAuthToken
-	if connectionQuery(db.WithContext(ctx)).Where("session_id = ? AND token <> ''", record.SessionID).First(&account).Error != nil {
+	if db.WithContext(ctx).Where("session_id = ? AND token <> '' AND (git_hub_id > 0 OR created_at > ?)", record.SessionID, now.Add(-30*24*time.Hour)).First(&account).Error != nil {
 		return APIToken{}, errTokenRejected
 	}
 	return record, nil

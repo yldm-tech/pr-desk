@@ -106,6 +106,7 @@ func TestMCPToolsAreScopedToTheTokensAccount(t *testing.T) {
 	if len(tools.Tools) < 5 {
 		t.Fatal("the tool list is unexpectedly short", len(tools.Tools))
 	}
+	assertToolAnnotations(t, tools.Tools)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_follow_ups", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatal(err)
@@ -178,6 +179,37 @@ func TestMCPWriteToolsHonourOptimisticConcurrency(t *testing.T) {
 	}
 	if after.HandledVersion != 4 {
 		t.Fatal("the follow-up was not marked handled", after.HandledVersion)
+	}
+}
+
+// The spec defaults destructiveHint and openWorldHint to true when they are absent, so omitting them published every tool here as destructive and as reaching GitHub, and a host that auto-approves harmless tools prompted on every mark_follow_up_read. This pins the wire contract so a new AddTool cannot quietly reintroduce the defaults.
+func assertToolAnnotations(t *testing.T, tools []*mcp.Tool) {
+	t.Helper()
+	writes := map[string]bool{"mark_follow_up_read": true, "mark_follow_up_handled": true, "snooze_follow_up": true, "unsnooze_follow_up": true}
+	seen := 0
+	for _, tool := range tools {
+		if tool.Annotations == nil {
+			t.Fatal("tool carries no annotations", tool.Name)
+		}
+		if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
+			t.Fatal("tool advertises an open world it never reaches", tool.Name)
+		}
+		if writes[tool.Name] {
+			seen++
+			if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
+				t.Fatal("a write tool that deletes nothing advertises as destructive", tool.Name)
+			}
+			if tool.Annotations.ReadOnlyHint {
+				t.Fatal("a write tool advertises as read-only", tool.Name)
+			}
+			continue
+		}
+		if !tool.Annotations.ReadOnlyHint {
+			t.Fatal("a read tool does not advertise as read-only", tool.Name)
+		}
+	}
+	if seen != len(writes) {
+		t.Fatal("not every write tool was listed", seen)
 	}
 }
 

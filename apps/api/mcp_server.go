@@ -21,6 +21,9 @@ import (
 // built from a checkout answers "dev".
 var appVersion = "dev"
 
+// The SDK models destructiveHint and openWorldHint as pointers because the spec defaults both to true when they are absent, so a tool that leaves them nil publishes itself as destructive and as reaching an open world. Nothing here calls out to anything, hence the address of a false.
+var falseHint = false
+
 // The MCP surface is deliberately narrower than the HTTP API: it reads the
 // follow-up workspace and changes local handling state, and it never touches
 // settings, notification destinations or the GitHub account itself. An agent
@@ -66,6 +69,7 @@ type listFollowUpsInput struct {
 	MinWaitingDays int    `json:"min_waiting_days,omitempty" jsonschema:"Only return follow-ups whose waiting clock has run at least this many days"`
 	Sort           string `json:"sort,omitempty" jsonschema:"waiting to put the longest wait first, or activity for the most recently changed first (default)"`
 	Limit          int    `json:"limit,omitempty" jsonschema:"Maximum number of follow-ups to return (default 30, maximum 200)"`
+	Offset         int    `json:"offset,omitempty" jsonschema:"How many matching follow-ups to skip before the page starts (default 0). total counts every match and has_more says whether any are left, so pass offset plus the number returned to read past the limit"`
 }
 
 type followUpOutput struct {
@@ -94,6 +98,7 @@ type followUpOutput struct {
 type listFollowUpsOutput struct {
 	FollowUps []followUpOutput `json:"follow_ups"`
 	Total     int              `json:"total" jsonschema:"Number of follow-ups matching the filter before the limit was applied"`
+	HasMore   bool             `json:"has_more" jsonschema:"True when matches remain after this page; call again with offset raised by the number returned"`
 }
 
 // waitingDays is the age of the waiting clock, which advanceFacts moves on human
@@ -207,6 +212,9 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 	if in.Reason != "" && !presentableReason(in.Reason) {
 		return nil, listFollowUpsOutput{}, errors.New("reason has to be " + strings.Join(presentableReasons, ", "))
 	}
+	if in.Offset < 0 {
+		return nil, listFollowUpsOutput{}, errors.New("offset cannot be negative")
+	}
 	rows, err := s.accountFollowUps(ctx, session.sessionID)
 	if err != nil {
 		return nil, listFollowUpsOutput{}, errors.New("unable to load follow-ups")
@@ -252,11 +260,21 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 	if in.Sort == "waiting" {
 		sort.SliceStable(matched, func(i, j int) bool { return matched[i].WaitingFor > matched[j].WaitingFor })
 	}
-	out := listFollowUpsOutput{FollowUps: matched, Total: len(matched)}
-	if len(matched) > limit {
-		out.FollowUps = matched[:limit]
+	// An offset past the end is a page nobody filled, not a mistake: a caller walking to the end of the list arrives there by construction.
+	out := listFollowUpsOutput{FollowUps: []followUpOutput{}, Total: len(matched)}
+	if in.Offset < len(matched) {
+		page := matched[in.Offset:]
+		if len(page) > limit {
+			page = page[:limit]
+		}
+		out.FollowUps = page
 	}
-	return toolResult(fmt.Sprintf("%d follow-ups match; returning %d.", out.Total, len(out.FollowUps))), out, nil
+	out.HasMore = in.Offset+len(out.FollowUps) < out.Total
+	summary := fmt.Sprintf("%d follow-ups match; returning %d.", out.Total, len(out.FollowUps))
+	if out.HasMore {
+		summary += fmt.Sprintf(" Pass offset %d for the next page.", in.Offset+len(out.FollowUps))
+	}
+	return toolResult(summary), out, nil
 }
 
 type getFollowUpInput struct {
@@ -268,7 +286,7 @@ type commentOutput struct {
 	Author    string `json:"author"`
 	Body      string `json:"body"`
 	URL       string `json:"url,omitempty"`
-	Kind      string `json:"kind" jsonschema:"review for an inline code comment, conversation for a discussion comment"`
+	Kind      string `json:"kind" jsonschema:"review for an inline code comment, summary for the prose submitted with a review, conversation for a discussion comment"`
 	CreatedAt string `json:"created_at"`
 }
 
@@ -385,10 +403,11 @@ type pullRequestInput struct {
 	Checks     string `json:"checks,omitempty" jsonschema:"Only return pull requests whose checks are in this state: success, failure, pending, inconclusive or unknown"`
 	Conflict   bool   `json:"conflict,omitempty" jsonschema:"Only return pull requests whose branch conflicts with its base"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum number of pull requests to return (default 30, maximum 200)"`
+	Offset     int    `json:"offset,omitempty" jsonschema:"How many matching pull requests to skip before the page starts (default 0). total counts every match and has_more says whether any are left, so pass offset plus the number returned to read past the limit"`
 }
 
+// There is deliberately no identifier here. The only id this surface accepts is a follow-up id, and a pull request primary key from the same account collides with it freely, so an agent passing one to get_follow_up would silently read an unrelated row instead of erroring. repository and number are the handle for a pull request.
 type pullRequestOutput struct {
-	ID            uint              `json:"id"`
 	Repository    string            `json:"repository"`
 	Number        int               `json:"number"`
 	Title         string            `json:"title"`
@@ -408,6 +427,7 @@ type pullRequestOutput struct {
 type pullRequestListOutput struct {
 	PullRequests []pullRequestOutput `json:"pull_requests"`
 	Total        int                 `json:"total"`
+	HasMore      bool                `json:"has_more" jsonschema:"True when matches remain after this page; call again with offset raised by the number returned"`
 }
 
 // A literal underscore or percent in a search term must not act as a wildcard.
@@ -437,6 +457,9 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	}
 	if in.Checks != "" && !validChecksFilter(in.Checks) {
 		return nil, pullRequestListOutput{}, checksFilterError()
+	}
+	if in.Offset < 0 {
+		return nil, pullRequestListOutput{}, errors.New("offset cannot be negative")
 	}
 	query := s.db.WithContext(ctx).Model(&PullRequest{}).Where("session_id = ?", session.sessionID)
 	if in.Repository != "" {
@@ -469,19 +492,25 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 		return nil, pullRequestListOutput{}, errors.New("unable to load pull requests")
 	}
 	var rows []PullRequest
-	if err := query.Order("updated_at DESC, id DESC").Limit(limit).Find(&rows).Error; err != nil {
+	// updated_at ties are broken by id, so the order is total and paging by offset over it neither repeats nor skips a row unless a sync moves one.
+	if err := query.Order("updated_at DESC, id DESC").Limit(limit).Offset(in.Offset).Find(&rows).Error; err != nil {
 		return nil, pullRequestListOutput{}, errors.New("unable to load pull requests")
 	}
 	out := pullRequestListOutput{PullRequests: []pullRequestOutput{}, Total: int(total)}
 	for _, row := range rows {
 		out.PullRequests = append(out.PullRequests, pullRequestOutput{
-			ID: row.ID, Repository: row.Repo, Number: row.Number, Title: row.Title, URL: row.URL,
+			Repository: row.Repo, Number: row.Number, Title: row.Title, URL: row.URL,
 			Author: row.Author, Role: row.Role, State: row.State, ReviewState: row.ReviewStatus,
 			Checks: row.ChecksStatus, FailingChecks: row.checks(), Draft: row.Draft, Conflict: row.HasConflicts,
 			Merged: row.MergedAt != nil, UpdatedAt: row.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
-	return toolResult(fmt.Sprintf("%d pull requests match; returning %d.", out.Total, len(out.PullRequests))), out, nil
+	out.HasMore = in.Offset+len(out.PullRequests) < out.Total
+	summary := fmt.Sprintf("%d pull requests match; returning %d.", out.Total, len(out.PullRequests))
+	if out.HasMore {
+		summary += fmt.Sprintf(" Pass offset %d for the next page.", in.Offset+len(out.PullRequests))
+	}
+	return toolResult(summary), out, nil
 }
 
 type repositoryOutput struct {
@@ -656,16 +685,17 @@ func (s *Server) followUpAction(action string) mcp.ToolHandlerFor[followUpAction
 
 func (s *Server) newMCPServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: appVersion, Title: "PR Desk"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days, and sort by longest wait.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up", Description: "Read one follow-up in full, including the stored comment thread rather than the truncated excerpt the listing carries.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpGetFollowUp)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpFollowUpSummary)
-	mcp.AddTool(server, &mcp.Tool{Name: "get_sync_status", Description: "Report how fresh the synchronized data is and whether the first inventory finished, so an empty result can be judged.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpSyncStatus)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state, role, check state or conflict. Unlike list_follow_ups this covers pull requests you only review, so it is the way to find every branch with failing checks rather than only your own.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize the follow-up workspace by repository: open, attention-needing, conflicting and check-failing counts. Every count is scoped to the pull requests a follow-up tracks, so a repository with no tracked pull request is absent entirely and the totals do not reconcile with list_pull_requests, which is what answers \"every branch that is red\".", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
-	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_read", Description: "Mark a follow-up as read. This does not mark the work as handled and does not touch GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("read"))
-	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("handled"))
-	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("snooze"))
-	mcp.AddTool(server, &mcp.Tool{Name: "unsnooze_follow_up", Description: "Cancel a snooze and let the follow-up surface again. Read and handled state are left alone.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("unsnooze"))
+	// No write tool below is destructive: none deletes a row, all four only move local handling flags, and applyFollowUpAction refuses a write whose version is stale, so nothing the caller has not seen can be overwritten.
+	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days, and sort by longest wait. A page holds at most 200 rows; total reports every match and offset pages through the rest.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpListFollowUps)
+	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up", Description: "Read one follow-up in full, including the stored comment thread rather than the truncated excerpt the listing carries.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpGetFollowUp)
+	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpFollowUpSummary)
+	mcp.AddTool(server, &mcp.Tool{Name: "get_sync_status", Description: "Report how fresh the synchronized data is and whether the first inventory finished, so an empty result can be judged.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpSyncStatus)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state, role, check state or conflict. Unlike list_follow_ups this covers pull requests you only review, so it is the way to find every branch with failing checks rather than only your own. A page holds at most 200 rows; total reports every match and offset pages through the rest, so an account with thousands of pull requests still answers completely.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpListPullRequests)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize the follow-up workspace by repository: open, attention-needing, conflicting and check-failing counts. Every count is scoped to the pull requests a follow-up tracks, so a repository with no tracked pull request is absent entirely and the totals do not reconcile with list_pull_requests, which is what answers \"every branch that is red\".", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &falseHint}}, s.mcpListRepositories)
+	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_read", Description: "Mark a follow-up as read. This does not mark the work as handled and does not touch GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("read"))
+	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("handled"))
+	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("snooze"))
+	mcp.AddTool(server, &mcp.Tool{Name: "unsnooze_follow_up", Description: "Cancel a snooze and let the follow-up surface again. Read and handled state are left alone.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("unsnooze"))
 	return server
 }
 
