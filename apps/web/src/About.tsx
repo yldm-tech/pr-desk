@@ -1,3 +1,4 @@
+import { secondaryAction } from "./action-styles";
 import { ExternalLink, FolderGit2, GitPullRequest, Inbox, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { projectRepository, projectVersion } from "./project";
@@ -14,7 +15,7 @@ export function About() {
         </div>
         <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed">{t("aboutTagline")}</p>
         <p className="mt-3 max-w-3xl leading-relaxed text-[var(--muted)]">{t("aboutDescription")}</p>
-        <a className="secondary-action mt-6 inline-flex max-w-full items-center gap-2" href={projectRepository} target="_blank" rel="noopener noreferrer">
+        <a className={`${secondaryAction} mt-6 inline-flex max-w-full items-center gap-2`} href={projectRepository} target="_blank" rel="noopener noreferrer">
           <FolderGit2 size={18} aria-hidden="true" />
           {t("aboutRepository")}
           <ExternalLink size={14} aria-hidden="true" />

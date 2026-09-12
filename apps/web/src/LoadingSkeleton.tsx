@@ -1,5 +1,6 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
+import { accessSkeleton, listHeading, muted, prListSkeletonRow, prStatus, prTitle, rowActivity, skeletonControls, skeletonFilters, skeletonFlex, skeletonSearch, skeletonLegend, skeletonRows, skeletonScore, skeletonSyncNote, skeletonYears, tableHead, tableRow, toolbar } from "./app-styles";
 import { achievementBottom, achievementOutcomes, achievementPanel, achievementScore, achievementTop, authorizedAccounts, outcomesContent, scoreSecondary } from "./overview-styles";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
 import { repositoryAction, repositoryControls, repositoryIdentity, repositoryListCaption, repositoryListPanel, repositoryNumber, repositoryRow, repositoryRows, repositorySummary, repositorySummaryItem } from "./repository-styles";
@@ -14,10 +15,10 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
       <div className="overview-skeleton @container/overview" role="status" aria-label={t("loading")} aria-busy="true">
         <div aria-hidden="true">
           {controls && (
-            <div className="skeleton-controls">
+            <div className={skeletonControls}>
               <Skeleton width={220} height={38} />
               <Skeleton width={170} height={12} />
-              <div className="skeleton-years">
+              <div className={skeletonYears}>
                 {Array.from({ length: 12 }, (_, i) => (
                   <Skeleton key={i} width={42} height={18} />
                 ))}
@@ -28,7 +29,7 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
             <article className={`${achievementScore} pt-7`}>
               <SkeletonTheme baseColor="var(--skeleton-hero-base)" highlightColor="var(--skeleton-hero-highlight)">
                 <Skeleton width="36%" height={15} />
-                <div className="skeleton-score">
+                <div className={skeletonScore}>
                   <Skeleton width="65%" height={66} />
                 </div>
                 <Skeleton width="32%" height={14} />
@@ -42,7 +43,7 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               <Skeleton width="35%" height={17} />
               <div className={outcomesContent}>
                 <Skeleton circle width={150} height={150} />
-                <div className="skeleton-legend">
+                <div className={skeletonLegend}>
                   <Skeleton count={3} height={18} />
                 </div>
               </div>
@@ -55,7 +56,7 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
                 <Skeleton width="55%" height={12} />
                 <Skeleton height={40} />
               </div>
-              <div className="skeleton-score">
+              <div className={skeletonScore}>
                 <Skeleton width="25%" height={32} />
               </div>
               <Skeleton height={280} />
@@ -64,11 +65,11 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               <Skeleton width="35%" height={17} />
               <div className={outcomesContent}>
                 <Skeleton circle width={130} height={130} />
-                <div className="skeleton-legend">
+                <div className={skeletonLegend}>
                   <Skeleton count={4} height={14} />
                 </div>
               </div>
-              <div className="skeleton-rows">
+              <div className={skeletonRows}>
                 <Skeleton count={5} height={22} />
               </div>
             </article>
@@ -93,18 +94,18 @@ function LoadingFrame({ children, className = "" }: { children: import("react").
 
 export function PRListSkeleton({ count = 5 }: { count?: number }) {
   return (
-    <LoadingFrame className="pr-list-skeleton">
+    <LoadingFrame className={prListSkeletonRow}>
       <div className="table block w-full">
-        <div className="thead">
+        <div className={tableHead}>
           {Array.from({ length: 5 }, (_, i) => (
             <Skeleton key={i} width={i === 0 ? 100 : 48} height={11} />
           ))}
         </div>
         {Array.from({ length: count }, (_, i) => (
-          <div className="row" key={i}>
-            <div className="prtitle">
+          <div className={tableRow} key={i}>
+            <div className={prTitle}>
               <Skeleton width={17} height={17} />
-              <div className="skeleton-flex">
+              <div className={skeletonFlex}>
                 <Skeleton width={i % 2 ? "92%" : "78%"} height={15} />
                 <Skeleton width="55%" height={15} />
                 <div className="mt-1">
@@ -115,14 +116,14 @@ export function PRListSkeleton({ count = 5 }: { count?: number }) {
             <div className="min-w-0 max-[640px]:col-start-1 max-[640px]:row-start-2">
               <Skeleton width="85%" height={12} />
             </div>
-            <div className="prstatus">
+            <div className={prStatus}>
               <Skeleton width={70} height={23} />
               <Skeleton width={60} height={11} />
             </div>
-            <span className="muted">
+            <span className={muted}>
               <Skeleton width="85%" height={12} />
             </span>
-            <div className="activity">
+            <div className={rowActivity}>
               <Skeleton width={38} height={30} />
             </div>
           </div>
@@ -140,7 +141,7 @@ export function RepositorySkeleton({ count = 6 }: { count?: number }) {
           <div className={repositoryRow} key={i}>
             <div className={repositoryIdentity}>
               <Skeleton width={36} height={36} />
-              <div className="skeleton-flex">
+              <div className={skeletonFlex}>
                 <Skeleton width="45%" height={11} />
                 <Skeleton width="75%" height={16} />
               </div>
@@ -165,7 +166,7 @@ export function ProfileSkeleton() {
     <LoadingFrame className="profile-skeleton">
       <div className={profileIdentity}>
         <Skeleton circle width={48} height={48} />
-        <div className="skeleton-flex">
+        <div className={skeletonFlex}>
           <Skeleton width="75%" height={16} />
           <Skeleton width="55%" height={12} />
         </div>
@@ -230,7 +231,7 @@ export function ActivitySkeleton() {
 
 export function AccessSkeleton() {
   return (
-    <LoadingFrame className="access-skeleton">
+    <LoadingFrame className={accessSkeleton}>
       <div className={`${authorizedAccounts} mb-0`}>
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} width={160} height={30} />
@@ -258,7 +259,7 @@ export function StatsSkeleton() {
         {[0, 1, 2, 3].map((i) => (
           <div className="stat @max-[620px]/dashboard:min-h-[76px] @max-[620px]/dashboard:p-3.5" key={i}>
             <Skeleton width={38} height={38} />
-            <div className="skeleton-flex">
+            <div className={skeletonFlex}>
               <Skeleton width="70%" height={12} />
               <Skeleton width={54} height={26} />
             </div>
@@ -303,12 +304,12 @@ export function PageSkeleton({ page }: { page: string }) {
     <div className="page-skeleton">
       <StatsSkeleton />
       <LoadingFrame>
-        <div className="list-heading">
+        <div className={listHeading}>
           <Skeleton width={130} height={20} />
         </div>
-        <div className="toolbar">
-          <Skeleton width="100%" height={40} containerClassName="skeleton-search" />
-          {page !== "Repositories" && <Skeleton width="100%" height={38} containerClassName="skeleton-filters" />}
+        <div className={toolbar}>
+          <Skeleton width="100%" height={40} containerClassName={skeletonSearch} />
+          {page !== "Repositories" && <Skeleton width="100%" height={38} containerClassName={skeletonFilters} />}
         </div>
       </LoadingFrame>
       {page === "Repositories" ? <RepositorySkeleton /> : <PRListSkeleton />}
@@ -319,7 +320,7 @@ export function PageSkeleton({ page }: { page: string }) {
 export function SyncStatusSkeleton() {
   return (
     <LoadingFrame className={autoSyncNote}>
-      <Skeleton width="100%" height={12} containerClassName="skeleton-sync-note" />
+      <Skeleton width="100%" height={12} containerClassName={skeletonSyncNote} />
     </LoadingFrame>
   );
 }

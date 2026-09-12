@@ -168,7 +168,7 @@ test("capture computed styles", async ({ page }) => {
   for (const width of [1280, 640]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/#/pull-requests");
-    const activity = page.locator("button.activity").first();
+    const activity = page.getByTestId("pr-activity").first();
     if (await activity.count()) {
       await activity.click();
       await page.waitForTimeout(250);

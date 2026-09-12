@@ -10,7 +10,7 @@ const dead = new Set(process.argv.slice(2).filter((a) => !a.startsWith("--")));
 const apply = process.argv.includes("--apply");
 const classesOf = (sel) => [...sel.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]);
 
-for (const file of ["apps/web/src/style.css", "apps/web/src/workspace.css"]) {
+for (const file of ["apps/web/src/style.css"]) {
   const root = postcss.parse(readFileSync(file, "utf8"), { from: file });
   root.walkRules((rule) => {
     const keep = [];

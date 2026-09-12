@@ -48,6 +48,8 @@ const invisible = (prop, a, b, rowA, rowB, key) => {
   // A data URI cannot carry a literal space inside an arbitrary value, so the
   // same image arrives percent-encoded. It draws the same glyph.
   if (prop === "backgroundImage") return a.replaceAll("%20", " ") === b.replaceAll("%20", " ");
+  // Flex direction and wrapping are carried on a grid container and never used.
+  if ((prop === "flexDirection" || prop === "flexWrap") && /grid/.test(rowA.display) && /grid/.test(rowB.display)) return true;
   if (["alignItems", "alignContent", "justifyItems", "justifyContent", "alignSelf", "justifySelf"].includes(prop)) {
     const spell = (v) => v.replace(/^flex-/, "");
     return spell(a) === spell(b);

@@ -30,7 +30,7 @@ export const scoreRate = "mt-2.5 flex items-center gap-[7px] text-[length:var(--
 export const scoreDot = "h-[5px] w-[5px] rounded-[50%] bg-[var(--hero-muted)]";
 
 // Hidden on this layout, but still rendered so the markup does not change.
-export const scoreWatermark = "hidden";
+export const scoreWatermark = "hidden text-[var(--hero-muted)]";
 
 export const scoreSecondary = [
   "relative mt-[26px] grid grid-cols-2 gap-[18px] border-t border-[var(--hero-border)] py-[18px]",
