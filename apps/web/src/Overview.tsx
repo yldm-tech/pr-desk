@@ -4,6 +4,52 @@ import { OverviewSkeleton, AccessSkeleton } from "./LoadingSkeleton";
 import { useMemo, useEffect, useRef } from "react";
 import Skeleton from "react-loading-skeleton";
 import * as Select from "@radix-ui/react-select";
+import { selectContent, selectOption } from "./select-styles";
+import { emptyState, linkAction, secondaryAction } from "./action-styles";
+import {
+  achievementBottom,
+  achievementEmpty,
+  achievementFootnote,
+  achievementOutcomes,
+  achievementPanel,
+  achievementScore,
+  achievementTop,
+  authorizedAccounts,
+  distributionDetails,
+  distributionLegend,
+  distributionPanel,
+  distributionSummary,
+  legendDot,
+  outcomesContent,
+  outcomesLegend,
+  outcomesRing,
+  overviewPage,
+  panelDescription,
+  panelHeading,
+  panelKicker,
+  repositoryTooltip,
+  ringLabel,
+  scoreDot,
+  scoreLabel,
+  scoreNumber,
+  scoreRate,
+  scoreSecondary,
+  scoreWatermark,
+  trendEmpty,
+  trendHeader,
+  trendHeadingSlot,
+  trendRepositoryLink,
+  trendRepoTrigger,
+  trendSkeleton,
+  trendSummaryRow,
+  trendTotal,
+  visibilityFeedback,
+  visibilityTabs,
+  yearPanel,
+  yearTab,
+  yearTabs,
+} from "./overview-styles";
+import { syncStatusError } from "./status-styles";
 import * as Tabs from "@radix-ui/react-tabs";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -73,14 +119,14 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
   if (query.isPending) return <OverviewSkeleton controls />;
   if (query.isError && !query.data)
     return (
-      <div className="empty-state" role="alert">
+      <div className={emptyState} role="alert">
         <AlertTriangle size={28} />
         <h2>{t("overviewError")}</h2>
-        <button className="secondary-action" onClick={() => query.refetch()}>
+        <button className={secondaryAction} onClick={() => query.refetch()}>
           {t("retry")}
         </button>
         {visibility !== "all" && (
-          <button className="secondary-action" onClick={() => changeScope("visibility", "all")}>
+          <button className={secondaryAction} onClick={() => changeScope("visibility", "all")}>
             {t("allContributions")}
           </button>
         )}
@@ -91,15 +137,15 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
   return (
     <Tabs.Root value={String(year)} onValueChange={(value) => changeScope("year", value)}>
       {query.isError && query.data && (
-        <div className="sync-status-error" role="status">
+        <div className={syncStatusError} role="status">
           <span>{t("refreshFailedKeepData")}</span>
-          <button className="access-recheck" onClick={() => query.refetch()}>
+          <button className={linkAction} onClick={() => query.refetch()}>
             {t("retry")}
           </button>
         </div>
       )}
       <Tabs.Root value={visibility} onValueChange={(value) => changeScope("visibility", value)}>
-        <Tabs.List className="visibility-tabs" aria-label={t("visibilityScope")}>
+        <Tabs.List className={visibilityTabs} aria-label={t("visibilityScope")}>
           <Tabs.Trigger value="all">{t("allContributions")}</Tabs.Trigger>
           <Tabs.Trigger value="public">
             {t("publicOnly")} <span>{query.isPlaceholderData || (!query.data.history_complete && !counts.public_repositories) ? "—" : (counts.public_repositories?.toLocaleString() ?? "—")}</span>
@@ -109,7 +155,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
           </Tabs.Trigger>
         </Tabs.List>
       </Tabs.Root>
-      <p className="visibility-feedback" role="status" aria-live="polite">
+      <p className={visibilityFeedback} role="status" aria-live="polite">
         {visibility === "all" ? (
           t("showingAllContributions")
         ) : visibility === "public" ? (
@@ -125,7 +171,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
               {t("installGitHubApp")}
             </a>
             {" · "}
-            <button className="access-recheck" onClick={() => access.refetch()} disabled={access.isFetching}>
+            <button className={linkAction} onClick={() => access.refetch()} disabled={access.isFetching}>
               {t("recheckAccess")}
             </button>
           </>
@@ -136,7 +182,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
         ) : access.isError ? (
           <>
             {t("accessCheckFailed")}{" "}
-            <button className="access-recheck" onClick={() => access.refetch()}>
+            <button className={linkAction} onClick={() => access.refetch()}>
               {t("retry")}
             </button>
           </>
@@ -151,7 +197,7 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
       </p>
       {visibility === "private" && access.isPending && <AccessSkeleton />}
       {visibility === "private" && access.data?.installations && access.data.installations.length > 0 && (
-        <div className="authorized-accounts">
+        <div className={authorizedAccounts}>
           {access.data.installations.map((account) => (
             <a key={account.account} href={account.settings_url} target="_blank" rel="noopener noreferrer">
               {account.account} · {t(account.can_read_prs ? (account.repository_selection === "all" ? "allRepositoriesAuthorized" : "selectedRepositoriesAuthorized") : "privatePermissionMissing")}
@@ -159,14 +205,14 @@ export default function Overview({ onAccessGranted }: { onAccessGranted: () => v
           ))}
         </div>
       )}
-      <Tabs.List className="overview-year-tabs" aria-label={t("yearSelect")}>
+      <Tabs.List className={yearTabs} aria-label={t("yearSelect")}>
         {query.data.years.map((value) => (
-          <Tabs.Trigger key={value} value={String(value)} className="overview-year-tab">
+          <Tabs.Trigger key={value} value={String(value)} className={yearTab}>
             {value}
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      <Tabs.Content value={String(year)} className="overview-year-panel" aria-busy={query.isFetching}>
+      <Tabs.Content value={String(year)} className={yearPanel} aria-busy={query.isFetching}>
         {query.isPlaceholderData ? <OverviewSkeleton /> : <Achievements data={query.data} visibility={visibility} />}
       </Tabs.Content>
     </Tabs.Root>
@@ -278,23 +324,23 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
     [states, t, i18n.resolvedLanguage],
   );
   return (
-    <section className="overview-page @container/overview" aria-label={t("achievements")}>
-      <div className="achievement-top grid grid-cols-1 @[800px]/overview:grid-cols-2">
-        <article className="achievement-score">
-          <div className="score-label">
+    <section className={`${overviewPage} @container/overview`} aria-label={t("achievements")}>
+      <div className={`${achievementTop} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+        <article className={achievementScore}>
+          <div className={scoreLabel}>
             <GitMerge size={18} />
             <span>{t("mergedTotal")}</span>
           </div>
-          <div className="score-number">
+          <div className={scoreNumber}>
             {number(s.merged)}
             <span>PRs</span>
           </div>
-          <div className="score-rate">
-            <span className="score-dot" />
+          <div className={scoreRate}>
+            <span className={scoreDot} />
             {t("mergeRate")} <strong>{rate}</strong>
           </div>
-          <GitMerge className="score-watermark" aria-hidden="true" />
-          <div className="score-secondary">
+          <GitMerge className={scoreWatermark} aria-hidden="true" />
+          <div className={scoreSecondary}>
             <div>
               <GitPullRequest size={16} />
               <span>{t("contributionTotal")}</span>
@@ -307,23 +353,23 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
             </div>
           </div>
         </article>
-        <article className="achievement-outcomes">
-          <div className="panel-heading">
+        <article className={achievementOutcomes}>
+          <div className={panelHeading}>
             <h2>{t("contributionStates")}</h2>
-            <span className="panel-kicker">{t("syncedSnapshot")}</span>
+            <span className={panelKicker}>{t("syncedSnapshot")}</span>
           </div>
-          <div className="outcomes-content">
-            <div className="outcomes-ring">
+          <div className={outcomesContent}>
+            <div className={outcomesRing}>
               {s.total > 0 && <Chart definition={stateChart} height={166} ariaLabel={t("contributionStates")} />}
-              <div className="ring-label">
+              <div className={ringLabel}>
                 <strong>{rate}</strong>
                 <span>{t("mergeRate")}</span>
               </div>
             </div>
-            <ul className="outcomes-legend">
+            <ul className={outcomesLegend}>
               {states.map((state) => (
                 <li key={state.label}>
-                  <span className="legend-dot" style={{ backgroundColor: state.color }} />
+                  <span className={legendDot} style={{ backgroundColor: state.color }} />
                   <span>{state.label}</span>
                   <strong>{number(state.value)}</strong>
                 </li>
@@ -333,12 +379,12 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
         </article>
       </div>
       {s.total === 0 ? (
-        <p className="achievement-empty">{t(data.history_complete ? "noAchievements" : "historySyncNeeded")}</p>
+        <p className={achievementEmpty}>{t(data.history_complete ? "noAchievements" : "historySyncNeeded")}</p>
       ) : (
-        <div className="achievement-bottom grid grid-cols-1 @[800px]/overview:grid-cols-2">
-          <article className="achievement-panel trend-panel @container/chart" aria-busy={trendLoading}>
-            <div className="trend-header flex-col items-stretch gap-3.5 @[560px]/chart:flex-row @[560px]/chart:items-center">
-              <div className="panel-heading">
+        <div className={`${achievementBottom} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+          <article className={`${achievementPanel} @container/chart`} aria-busy={trendLoading}>
+            <div className={`${trendHeader} flex-col items-stretch gap-3.5 @[560px]/chart:flex-row @[560px]/chart:items-center`}>
+              <div className={`${panelHeading} ${trendHeadingSlot}`}>
                 <div>
                   <h2>{t("mergeActivity")}</h2>
                   <p>
@@ -347,7 +393,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 </div>
               </div>
               <Select.Root value={repo} onValueChange={setSelectedRepo}>
-                <Select.Trigger className="trend-repo-trigger w-full max-w-full @[560px]/chart:w-80 @[560px]/chart:max-w-[48%]" aria-label={t("trendRepository")}>
+                <Select.Trigger className={`${trendRepoTrigger} w-full max-w-full @[560px]/chart:w-80 @[560px]/chart:max-w-[48%]`} aria-label={t("trendRepository")}>
                   <FolderGit2 size={16} />
                   <Select.Value />
                   <Select.Icon>
@@ -355,16 +401,16 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                   </Select.Icon>
                 </Select.Trigger>
                 <Select.Portal>
-                  <Select.Content className="language-menu trend-repo-menu" position="popper" align="end" sideOffset={8} collisionPadding={12}>
+                  <Select.Content className={`${selectContent} min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)] [&_[data-radix-select-viewport]]:max-h-[280px]`} position="popper" align="end" sideOffset={8} collisionPadding={12}>
                     <Select.Viewport>
-                      <Select.Item className="language-option" value="all">
+                      <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value="all">
                         <Select.ItemText>{t("allTrendRepositories")}</Select.ItemText>
                         <Select.ItemIndicator>
                           <Check size={15} />
                         </Select.ItemIndicator>
                       </Select.Item>
                       {data.repositories.map((item) => (
-                        <Select.Item className="language-option" value={item.repo} key={item.repo}>
+                        <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value={item.repo} key={item.repo}>
                           <Select.ItemText>{item.repo}</Select.ItemText>
                           <Select.ItemIndicator>
                             <Check size={15} />
@@ -376,44 +422,44 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 </Select.Portal>
               </Select.Root>
             </div>
-            <div className="trend-summary-row flex-wrap gap-2">
-              <div className="trend-total">
+            <div className={`${trendSummaryRow} flex-wrap gap-2`}>
+              <div className={`trend-total ${trendTotal}`}>
                 <strong>{trendLoading ? <Skeleton width={90} /> : number(periodTotal)}</strong>
                 <span>{t("periodMerged")}</span>
               </div>
               {repo !== "all" && (
-                <a className="trend-repository-link" href={`https://github.com/${repo}`} target="_blank" rel="noopener noreferrer">
+                <a className={trendRepositoryLink} href={`https://github.com/${repo}`} target="_blank" rel="noopener noreferrer">
                   {repo}
                 </a>
               )}
             </div>
             {trendLoading ? (
-              <div className="trend-skeleton" role="status" aria-label={t("loading")}>
+              <div className={trendSkeleton} role="status" aria-label={t("loading")}>
                 <Skeleton height={260} />
               </div>
             ) : trendError ? (
-              <div role="alert" className="trend-empty">
+              <div role="alert" className={trendEmpty}>
                 <p>{t("overviewError")}</p>
-                <button className="access-recheck" onClick={() => trendQuery.refetch()}>
+                <button className={linkAction} onClick={() => trendQuery.refetch()}>
                   {t("retry")}
                 </button>
               </div>
             ) : periodTotal === 0 ? (
-              <div className="trend-empty">{t("noTrendMerges")}</div>
+              <div className={trendEmpty}>{t("noTrendMerges")}</div>
             ) : (
               <Chart definition={monthChart} height={280} ariaLabel={t("mergeActivity")} />
             )}
           </article>
-          <article className="achievement-panel distribution-panel block">
-            <div className="panel-heading">
+          <article className={distributionPanel}>
+            <div className={panelHeading}>
               <h2>{t("contributionDistribution")}</h2>
-              <span className="panel-kicker">
+              <span className={panelKicker}>
                 {number(s.repositories)} {t("repositories")}
               </span>
             </div>
-            <p className="panel-description">{t("distributionDescription")}</p>
-            <div className="distribution-summary">
-              <div className="outcomes-ring">
+            <p className={panelDescription}>{t("distributionDescription")}</p>
+            <div className={distributionSummary}>
+              <div className={outcomesRing}>
                 <TooltipChart
                   definition={repoChart}
                   onSelect={(point) => {
@@ -423,7 +469,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                   renderTooltipBody={({ points }) => {
                     const item = points[0]?.datum;
                     return item ? (
-                      <div className="repository-tooltip">
+                      <div className={repositoryTooltip}>
                         {item.href ? (
                           <a href={item.href} target="_blank" rel="noopener noreferrer">
                             {item.label}
@@ -443,15 +489,15 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                   height={166}
                   ariaLabel={t("contributionDistribution")}
                 />
-                <div className="ring-label">
+                <div className={ringLabel}>
                   <strong>{number(s.total)}</strong>
                   <span>PRs</span>
                 </div>
               </div>
-              <ul className="distribution-legend" tabIndex={0} aria-label={t("contributionDistribution")}>
+              <ul className={distributionLegend} tabIndex={0} aria-label={t("contributionDistribution")}>
                 {distribution.map((item) => (
                   <li key={item.label}>
-                    <span className="legend-dot" style={{ backgroundColor: item.color }} />
+                    <span className={legendDot} style={{ backgroundColor: item.color }} />
                     <a href={item.href} title={item.label} target="_blank" rel="noopener noreferrer">
                       {item.label}
                     </a>
@@ -460,7 +506,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 ))}
               </ul>
             </div>
-            <div id="repository-breakdown" className="distribution-details" tabIndex={0} role="region" aria-label={t("repositoryBreakdown")}>
+            <div id="repository-breakdown" className={distributionDetails} tabIndex={0} role="region" aria-label={t("repositoryBreakdown")}>
               <table>
                 <thead>
                   <tr>
@@ -487,7 +533,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
           </article>
         </div>
       )}
-      <p className="achievement-footnote">
+      <p className={achievementFootnote}>
         <Info size={14} />
         <span>
           {t(data.history_complete ? "historyScope" : "historySyncNeeded")} {t("yearBasis")}

@@ -16,6 +16,14 @@ export function safeGitHubLink(raw: string): string | undefined {
     return undefined;
   }
 }
+// The colour a check result is shown in. It used to be a class name the
+// stylesheet turned into a colour; the mapping lives here now.
+export function checkToneClass(tone: string) {
+  if (tone === "success") return "text-[var(--success)]";
+  if (tone === "failure") return "text-[var(--danger)]";
+  if (tone === "pending") return "text-[var(--warning)]";
+  return "text-[var(--muted)]";
+}
 export function checkTone(status: string, conclusion: string) {
   if (status !== "completed") return "pending";
   if (["success", "neutral", "skipped"].includes(conclusion)) return "success";

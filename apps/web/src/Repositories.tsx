@@ -1,4 +1,28 @@
 import { AlertTriangle, ArrowUpRight, Check, FolderGit2, GitPullRequest, Inbox, Search, X } from "lucide-react";
+import { emptyState, linkAction, secondaryAction } from "./action-styles";
+import {
+  repositoryAction,
+  repositoryAttention,
+  repositoryAvatar,
+  repositoryColumns,
+  repositoryConflicts,
+  repositoryControlLabel,
+  repositoryControls,
+  repositoryIdentity,
+  repositoryListCaption,
+  repositoryListPanel,
+  repositoryMobileLabel,
+  repositoryNumber,
+  repositoryNumberLink,
+  repositoryRow,
+  repositoryRows,
+  repositoryScopeNote,
+  repositorySearch,
+  repositorySummary,
+  repositorySummaryItem,
+  repositoryZero,
+} from "./repository-styles";
+import { syncStatusError } from "./status-styles";
 import { useSearchParams, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import * as Tabs from "@radix-ui/react-tabs";
@@ -37,9 +61,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       return next;
     });
   return (
-    <section id="repositories" className="repository-workspace">
+    <section id="repositories" className="grid gap-[22px]">
       <Tabs.Root className="grid gap-5" value={scope} onValueChange={(value) => change("scope", value === "all" ? "" : value)}>
-        <Tabs.List className="repository-summary" aria-label={t("repositoryScope")}>
+        <Tabs.List className={repositorySummary} aria-label={t("repositoryScope")}>
           {(
             [
               { value: "all", label: "activeRepositories", icon: FolderGit2 },
@@ -47,7 +71,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
               { value: "conflicts", label: "conflictRepositories", icon: AlertTriangle },
             ] as const
           ).map(({ value, label, icon: Icon }) => (
-            <Tabs.Trigger key={value} value={value} className="repository-summary-item">
+            <Tabs.Trigger key={value} value={value} className={repositorySummaryItem}>
               <span>
                 <Icon size={17} aria-hidden="true" />
                 {t(label)}
@@ -56,9 +80,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
             </Tabs.Trigger>
           ))}
         </Tabs.List>
-        <Tabs.Content value={scope} className="repository-list-panel">
-          <div className="repository-controls">
-            <label className="repository-search">
+        <Tabs.Content value={scope} className={repositoryListPanel}>
+          <div className={repositoryControls}>
+            <label className={repositorySearch}>
               <Search size={17} aria-hidden="true" />
               <input id="pr-search" type="search" maxLength={120} aria-label={t("searchRepositories")} placeholder={t("repositorySearchPlaceholder")} value={search} onChange={(event) => change("q", event.target.value)} />
               {search && (
@@ -67,7 +91,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                 </button>
               )}
             </label>
-            <label className="repository-control-label">
+            <label className={repositoryControlLabel}>
               <span>{t("repositoryOwner")}</span>
               <select aria-label={t("repositoryOwner")} value={owner} onChange={(event) => change("owner", event.target.value)}>
                 <option value="">{t("allOwners")}</option>
@@ -79,7 +103,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                 ))}
               </select>
             </label>
-            <label className="repository-control-label">
+            <label className={repositoryControlLabel}>
               <span>{t("repositorySort")}</span>
               <select aria-label={t("repositorySort")} value={sort} onChange={(event) => change("sort", event.target.value)}>
                 <option value="attention">{t("sortAttention")}</option>
@@ -88,10 +112,10 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
               </select>
             </label>
           </div>
-          <div className="repository-list-caption">
+          <div className={repositoryListCaption}>
             <span>
               {repositories ? t("repositoryResults", { count: shown.length }) : "—"}
-              <span className="repository-scope-note"> · {t("repositoryOpenScope")}</span>
+              <span className={repositoryScopeNote}> · {t("repositoryOpenScope")}</span>
             </span>
             {filtered && (
               <button onClick={clear}>
@@ -101,9 +125,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
             )}
           </div>
           {error && repositories && (
-            <div className="sync-status-error" role="status">
+            <div className={syncStatusError} role="status">
               <span>{t("refreshFailedKeepData")}</span>
-              <button className="access-recheck" onClick={retry}>
+              <button className={linkAction} onClick={retry}>
                 {t("retry")}
               </button>
             </div>
@@ -111,27 +135,27 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
           {loading ? (
             <RepositorySkeleton />
           ) : error && !repositories ? (
-            <div className="empty-state" role="alert">
+            <div className={emptyState} role="alert">
               <AlertTriangle size={28} />
               <h2>{t("unableRepositories")}</h2>
-              <button className="secondary-action" onClick={retry}>
+              <button className={secondaryAction} onClick={retry}>
                 {t("retry")}
               </button>
             </div>
           ) : !shown.length ? (
-            <div className="empty-state">
+            <div className={emptyState}>
               <FolderGit2 size={28} />
               <h2>{t("emptyResultsTitle")}</h2>
               <p>{t(filtered ? "emptyResultsDescription" : "noRepos")}</p>
               {filtered && (
-                <button className="secondary-action" onClick={clear}>
+                <button className={secondaryAction} onClick={clear}>
                   {t("clearFilters")}
                 </button>
               )}
             </div>
           ) : (
             <>
-              <div className="repository-columns" aria-hidden="true">
+              <div className={repositoryColumns} aria-hidden="true">
                 <span>{t("repositories")}</span>
                 <span>{t("open")}</span>
                 <span>{t("navAttention")}</span>
@@ -139,14 +163,14 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                 <span>{t("checksFailing")}</span>
                 <span />
               </div>
-              <ul className="repository-rows">
+              <ul className={repositoryRows}>
                 {shown.map((repo) => {
                   const [organization, ...name] = repo.repo.split("/");
                   const prURL = "/pull-requests?" + new URLSearchParams({ repo: repo.repo });
                   return (
-                    <li className="repository-row" key={repo.repo}>
-                      <div className="repository-identity">
-                        <span className="repository-avatar" aria-hidden="true">
+                    <li className={repositoryRow} key={repo.repo}>
+                      <div className={repositoryIdentity}>
+                        <span className={repositoryAvatar} aria-hidden="true">
                           {organization.slice(0, 2).toUpperCase()}
                         </span>
                         <a href={`https://github.com/${repo.repo}`} target="_blank" rel="noopener noreferrer" title={repo.repo}>
@@ -157,33 +181,33 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                           </strong>
                         </a>
                       </div>
-                      <Link className="repository-number" to={prURL} aria-label={t("repositoryOpenLink", { repo: repo.repo, count: repo.open })}>
-                        <span className="repository-mobile-label">
+                      <Link className={repositoryNumberLink} to={prURL} aria-label={t("repositoryOpenLink", { repo: repo.repo, count: repo.open })}>
+                        <span className={repositoryMobileLabel}>
                           <GitPullRequest size={13} />
                           {t("open")}
                         </span>
                         {repo.open.toLocaleString()}
                       </Link>
-                      <div className="repository-number">
-                        <span className="repository-mobile-label">{t("navAttention")}</span>
+                      <div className={repositoryNumber}>
+                        <span className={repositoryMobileLabel}>{t("navAttention")}</span>
                         {repo.needs_attention > 0 ? (
-                          <Link className="repository-attention" to={"/attention?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
+                          <Link className={repositoryAttention} to={"/attention?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
                             {repo.needs_attention.toLocaleString()}
                           </Link>
                         ) : (
-                          <span className="repository-zero">0</span>
+                          <span className={repositoryZero}>0</span>
                         )}
                       </div>
-                      <div className="repository-number">
-                        <span className="repository-mobile-label">{t("conflicts")}</span>
-                        <span className={repo.conflicts ? "repository-conflicts" : "repository-zero"}>{repo.conflicts.toLocaleString()}</span>
+                      <div className={repositoryNumber}>
+                        <span className={repositoryMobileLabel}>{t("conflicts")}</span>
+                        <span className={repo.conflicts ? repositoryConflicts : repositoryZero}>{repo.conflicts.toLocaleString()}</span>
                       </div>
-                      <div className="repository-number">
-                        <span className="repository-mobile-label">{t("checksFailing")}</span>
-                        <span className={repo.checks_failing ? "repository-conflicts" : "repository-zero"}>{repo.checks_failing.toLocaleString()}</span>
+                      <div className={repositoryNumber}>
+                        <span className={repositoryMobileLabel}>{t("checksFailing")}</span>
+                        <span className={repo.checks_failing ? repositoryConflicts : repositoryZero}>{repo.checks_failing.toLocaleString()}</span>
                       </div>
-                      <Link className="repository-action" to={prURL}>
-                        {repo.needs_attention === 0 && <Check size={14} className="repository-clear" aria-hidden="true" />}
+                      <Link className={repositoryAction} to={prURL}>
+                        {repo.needs_attention === 0 && <Check size={14} className="opacity-60" aria-hidden="true" />}
                         <span>{t("viewRepositoryPRs")}</span>
                         <ArrowUpRight size={14} aria-hidden="true" />
                       </Link>

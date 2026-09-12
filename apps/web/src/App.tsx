@@ -5,6 +5,62 @@ import { FollowUpSummary, FollowUpWorkspace, useFollowUps } from "./FollowUps";
 import { FollowUpSettings } from "./FollowUpSettings";
 import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
+import { checkToneClass } from "./activity-model";
+import { emptyState, linkAction, secondaryAction } from "./action-styles";
+import {
+  syncFeedback as syncFeedback_,
+  accentText,
+  accountBar,
+  appShell,
+  backgroundRefresh,
+  brand,
+  brandLogo,
+  commentButton,
+  conflict,
+  filters,
+  headerActions,
+  headerDate,
+  headerTitleSlot,
+  listHeading,
+  muted,
+  nav,
+  navButton,
+  asideBorder,
+  overviewAside,
+  overviewCanvas,
+  overviewHeading,
+  overviewHeaderGap,
+  pageHeaderGap,
+  pageHeader,
+  pageTitle,
+  pagination,
+  prRepository,
+  prStatus,
+  prTitle,
+  prTitleLink,
+  prUpdated,
+  rowActivity,
+  searchChip,
+  searchForm,
+  sidebar,
+  sidebarAction,
+  sidebarActionActive,
+  sidebarBottom,
+  skipLink,
+  spinning,
+  stat,
+  statIcon,
+  stats,
+  statusPill,
+  syncButton,
+  syncFeedbackFloating,
+  tableSurface,
+  tableChecks,
+  tableHead,
+  tableRow,
+  toolbar,
+} from "./app-styles";
+import { syncStatusError } from "./status-styles";
 import { SyncProgress } from "./SyncProgress";
 import { UserMenu } from "./UserMenu";
 import Skeleton from "react-loading-skeleton";
@@ -197,7 +253,7 @@ export default function App() {
   };
   const searchControl = (
     <form
-      className="search-form"
+      className={searchForm}
       role="search"
       onSubmit={(e) => {
         e.preventDefault();
@@ -207,7 +263,7 @@ export default function App() {
       <label htmlFor="pr-search">{t(filter === "Repositories" ? "searchRepositories" : "search")}</label>
       <div>
         <input id="pr-search" type="search" maxLength={120} title={t("searchShortcut")} aria-keyshortcuts="/" placeholder={t(filter === "Repositories" ? "repositorySearchPlaceholder" : "searchPlaceholder")} value={draftSearch} onChange={(e) => setDraftSearch(e.target.value)} />
-        <button className="iconbtn" aria-label={t("search")} type="submit">
+        <button aria-label={t("search")} type="submit">
           <Search size={19} />
         </button>
         {search && (
@@ -229,9 +285,9 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [syncFeedback]);
   return (
-    <div className={`app max-[900px]:block ${filter === "Overview" ? "overview-layout" : ""}`}>
+    <div className={`${appShell} max-[900px]:block ${filter === "Overview" ? overviewCanvas : ""}`}>
       <a
-        className="skip-link"
+        className={skipLink}
         href="#main-content"
         onClick={(event) => {
           event.preventDefault();
@@ -240,23 +296,25 @@ export default function App() {
       >
         {t("skipContent")}
       </a>
-      <aside className="min-[901px]:w-[208px] min-[901px]:max-[1200px]:px-3 max-[900px]:static max-[900px]:grid max-[900px]:h-auto max-[900px]:w-full max-[900px]:grid-cols-[minmax(0,1fr)_auto] max-[900px]:gap-3 max-[900px]:overflow-visible max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:p-4">
-        <a href="#/" className="brand max-[900px]:p-0 max-[900px]:self-center max-[480px]:text-[17px] max-[480px]:gap-1.5">
-          <img className="logo" src="/favicon.svg" alt="" />
+      <aside
+        className={`${sidebar} ${filter === "Overview" ? overviewAside : asideBorder} min-[901px]:w-[208px] min-[901px]:max-[1200px]:px-3 max-[900px]:static max-[900px]:grid max-[900px]:h-auto max-[900px]:w-full max-[900px]:grid-cols-[minmax(0,1fr)_auto] max-[900px]:gap-3 max-[900px]:overflow-visible max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:p-4`}
+      >
+        <a href="#/" className={`${brand} max-[900px]:p-0 max-[900px]:self-center max-[480px]:text-[17px] max-[480px]:gap-1.5`}>
+          <img className={brandLogo} src="/favicon.svg" alt="" />
           <span className="flex flex-col gap-0.5 leading-tight">
             <span>PR Desk</span>
-            <span className="brand-version text-[11px] font-normal tracking-normal text-[var(--muted)]">{projectVersion}</span>
+            <span className="text-[11px] font-normal tracking-normal text-[var(--muted)]">{projectVersion}</span>
           </span>
         </a>
         <nav
           aria-label={t("mainNavigation")}
-          className="max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button>span]:max-w-full max-[480px]:[&>button>span]:wrap-anywhere max-[480px]:[&>button]:text-[11px]"
+          className={`${nav} max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button>span]:max-w-full max-[480px]:[&>button>span]:wrap-anywhere max-[480px]:[&>button]:text-[11px]`}
         >
-          <button className={filter === "Overview" ? "active" : ""} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
+          <button className={navButton(filter === "Overview")} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
             <LayoutDashboard size={17} aria-hidden="true" />
             <span>{t("navOverview")}</span>
           </button>
-          <button className={filter === "Needs attention" ? "active" : ""} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
+          <button className={navButton(filter === "Needs attention")} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
             <Inbox size={17} aria-hidden="true" />
             <span>{t("navAttention")}</span>
             {(authLoading || auth?.connected) && (
@@ -265,29 +323,31 @@ export default function App() {
               </b>
             )}
           </button>
-          <button className={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "active" : ""} aria-current={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
+          <button className={navButton(!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter))} aria-current={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
             <span>{t("navAll")}</span>
           </button>
-          <button className={filter === "Repositories" ? "active" : ""} aria-current={filter === "Repositories" ? "page" : undefined} onClick={() => setFilter("Repositories")}>
+          <button className={navButton(filter === "Repositories")} aria-current={filter === "Repositories" ? "page" : undefined} onClick={() => setFilter("Repositories")}>
             <FolderGit2 size={17} aria-hidden="true" />
             <span>{t("navRepositories")}</span>
           </button>
-          <button className={filter === "About" ? "active" : ""} aria-current={filter === "About" ? "page" : undefined} onClick={() => setFilter("About")}>
+          <button className={navButton(filter === "About")} aria-current={filter === "About" ? "page" : undefined} onClick={() => setFilter("About")}>
             <Info size={17} aria-hidden="true" />
             <span>{t("navAbout")}</span>
           </button>
         </nav>
-        <div className="sidebottom max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs">
+        <div
+          className={`${sidebarBottom} max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs`}
+        >
           {auth?.connected && (
-            <button className={filter === "Settings" ? "organization-access active" : "organization-access"} aria-current={filter === "Settings" ? "page" : undefined} aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
+            <button className={filter === "Settings" ? sidebarActionActive : sidebarAction} aria-current={filter === "Settings" ? "page" : undefined} aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
               <Settings2 size={16} aria-hidden="true" />
               <span className="max-[480px]:hidden">{t("followup.settings")}</span>
             </button>
           )}
           {auth?.connected && (
             <a
-              className="organization-access"
+              className={sidebarAction}
               title={t("organizationAccess")}
               aria-label={t("organizationAccess")}
               onClick={(event) => {
@@ -312,17 +372,17 @@ export default function App() {
             </a>
           )}
           {auth?.connected && (
-            <button className="sync" disabled={!auth?.connected || syncing} aria-busy={syncing} onClick={() => syncMutation.mutate()}>
-              <RefreshCw size={16} className={syncing ? "spinning" : ""} />
+            <button className={syncButton} disabled={!auth?.connected || syncing} aria-busy={syncing} onClick={() => syncMutation.mutate()}>
+              <RefreshCw size={16} className={syncing ? spinning : ""} />
               {syncing ? t("syncing") : t("sync")}
             </button>
           )}
         </div>
       </aside>
-      <main id="main-content" tabIndex={-1} className="@container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5">
-        <header className="page-header">
-          <div>
-            <h1>
+      <main id="main-content" tabIndex={-1} className={`min-w-0 focus:outline-none @container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5`}>
+        <header className={`${pageHeader} ${filter === "Overview" ? overviewHeaderGap : pageHeaderGap}`}>
+          <div className={headerTitleSlot}>
+            <h1 className={filter === "Overview" ? `${pageTitle} ${overviewHeading}` : pageTitle}>
               {filter === "About" ? (
                 t("navAbout")
               ) : authLoading ? (
@@ -343,14 +403,14 @@ export default function App() {
             </h1>
 
             {oauthError && (
-              <p className="error" role="alert">
+              <p className="text-[var(--danger)]" role="alert">
                 {t("oauthCancelled")}
               </p>
             )}
           </div>
-          <div className="account-bar">
-            <time className="header-date">{new Intl.DateTimeFormat(i18n.language, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</time>
-            <div className="header-actions">
+          <div className={accountBar}>
+            <time className={headerDate}>{new Intl.DateTimeFormat(i18n.language, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</time>
+            <div className={headerActions}>
               <LanguageMenu />
               {authLoading ? <AccountSkeleton /> : auth?.connected || filter === "About" ? <UserMenu connected={!!auth?.connected} username={auth?.username} onDisconnect={() => logoutMutation.mutate()} disconnecting={logoutMutation.isPending} disconnectError={logoutMutation.isError} /> : null}
             </div>
@@ -358,12 +418,12 @@ export default function App() {
         </header>
         <SyncProgress connected={!!auth?.connected} pending={syncMutation.isPending} onRunningChange={setRemoteSyncing} hidden={filter === "About" || filter === "Settings"} />
         {auth?.sync_paused && filter !== "About" && (
-          <p className="sync-status-error" role="status">
+          <p className={syncStatusError} role="status">
             {t("followup.paused")} <a href={apiURL + "/api/v1/auth/github"}>{t("followup.reconnect")}</a>
           </p>
         )}
         {filter !== "About" && syncFeedback && !remoteSyncing && (
-          <div className={`sync-feedback ${syncFeedback.error ? "sync-feedback-error" : ""}`} role={syncFeedback.error ? "alert" : "status"}>
+          <div className={syncFeedback.error ? syncFeedback_ : `${syncFeedback_} ${syncFeedbackFloating}`} role={syncFeedback.error ? "alert" : "status"}>
             <span>{syncFeedback.message}</span>
             <button aria-label={t("dismissMessage")} onClick={() => setSyncFeedback(null)}>
               ×
@@ -375,10 +435,10 @@ export default function App() {
         ) : authLoading ? (
           <PageSkeleton page={filter} />
         ) : authError && !auth ? (
-          <section className="empty-state" role="alert">
+          <section className={emptyState} role="alert">
             <AlertTriangle size={28} />
             <h2>{t("apiUnavailable")}</h2>
-            <button className="secondary-action" onClick={() => retryAuth()}>
+            <button className={secondaryAction} onClick={() => retryAuth()}>
               {t("retry")}
             </button>
           </section>
@@ -398,22 +458,22 @@ export default function App() {
         ) : (
           <>
             {summaryError && (
-              <div className="sync-status-error" role="status">
+              <div className={syncStatusError} role="status">
                 <span>{t("summaryUnavailable")}</span>
-                <button className="access-recheck" onClick={() => retrySummary()}>
+                <button className={linkAction} onClick={() => retrySummary()}>
                   {t("retry")}
                 </button>
               </div>
             )}
-            <section className="stats @max-[760px]/dashboard:grid-cols-2 @max-[760px]/dashboard:gap-3" aria-label={t("overview")}>
+            <section className={`${stats} @max-[760px]/dashboard:grid-cols-2 @max-[760px]/dashboard:gap-3`} aria-label={t("overview")}>
               {[
                 [t("open"), summary ? String(summary.open) : "—", GitPullRequest, "purple"],
                 [t("needsReview"), summary ? String(summary.needs_review) : "—", MessageSquare, "blue"],
                 [t("conflicts"), summary ? String(summary.conflicts) : "—", AlertTriangle, "red"],
                 [t("mergedMonth"), summary ? String(summary.merged) : "—", GitMerge, "green"],
-              ].map(([l, v, I, c]: any) => (
-                <div key={l} className="stat @max-[620px]/dashboard:min-h-[76px] @max-[620px]/dashboard:p-3.5">
-                  <div className={"staticon " + c}>
+              ].map(([l, v, I]: any) => (
+                <div key={l} className={`${stat} @max-[620px]/dashboard:min-h-[76px] @max-[620px]/dashboard:p-3.5`}>
+                  <div className={statIcon}>
                     <I size={18} />
                   </div>
                   <div>
@@ -425,19 +485,19 @@ export default function App() {
             </section>
             {filter !== "Repositories" && (
               <>
-                <div className="list-heading">
+                <div className={listHeading}>
                   <h2>
                     {t("yourPRs")} <span>{isLoading ? "—" : (data?.total ?? 0)}</span>
                     {isFetching && !isLoading && (
-                      <small className="background-refresh" role="status">
-                        <RefreshCw size={13} className="spinning" />
+                      <small className={backgroundRefresh} role="status">
+                        <RefreshCw size={13} className={spinning} />
                         {t("updatingResults")}
                       </small>
                     )}
                   </h2>
                   {repository && (
                     <button
-                      className="search-chip"
+                      className={searchChip}
                       onClick={() =>
                         setParams((current) => {
                           const next = new URLSearchParams(current);
@@ -453,17 +513,17 @@ export default function App() {
                     </button>
                   )}
                   {search && (
-                    <button className="search-chip" onClick={clearSearch} aria-label={t("clearFilters")}>
+                    <button className={searchChip} onClick={clearSearch} aria-label={t("clearFilters")}>
                       {search}
                       <X size={14} />
                     </button>
                   )}
                 </div>
-                <div className="toolbar">
+                <div className={toolbar}>
                   {searchControl}
                   {/* "Needs attention" returns FollowUpWorkspace further up, so this branch only ever renders the PR list. */}
                   {
-                    <div className="filters max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap">
+                    <div className={`${filters} max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap`}>
                       {[
                         ["All", t("filterAll")],
                         ["Review requested", t("filterReview")],
@@ -478,26 +538,26 @@ export default function App() {
                   }
                 </div>
                 {isError && data && (
-                  <div className="sync-status-error" role="status">
+                  <div className={syncStatusError} role="status">
                     <span>{t("refreshFailedKeepData")}</span>
-                    <button className="access-recheck" onClick={() => refetch()}>
+                    <button className={linkAction} onClick={() => refetch()}>
                       {t("retry")}
                     </button>
                   </div>
                 )}
                 {isLoading && <PRListSkeleton />}
                 {!isLoading && (!isError || data) && shown.length === 0 && (
-                  <div className="empty-state">
+                  <div className={emptyState}>
                     <Inbox size={28} />
                     <h2>{t("emptyResultsTitle")}</h2>
                     <p>{t(search || repository || page > 0 ? "emptyResultsDescription" : "noOpenResults")}</p>
                     {page > 0 ? (
-                      <button className="secondary-action" onClick={() => setPage(0)}>
+                      <button className={secondaryAction} onClick={() => setPage(0)}>
                         {t("firstPage")}
                       </button>
                     ) : search || repository ? (
                       <button
-                        className="secondary-action"
+                        className={secondaryAction}
                         onClick={() => {
                           setDraftSearch("");
                           setParams((current) => {
@@ -511,7 +571,7 @@ export default function App() {
                       </button>
                     ) : (
                       filter !== "All" && (
-                        <button className="secondary-action" onClick={() => navigate(filterPaths.All)}>
+                        <button className={secondaryAction} onClick={() => navigate(filterPaths.All)}>
                           {t("navAll")}
                         </button>
                       )
@@ -519,18 +579,18 @@ export default function App() {
                   </div>
                 )}
                 {isError && !data && (
-                  <div className="empty-state" role="alert">
+                  <div className={emptyState} role="alert">
                     <AlertTriangle size={28} />
                     <h2>{t("unablePRs")}</h2>
-                    <button className="secondary-action" onClick={() => refetch()}>
+                    <button className={secondaryAction} onClick={() => refetch()}>
                       {t("retry")}
                     </button>
                   </div>
                 )}
                 {!isLoading && shown.length > 0 && (
                   <>
-                    <div className="table block w-full" role="table" aria-label={t("yourPRs")}>
-                      <div className="thead" role="row">
+                    <div className={`${tableSurface} table w-full`} role="table" aria-label={t("yourPRs")}>
+                      <div className={tableHead} role="row">
                         <span role="columnheader">{t("pullRequest")}</span>
                         <span role="columnheader">{t("repository")}</span>
                         <span role="columnheader">{t("status")}</span>
@@ -538,11 +598,11 @@ export default function App() {
                         <span role="columnheader">{t("activity")}</span>
                       </div>
                       {shown.map((p) => (
-                        <div key={`${p.repo}-${p.number}`} className="row" role="row">
-                          <div className="prtitle" role="cell">
-                            <GitPullRequest size={17} className="purpletxt" />
+                        <div key={`${p.repo}-${p.number}`} className={tableRow} role="row">
+                          <div className={prTitle} role="cell">
+                            <GitPullRequest size={17} className={accentText} />
                             <div>
-                              <a className="pr-title-link" href={p.url || `https://github.com/${p.repo}/pull/${p.number}`} target="_blank" rel="noopener noreferrer">
+                              <a className={prTitleLink} href={p.url || `https://github.com/${p.repo}/pull/${p.number}`} target="_blank" rel="noopener noreferrer">
                                 {p.title}
                               </a>
                               <small>
@@ -551,29 +611,29 @@ export default function App() {
                             </div>
                           </div>
                           <div role="cell" className="min-w-0 max-[640px]:col-start-1 max-[640px]:row-start-2">
-                            <a className="pr-repository" title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
+                            <a className={prRepository} title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
                               {p.repo}
                             </a>
                           </div>
-                          <div className="prstatus" role="cell">
-                            <span className={"pill " + p.status.toLowerCase().replaceAll(" ", "-")}>{t(statusKey(p.status), { defaultValue: p.status })}</span>
+                          <div className={prStatus} role="cell">
+                            <span className={statusPill(p.status)}>{t(statusKey(p.status), { defaultValue: p.status })}</span>
                             {p.conflict && (
-                              <span className="conflict">
+                              <span className={conflict}>
                                 <AlertTriangle size={13} />
                                 {t("conflict")}
                               </span>
                             )}
                             {p.checks_status && (
-                              <span className={"checks " + p.checks_status}>
+                              <span className={`${tableChecks} ${checkToneClass(p.checks_status ?? "")}`}>
                                 {t("ci")}: {t(p.checks_status, { defaultValue: p.checks_status })}
                               </span>
                             )}
                           </div>
-                          <span className="muted pr-updated" role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
+                          <span className={`${muted} ${prUpdated}`} role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
                             {p.updated_at && !Number.isNaN(Date.parse(p.updated_at)) ? new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(p.updated_at)) : t("unknown")}
                           </span>
-                          <div role="cell" className="activity">
-                            <button className="commentbtn activity" title={t("viewActivity")} aria-label={t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
+                          <div role="cell" className={rowActivity}>
+                            <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
                               <MessageSquare size={15} />
                               {p.comments}
                             </button>
@@ -581,7 +641,7 @@ export default function App() {
                         </div>
                       ))}
                     </div>
-                    <div className="pagination flex-wrap">
+                    <div className={`${pagination} flex-wrap`}>
                       <button disabled={page === 0 || isLoading} onClick={() => setPage(page - 1)}>
                         {t("previous")}
                       </button>
@@ -603,17 +663,17 @@ export default function App() {
         <ActivityDialog title={`${t("comments")} · ${selected.repo} #${selected.number}`} onClose={() => setSelected(null)}>
           {commentsQuery.isLoading && <ActivitySkeleton />}
           {commentsQuery.isError && (
-            <div className="activity-warning" role="alert">
+            <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[13px] text-[var(--warning)] [&_ul]:pl-5" role="alert">
               {t("unableComments")}
             </div>
           )}
           {commentsQuery.data && <ActivityPanel data={commentsQuery.data} />}
-          <div className="activity-footer">
-            <a className="secondary-action" href={selected.url || `https://github.com/${selected.repo}/pull/${selected.number}`} target="_blank" rel="noopener noreferrer">
+          <div className="sticky bottom-0 z-[2] mt-auto flex justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] py-4">
+            <a className={secondaryAction} href={selected.url || `https://github.com/${selected.repo}/pull/${selected.number}`} target="_blank" rel="noopener noreferrer">
               {t("viewGitHub")}
               <ExternalLink size={14} />
             </a>
-            <button className="secondary-action" disabled={commentsQuery.isFetching} onClick={() => commentsQuery.refetch()}>
+            <button className={secondaryAction} disabled={commentsQuery.isFetching} onClick={() => commentsQuery.refetch()}>
               <RefreshCw size={15} className={commentsQuery.isFetching ? "spinning" : ""} />
               {commentsQuery.isFetching ? t("refreshing") : t("refresh")}
             </button>
