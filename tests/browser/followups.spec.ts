@@ -68,14 +68,12 @@ test("read leaves task pending; explicit handling moves it to waiting", async ({
   await expect(card).toContainText("Handle timezone boundaries");
 });
 
-test("reviewer filter and mobile layout", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+// The hand-rolled 390x844 viewport and the document-level overflow check that used to live here are gone: this file runs in the `desktop` project only, and layout.spec.ts now walks this route at twenty-four viewports with a per-element sweep that also sees content clipped by an `overflow: hidden` ancestor, which `documentElement.scrollWidth` never could. What is left here is the behaviour, which is width-independent.
+test("the reviewer filter narrows the list to review requests", async ({ page }, testInfo) => {
   await page.goto("/#/attention?role=reviewer");
   await expect(page.getByTestId("follow-up-card")).toHaveCount(1);
   await expect(page.getByTestId("follow-up-card")).toContainText("Review storage migration");
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
-  expect(overflow).toBe(false);
-  await page.screenshot({ path: testInfo.outputPath("mobile-followups.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("followups-reviewer.png"), fullPage: true });
 });
 
 test("settings save timezone and selected review teams", async ({ page }) => {
@@ -102,12 +100,11 @@ test("repository waiting periods report the offending line instead of failing th
   expect(posted).toBe(false);
 });
 
-test("settings fit a narrow viewport", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+// Same move as the reviewer test above: the width assertion belongs to the matrix, the reminder form rendering at all belongs here.
+test("the reminder schedule renders on the default settings tab", async ({ page }, testInfo) => {
   await page.goto("/#/settings");
   await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
-  await page.screenshot({ path: testInfo.outputPath("mobile-settings.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("settings-reminders.png"), fullPage: true });
 });
 
 test("telegram destination validates the chat ID before calling the API", async ({ page }, testInfo) => {

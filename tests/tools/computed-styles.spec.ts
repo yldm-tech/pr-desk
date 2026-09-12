@@ -12,7 +12,7 @@
 // transparent ring layers to box-shadow, and outline width and colour keep
 // whatever the user agent had when outline-style is none. compare.mjs ignores them.
 import { test, type Page } from "@playwright/test";
-import { installFixtures } from "../browser/fixtures";
+import { installFixtures, ROUTES } from "../browser/fixtures";
 
 const PROPS = [
   "display",
@@ -86,23 +86,30 @@ const PROPS = [
   "visibility",
 ];
 
-// Every route worth a look, at the widths the stylesheets actually branch on.
-// The filtered listing is included because it is the only state that shows the
-// repository chip above the follow-ups.
-const ROUTES = ["/#/", "/#/attention", "/#/attention?repo=fixture/reviewer", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
-// Desktop, then each width a stylesheet or container query branches at.
-const WIDTHS = [1280, 800, 760, 640, 400];
+// These are VIEWPORT widths, not container widths, and the distinction is what the old list got wrong. A container threshold is reached through the shell — <main>'s content box is V-32 while the top bar is in use and 0.95V-208 once the 208px sidebar exists — so each container token has to be sampled by the two viewports that straddle it rather than by a viewport equal to it. The previous list claimed to be "each width a stylesheet or container query branches at" and was neither: it never sampled 480, 900, 1100 or 1200, and its two container entries landed on the same side of the threshold they were meant to bracket (a 800px viewport gives a 768px container, above 760.02; 760 gives 728, below it).
+// The pre-migration thresholds (~1019 and 792 for 760.02, ~1061 and 832 for 800.02) are kept alongside the new ones so a single capture serves both sides of the comparison.
+const WIDTHS = [1920, 1440, 1280, 1200, 1199, 1146, 1145, 1100, 1061, 1024, 1019, 901, 900, 899, 832, 800, 792, 768, 672, 671, 640, 512, 480, 479, 412, 390, 360, 320];
+
+// The harness otherwise only ever renders at height 900, where `short:` (height < 480px) can never match, so the landscape phone the variant exists for was invisible to it. The portrait entry is the control: the same two routes at the same width with the variant off.
+const HEIGHTS: [number, number][] = [
+  [844, 390],
+  [390, 844],
+];
 
 // Records every rendered element, keyed by its position in the tree.
 async function collect(page: Page, props: string[], label: string) {
   return page.evaluate(
     ({ props, label }) => {
       const out: Record<string, Record<string, string>> = {};
+      // A sibling index is stable across a restyle but not across a reorder, and moving a cell to fix its reading order renames every descendant of every row at every width, which buries the handful of real differences under thousands of spurious ones. Where an element carries an identity of its own the key uses that instead. Siblings can share a test id, so the occurrence among same-named siblings is what keeps the key unique.
+      const identityOf = (el: Element) => el.getAttribute("data-cell") ?? el.getAttribute("data-testid");
       const pathOf = (el: Element) => {
         const parts: string[] = [];
         for (let node: Element | null = el; node && node !== document.documentElement; node = node.parentElement) {
           const siblings = node.parentElement ? [...node.parentElement.children] : [];
-          parts.unshift(`${node.tagName.toLowerCase()}:${siblings.indexOf(node)}`);
+          const identity = identityOf(node);
+          if (identity) parts.unshift(`${node.tagName.toLowerCase()}@${identity}:${siblings.filter((sibling) => identityOf(sibling) === identity).indexOf(node)}`);
+          else parts.unshift(`${node.tagName.toLowerCase()}:${siblings.indexOf(node)}`);
         }
         return parts.join("/");
       };
@@ -140,6 +147,16 @@ test("capture computed styles", async ({ page }) => {
       await page.goto(route);
       await settle();
       await walk(`${width}${route}`);
+    }
+  }
+
+  // The landscape phone, and the same width in portrait as its control. Nothing above this line is ever shorter than 900px, so every `short:` rule in the stylesheet was outside the harness's reach.
+  for (const [width, height] of HEIGHTS) {
+    await page.setViewportSize({ width, height });
+    for (const route of ROUTES) {
+      await page.goto(route);
+      await settle();
+      await walk(`${width}x${height}${route}`);
     }
   }
 

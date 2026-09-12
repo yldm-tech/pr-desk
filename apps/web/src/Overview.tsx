@@ -1,7 +1,7 @@
 import { apiURL } from "./api-url";
 import { useSearchParams } from "react-router-dom";
 import { OverviewSkeleton, AccessSkeleton } from "./LoadingSkeleton";
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import Skeleton from "react-loading-skeleton";
 import * as Select from "@radix-ui/react-select";
 import { selectContent, selectOption } from "./select-styles";
@@ -76,6 +76,8 @@ const schema = z.object({
 type Data = z.infer<typeof schema>;
 // Keep visited scopes available while stale data refreshes in the background.
 const overviewCache = { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000 };
+// The narrowest trend panel that still carries a label for every month; below it the axis is thinned. The default period is thirteen months and the labels carry a two-digit year, so a -35deg "Sep 25" occupies about 35px of axis-aligned box — which is what the chart's collision test measures — against a band that is only as wide as the panel divided by thirteen. A 1280px window gives this panel 447px, or about 439px once the platform draws a classic scrollbar, and that is still enough for all thirteen; a phone's 250-350px is not, and there the library drops the labels that collide. The number cannot be a container query: nothing in CSS can reach a chart option, so the panel has to be measured.
+const trendAxisAllMonthsWidth = 420;
 export default function Overview({ onAccessGranted }: { onAccessGranted: () => void }) {
   const previousAccess = useRef<string | undefined>(undefined);
   const { t, i18n } = useTranslation();
@@ -250,6 +252,16 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   const months = repo === "all" ? data.months : (trendQuery.data?.months ?? []);
 
   const periodTotal = months.reduce((sum, m) => sum + m.merged, 0);
+  const trendPanel = useRef<HTMLElement>(null);
+  // Starts optimistic so a browser without ResizeObserver, or the frame before the first observation, renders the full axis rather than a thinned one.
+  const [trendAxisFitsEveryMonth, setTrendAxisFitsEveryMonth] = useState(true);
+  useEffect(() => {
+    const panel = trendPanel.current;
+    if (!panel) return;
+    const observer = new ResizeObserver((entries) => setTrendAxisFitsEveryMonth((entries[0]?.contentRect.width ?? 0) >= trendAxisAllMonthsWidth));
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [s.total]);
   const monthChart = useMemo(
     () =>
       defineChart({
@@ -258,14 +270,10 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
           x: {
             scale: () => scaleBand().padding(0.48),
             axis: {
-              tickLabels: { rotate: -35, thin: false },
+              // `thin: false` pins every month; without it the library drops the labels whose boxes collide. The explicit tick values are gone either way: a band scale has no tick generator, so the chart already falls back to the whole domain and the list only restated it.
+              tickLabels: trendAxisFitsEveryMonth ? { rotate: -35, thin: false } : { rotate: -35 },
               line: false,
-              ticks: {
-                values: months.map(({ month }) => month),
-                size: 0,
-                padding: 12,
-                format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")),
-              },
+              ticks: { size: 0, padding: 12, format: (value) => new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", year: months[0]?.month.slice(0, 4) !== months[months.length - 1]?.month.slice(0, 4) ? "2-digit" : undefined, timeZone: "UTC" }).format(new Date(value + "-01T00:00:00Z")) },
             },
           },
           y: { scale: scaleLinear, nice: true, grid: true, axis: { line: false, ticks: { size: 0, count: 4, padding: 10 } } },
@@ -278,7 +286,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
           ],
         },
       }),
-    [months, t, i18n.resolvedLanguage],
+    [months, t, i18n.resolvedLanguage, trendAxisFitsEveryMonth],
   );
   const distribution = useMemo(() => {
     const colors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
@@ -326,7 +334,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   );
   return (
     <section className={`${overviewPage} @container/overview`} aria-label={t("achievements")}>
-      <div className={`${achievementTop} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+      <div className={`${achievementTop} grid grid-cols-1 @row/overview:grid-cols-2`}>
         <article className={achievementScore}>
           <div className={scoreLabel}>
             <GitMerge size={18} />
@@ -382,9 +390,9 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
       {s.total === 0 ? (
         <p className={achievementEmpty}>{t(data.history_complete ? "noAchievements" : "historySyncNeeded")}</p>
       ) : (
-        <div className={`${achievementBottom} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
-          <article className={`${achievementPanel} @container/chart`} aria-busy={trendLoading}>
-            <div className={`${trendHeader} flex-col items-stretch gap-3.5 @[560px]/chart:flex-row @[560px]/chart:items-center`}>
+        <div className={`${achievementBottom} grid grid-cols-1 @row/overview:grid-cols-2`}>
+          <article className={`${achievementPanel} @container/chart`} aria-busy={trendLoading} ref={trendPanel}>
+            <div className={`${trendHeader} flex-col items-stretch gap-3.5 @pair/chart:flex-row @pair/chart:items-center`}>
               <div className={`${panelHeading} ${trendHeadingSlot}`}>
                 <div>
                   <h2>{t("mergeActivity")}</h2>
@@ -394,7 +402,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 </div>
               </div>
               <Select.Root value={repo} onValueChange={setSelectedRepo}>
-                <Select.Trigger className={`${trendRepoTrigger} w-full max-w-full @[560px]/chart:w-80 @[560px]/chart:max-w-[48%]`} aria-label={t("trendRepository")}>
+                <Select.Trigger className={`${trendRepoTrigger} w-full max-w-full @pair/chart:w-80 @pair/chart:max-w-[48%]`} aria-label={t("trendRepository")}>
                   <FolderGit2 size={16} />
                   <Select.Value />
                   <Select.Icon>
@@ -402,16 +410,17 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                   </Select.Icon>
                 </Select.Trigger>
                 <Select.Portal>
-                  <Select.Content className={`${selectContent} min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)] [&_[data-radix-select-viewport]]:max-h-[280px]`} position="popper" align="end" sideOffset={8} collisionPadding={12}>
+                  {/* The viewport is the element that scrolls, so its cap has to be the smaller of the list height this menu wants and the room Radix measured below the trigger. A bare 280px draws the bottom of the list past the collision boundary on a landscape phone, and nothing can scroll it back into view, because the element overflowing is the scroll container itself. */}
+                  <Select.Content className={`${selectContent} min-w-[var(--radix-select-trigger-width)] max-w-[calc(100vw-24px)] [&_[data-radix-select-viewport]]:max-h-[min(280px,var(--radix-select-content-available-height))]`} position="popper" align="end" sideOffset={8} collisionPadding={12}>
                     <Select.Viewport>
-                      <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value="all">
+                      <Select.Item className={`${selectOption} gap-6 text-[length:0.75rem] [overflow-wrap:anywhere]`} value="all">
                         <Select.ItemText>{t("allTrendRepositories")}</Select.ItemText>
                         <Select.ItemIndicator>
                           <Check size={15} />
                         </Select.ItemIndicator>
                       </Select.Item>
                       {data.repositories.map((item) => (
-                        <Select.Item className={`${selectOption} gap-6 text-[12px] [overflow-wrap:anywhere]`} value={item.repo} key={item.repo}>
+                        <Select.Item className={`${selectOption} gap-6 text-[length:0.75rem] [overflow-wrap:anywhere]`} value={item.repo} key={item.repo}>
                           <Select.ItemText>{item.repo}</Select.ItemText>
                           <Select.ItemIndicator>
                             <Check size={15} />
@@ -464,7 +473,8 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
                 <TooltipChart
                   definition={repoChart}
                   onSelect={(point) => {
-                    if (point?.datum.href) window.open(point.datum.href, "_blank", "noopener,noreferrer");
+                    // The chart fires this from its click handler, and a click is the only way a touch device can raise the tooltip that carries each slice's count and share. Opening github.com on that gesture — with a 48px radius around a 166px donut, so anywhere near it counts — would make reading the chart at all impossible without leaving the dashboard, so a coarse pointer gets the breakdown table instead, which carries the same numbers.
+                    if (point?.datum.href && window.matchMedia("(hover: hover) and (pointer: fine)").matches) window.open(point.datum.href, "_blank", "noopener,noreferrer");
                     else if (point) document.getElementById("repository-breakdown")?.focus();
                   }}
                   renderTooltipBody={({ points }) => {

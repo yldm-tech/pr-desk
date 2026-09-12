@@ -623,10 +623,11 @@ export function FollowUpSettings() {
           whatever the page puts above it; the panels keep a readable measure. */}
       <Tabs.List className="flex gap-1 overflow-x-auto border-b border-[var(--border)] [overscroll-behavior-x:contain] [scrollbar-width:thin]" aria-label={t("followup.settings")}>
         {settingsTabs.map((tab) => (
+          // Narrower than the split band the three labels measure wider than the content box, and the strip's sideways scroll is the only thing that reveals the third one: no fade, no chevron, and no scrollbar on a touch device, so the whole agent-token section reads as absent. Tightening them is enough to fit all three; the scroller stays as the backstop for a longer translation.
           <Tabs.Trigger
             key={tab}
             value={tab}
-            className="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3.5 py-2.5 font-medium text-[var(--muted)] transition-colors hover:text-[var(--foreground)] focus-visible:rounded-t-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)] data-[state=active]:border-[var(--accent)] data-[state=active]:text-[var(--accent-text)]"
+            className="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3.5 py-2.5 font-medium text-[var(--muted)] transition-colors @max-split/dashboard:px-2 @max-split/dashboard:text-[length:0.75rem] pointer-coarse:min-h-11 pointer-coarse:min-w-11 hover:text-[var(--foreground)] focus-visible:rounded-t-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)] data-[state=active]:border-[var(--accent)] data-[state=active]:text-[var(--accent-text)]"
           >
             {t(tabLabels[tab])}
           </Tabs.Trigger>

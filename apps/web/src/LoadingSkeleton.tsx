@@ -1,6 +1,30 @@
 import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
 import { autoSyncNote } from "./status-styles";
-import { accessSkeleton, listHeading, muted, prListSkeletonRow, prStatus, prTitle, rowActivity, skeletonControls, skeletonFilters, skeletonFlex, skeletonSearch, skeletonLegend, skeletonRows, skeletonScore, skeletonSyncNote, skeletonYears, tableHead, tableRow, toolbar } from "./app-styles";
+import {
+  accessSkeleton,
+  listHeading,
+  muted,
+  prListSkeletonRow,
+  prStatus,
+  prTitle,
+  rowActivity,
+  skeletonControls,
+  skeletonFilters,
+  skeletonFlex,
+  skeletonSearch,
+  skeletonLegend,
+  skeletonRows,
+  skeletonScore,
+  skeletonSyncNote,
+  skeletonYears,
+  stat,
+  statIcon,
+  stats,
+  tableHead,
+  tableRow,
+  tableSurface,
+  toolbar,
+} from "./app-styles";
 import { achievementBottom, achievementOutcomes, achievementPanel, achievementScore, achievementTop, authorizedAccounts, outcomesContent, scoreSecondary } from "./overview-styles";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
 import { repositoryAction, repositoryControls, repositoryIdentity, repositoryListCaption, repositoryListPanel, repositoryNumber, repositoryRow, repositoryRows, repositorySummary, repositorySummaryItem } from "./repository-styles";
@@ -25,7 +49,7 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               </div>
             </div>
           )}
-          <div className={`${achievementTop} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+          <div className={`${achievementTop} grid grid-cols-1 @row/overview:grid-cols-2`}>
             <article className={`${achievementScore} pt-7`}>
               <SkeletonTheme baseColor="var(--skeleton-hero-base)" highlightColor="var(--skeleton-hero-highlight)">
                 <Skeleton width="36%" height={15} />
@@ -49,7 +73,7 @@ export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
               </div>
             </article>
           </div>
-          <div className={`${achievementBottom} grid grid-cols-1 @[800px]/overview:grid-cols-2`}>
+          <div className={`${achievementBottom} grid grid-cols-1 @row/overview:grid-cols-2`}>
             <article className={achievementPanel}>
               <Skeleton width="30%" height={17} />
               <div className="mt-3">
@@ -95,12 +119,13 @@ function LoadingFrame({ children, className = "" }: { children: import("react").
 export function PRListSkeleton({ count = 5 }: { count?: number }) {
   return (
     <LoadingFrame className={prListSkeletonRow}>
-      <div className="table block w-full">
+      <div className={`${tableSurface} table w-full`}>
         <div className={tableHead}>
           {Array.from({ length: 5 }, (_, i) => (
             <Skeleton key={i} width={i === 0 ? 100 : 48} height={11} />
           ))}
         </div>
+        {/* Cell order and explicit placement mirror the loaded row exactly: DOM order is the card's reading order (title, activity, repository, status, updated) and the table order is restored by column placement, so the placeholder and the real row never disagree about which cell sits where. */}
         {Array.from({ length: count }, (_, i) => (
           <div className={tableRow} key={i}>
             <div className={prTitle}>
@@ -113,19 +138,21 @@ export function PRListSkeleton({ count = 5 }: { count?: number }) {
                 </div>
               </div>
             </div>
-            <div className="min-w-0 max-[640px]:col-start-1 max-[640px]:row-start-2">
+            <div className={rowActivity}>
+              <Skeleton width={38} height={30} />
+            </div>
+            <div className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
               <Skeleton width="85%" height={12} />
             </div>
             <div className={prStatus}>
               <Skeleton width={70} height={23} />
-              <Skeleton width={60} height={11} />
+              {/* The CI-check placeholder takes a full line of its own because the real check cell is `block w-full` inside this wrapping flex row; a fixed-width bar here would make the placeholder a line shorter than the row it stands in for. */}
+              <Skeleton width="100%" height={11} containerClassName="block w-full" />
             </div>
-            <span className={muted}>
+            {/* The loaded cell right-aligns itself with `justify-self-end`, which sizes a grid item to its content. That is right for a timestamp and wrong for a percentage-width placeholder, which would collapse to nothing, so the placeholder stays stretched and right-aligns its contents instead. */}
+            <span className={`${muted} col-start-2 row-start-2 text-right @row/dashboard:col-start-4 @row/dashboard:row-start-1 @row/dashboard:text-left`}>
               <Skeleton width="85%" height={12} />
             </span>
-            <div className={rowActivity}>
-              <Skeleton width={38} height={30} />
-            </div>
           </div>
         ))}
       </div>
@@ -146,7 +173,8 @@ export function RepositorySkeleton({ count = 6 }: { count?: number }) {
                 <Skeleton width="75%" height={16} />
               </div>
             </div>
-            {[0, 1, 2].map((key) => (
+            {/* Four number cells, not three: the loaded row puts the open-count link in the first 88px track and the three counters after it, so a skeleton with one fewer child would drop the action block into an 88px track instead of the 116px one and the list would jump sideways when the data lands. */}
+            {[0, 1, 2, 3].map((key) => (
               <div className={repositoryNumber} key={key}>
                 <Skeleton width={24} height={18} />
               </div>
@@ -255,10 +283,13 @@ export function AccountSkeleton() {
 export function StatsSkeleton() {
   return (
     <LoadingFrame className="stats-skeleton">
-      <section className="stats @max-[760px]/dashboard:grid-cols-2 @max-[760px]/dashboard:gap-3">
+      {/* These are the exported constants, not the bare words "stats"/"stat": no stylesheet in this app defines those class names, so spelling them as strings left the loading state with no grid and no card at any width. */}
+      <section className={stats}>
         {[0, 1, 2, 3].map((i) => (
-          <div className="stat @max-[620px]/dashboard:min-h-[76px] @max-[620px]/dashboard:p-3.5" key={i}>
-            <Skeleton width={38} height={38} />
+          <div className={stat} key={i}>
+            <div className={statIcon}>
+              <Skeleton width={18} height={18} />
+            </div>
             <div className={skeletonFlex}>
               <Skeleton width="70%" height={12} />
               <Skeleton width={54} height={26} />
