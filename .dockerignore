@@ -25,3 +25,6 @@ output
 **/*.p12
 **/*.pfx
 apps/api/webdist
+apps/api/api
+apps/api/prdesk
+apps/api/cmd/prdesk/prdesk
