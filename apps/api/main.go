@@ -35,7 +35,7 @@ type PullRequest struct {
 	Draft         bool       `json:"draft"`
 	RepoPrivate   *bool      `json:"repo_private" gorm:"index"`
 	ID            uint       `json:"id" gorm:"primaryKey"`
-	SessionID     string     `json:"-" gorm:"index;not null"`
+	SessionID     string     `json:"-" gorm:"index;index:pr_session_url,priority:1;not null"`
 	Number        int        `json:"number"`
 	Repo          string     `json:"repo" gorm:"index"`
 	Title         string     `json:"title"`
@@ -48,8 +48,12 @@ type PullRequest struct {
 	ChecksJSON    string     `json:"-" gorm:"column:checks_detail"`
 	PRCreatedAt   *time.Time `json:"created_at,omitempty"`
 	MergedAt      *time.Time `json:"merged_at,omitempty"`
-	URL           string     `json:"url"`
-	UpdatedAt     time.Time  `json:"updated_at" gorm:"index"`
+	URL           string     `json:"url" gorm:"index:pr_session_url,priority:2"`
+	// When this repository's visibility was last asked about, whether or not
+	// GitHub answered. Without it an unresolvable repository is asked about on
+	// every overview request.
+	RepoVisibilityCheckedAt *time.Time `json:"-"`
+	UpdatedAt               time.Time  `json:"updated_at" gorm:"index"`
 }
 type OAuthToken struct {
 	GitHubID           int64      `gorm:"not null;default:0"`
@@ -60,12 +64,16 @@ type OAuthToken struct {
 	GitHubCreatedAt    *time.Time
 	HistorySyncedAt    *time.Time
 	HistoryCursor      *time.Time `json:"-"`
-	HistoryTotal       int
-	ID                 uint   `gorm:"primaryKey"`
-	SessionID          string `gorm:"index;not null"`
-	Username           string
-	Token              string
-	CreatedAt          time.Time
+	// When the historical search last ran to completion. HistorySyncedAt only
+	// lands after the phases that follow it, so without this a failure in one of
+	// those repeats the whole walk.
+	HistoryWalkedAt *time.Time `json:"-"`
+	HistoryTotal    int
+	ID              uint   `gorm:"primaryKey"`
+	SessionID       string `gorm:"index;not null"`
+	Username        string
+	Token           string
+	CreatedAt       time.Time
 }
 type ReviewComment struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -413,6 +421,10 @@ func githubAuth(c *gin.Context) {
 	// An authorization that interrupted itself to sign in resumes where it left off.
 	if back := safeReturnPath(c.Query("return")); back != "" {
 		c.SetCookie("oauth_return", back, 600, "/", "", secureCookies(c), true)
+	} else {
+		// A sign-in that is not resuming anything must not inherit the return path
+		// of an authorization somebody abandoned.
+		c.SetCookie("oauth_return", "", -1, "/", "", secureCookies(c), true)
 	}
 	oauthCfg := githubOAuthConfig()
 	c.Redirect(http.StatusFound, oauthCfg.AuthCodeURL(state))
@@ -533,7 +545,10 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Update("sync_requested_at", nil).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to start sync"}}
 	}
-	incremental := t.HistorySyncedAt != nil && !t.FullSyncPending
+	// A completed walk is enough to go incremental: the rows are stored, and the
+	// phases that failed after it re-run either way. An explicit full-sync request
+	// still forces the walk, because it sets FullSyncPending.
+	incremental := (t.HistorySyncedAt != nil || t.HistoryWalkedAt != nil) && !t.FullSyncPending
 	mode := "full"
 	if incremental {
 		mode = "incremental"
@@ -573,7 +588,12 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	syncStarted := time.Now().UTC()
 	var since *time.Time
 	if incremental {
+		// Without one of these the incremental path falls back to the full walk,
+		// which is the cost this is here to avoid.
 		since = t.HistorySyncedAt
+		if since == nil {
+			since = t.HistoryWalkedAt
+		}
 	}
 	// A full walk that was interrupted resumes where it stopped. Everything
 	// before the cursor is already stored, so re-reading it would only spend
@@ -608,7 +628,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	// end means a failure in the later stages costs a retry of those stages,
 	// not another hundred search requests.
 	if !incremental {
-		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"full_sync_pending": false, "history_cursor": nil}).Error; err != nil {
+		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"full_sync_pending": false, "history_cursor": nil, "history_walked_at": syncStarted}).Error; err != nil {
 			return syncResult{500, gin.H{"error": "Unable to save sync checkpoint"}}
 		}
 	}

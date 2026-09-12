@@ -70,9 +70,22 @@ func TestOAuthCookieSecurityBehindProxy(t *testing.T) {
 			if w.Code != http.StatusFound {
 				t.Fatalf("status=%d", w.Code)
 			}
+			// Two cookies: the state, and the deletion of any return path left over
+			// from an authorization somebody abandoned. Both carry the same flags.
 			cookies := w.Result().Cookies()
-			if len(cookies) != 1 || cookies[0].Name != "oauth_state" || cookies[0].Secure != tc.secure || !cookies[0].HttpOnly {
-				t.Fatalf("unexpected OAuth cookie flags: %v", cookies)
+			if len(cookies) != 2 {
+				t.Fatalf("unexpected OAuth cookie set: %v", cookies)
+			}
+			for _, cookie := range cookies {
+				if cookie.Secure != tc.secure || !cookie.HttpOnly {
+					t.Fatalf("unexpected OAuth cookie flags: %v", cookies)
+				}
+			}
+			if cookies[0].Name != "oauth_state" || cookies[0].Value == "" {
+				t.Fatalf("the state cookie is missing: %v", cookies)
+			}
+			if cookies[1].Name != "oauth_return" || cookies[1].MaxAge >= 0 {
+				t.Fatalf("an abandoned return path was not cleared: %v", cookies)
 			}
 		})
 	}

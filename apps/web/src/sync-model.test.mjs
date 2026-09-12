@@ -15,3 +15,10 @@ test("does not repeatedly refresh an unchanged completed snapshot", () => {
 test("refreshes partial data after a running sync stops", () => {
   assert.equal(shouldRefreshAfterSync({ status: "running" }, { status: "failed" }), true);
 });
+
+test("does not refresh on the first snapshot after mount", () => {
+  // Nothing has changed yet: there is no previous poll to have changed from, and
+  // the sync it reports may have finished long before this tab was opened.
+  assert.equal(shouldRefreshAfterSync(undefined, { status: "complete", updated_at: "2026-01-01T00:00:00Z" }), false);
+  assert.equal(shouldRefreshAfterSync(undefined, { status: "running" }), false);
+});

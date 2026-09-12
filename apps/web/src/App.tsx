@@ -506,7 +506,7 @@ export default function App() {
                           return next;
                         })
                       }
-                      aria-label={t("clearRepositoryFilter")}
+                      aria-label={t("clearRepositoryFilter", { repo: repository })}
                     >
                       {repository}
                       <X size={14} />

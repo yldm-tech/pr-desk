@@ -29,6 +29,32 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Two accounts, one of them unconnected, so the partial unique index on
+	// git_hub_id is built over live rows rather than an empty table.
+	for _, account := range []OAuthToken{
+		{SessionID: "migrate-a", GitHubID: 4242, Username: "houko", Token: "stored"},
+		{SessionID: "migrate-b", GitHubID: 0, Username: "", Token: ""},
+	} {
+		if err := db.Create(&account).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The migration has to have work to do, or re-running it proves nothing. A
+	// rollout meets a schema that is behind the binary, so the schema is put
+	// behind on purpose: a column dropped and an index removed, under live rows.
+	if err := db.Migrator().DropColumn(&PullRequest{}, "role"); err != nil {
+		t.Fatal("could not regress the schema:", err)
+	}
+	if db.Migrator().HasIndex(&PullRequest{}, "idx_pull_requests_url") {
+		if err := db.Migrator().DropIndex(&PullRequest{}, "idx_pull_requests_url"); err != nil {
+			t.Fatal("could not regress the schema:", err)
+		}
+	}
+	if db.Migrator().HasColumn(&PullRequest{}, "role") {
+		t.Fatal("the column was not actually dropped, so the migration has nothing to add back")
+	}
+
 	// Re-running the migration is what a rollout does to the live database.
 	if err := migrateDatabase(db); err != nil {
 		t.Fatal("migrating a populated database failed:", err)
@@ -44,10 +70,18 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	if survivor.Title != "Existing row" || !survivor.UpdatedAt.UTC().Equal(activity) {
 		t.Fatal("the migration rewrote existing data", survivor.Title, survivor.UpdatedAt)
 	}
+	if !db.Migrator().HasColumn(&PullRequest{}, "role") {
+		t.Fatal("the dropped column was not restored")
+	}
 	var follows int64
 	db.Model(&FollowUp{}).Where("session_id = ?", "migrate").Count(&follows)
 	if follows != 1 {
 		t.Fatal("follow-up rows were lost", follows)
+	}
+	var accounts int64
+	db.Model(&OAuthToken{}).Where("session_id LIKE ?", "migrate-%").Count(&accounts)
+	if accounts != 2 {
+		t.Fatal("account rows were lost", accounts)
 	}
 }
 

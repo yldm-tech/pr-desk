@@ -80,8 +80,12 @@ func (s *Server) syncReviewRequests(ctx context.Context, token OAuthToken, plain
 	for _, team := range teams {
 		queries = append(queries, "type:pr state:open team-review-requested:"+team)
 	}
-	// No authored page sink and no history-count tracker for review discovery.
-	discoveryCtx := context.WithValue(context.WithValue(ctx, historyPageSinkKey{}, nil), historyProgressKey{}, nil)
+	// No authored page sink and no history-count tracker for review discovery, and
+	// no cursor either: the cursor records how far the authored walk has persisted
+	// pages, and these queries persist nothing. Leaving it attached makes every
+	// review query mark the cursor at its own end, so the next full sync resumes
+	// from the last run rather than from the account's creation.
+	discoveryCtx := context.WithValue(context.WithValue(context.WithValue(ctx, historyPageSinkKey{}, nil), historyProgressKey{}, nil), historyCursorKey{}, nil)
 	seen := map[string]bool{}
 	for _, query := range queries {
 		items, err := fetchHistory(discoveryCtx, githubClient(plaintext), query, from, through)
