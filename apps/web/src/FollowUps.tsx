@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { inlineAction, secondaryAction } from "./action-styles";
 import { panelHeading } from "./overview-styles";
-import { linkButton } from "./app-styles";
+import { linkButton, searchChip } from "./app-styles";
 import { followUpActions, followUpCard, followUpCardHeading, followUpCounts, followUpExcerpt, followUpFilters, followUpPriority, followUpPriorityReasons, followUpReason, followUpReasonCompact, followUpReasons, followUpSnooze, followUpSummary, followUpWait, followUpWorkspace } from "./followup-styles";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -210,7 +210,7 @@ export function FollowUpWorkspace() {
         <Link to="/settings">{t("followup.goSettings")}</Link>
       </div>
       {repo && (
-        <p data-testid="repository-chip" className="search-chip">
+        <p data-testid="repository-chip" className={searchChip}>
           <span>{repo}</span>
           <button className={linkButton} type="button" onClick={clearRepository} aria-label={t("clearRepositoryFilter", { repo })}>
             ×

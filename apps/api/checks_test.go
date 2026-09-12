@@ -44,7 +44,7 @@ func TestUnhealthyChecksNamesTheRunsFailuresFirst(t *testing.T) {
 		{Name: "e2e", Status: "in_progress"},
 		completed("unit", "failure"),
 	}
-	got := unhealthyChecks(runs)
+	got := unhealthyChecks(runs, nil)
 	if len(got) != 3 {
 		t.Fatalf("expected the three non-passing runs, got %d: %+v", len(got), got)
 	}
@@ -66,8 +66,59 @@ func TestUnhealthyChecksStaysBounded(t *testing.T) {
 	for i := 0; i < maxRecordedChecks*3; i++ {
 		runs = append(runs, completed("job", "failure"))
 	}
-	if got := len(unhealthyChecks(runs)); got != maxRecordedChecks {
+	if got := len(unhealthyChecks(runs, nil)); got != maxRecordedChecks {
 		t.Fatalf("recorded %d checks, wanted the cap of %d", got, maxRecordedChecks)
+	}
+}
+
+// Vercel, Netlify and most non-Actions integrations report through the older
+// commit status API. Such a repository summarises as failure through the
+// combined state while contributing no check run, so reading runs alone leaves
+// a red mark with nothing named behind it.
+func TestUnhealthyChecksNamesAFailingCommitStatus(t *testing.T) {
+	runs := []checkRun{completed("build", "success")}
+	statuses := []commitStatus{
+		{Context: "Vercel", State: "failure", URL: "https://vercel.com/x"},
+		{Context: "licence/cla", State: "success"},
+	}
+	// This is the shape GitHub reports for that repository: every check run
+	// green, the combined state red because of the status.
+	if got := checkSummary(runs, "failure"); got != "failure" {
+		t.Fatalf("a failing commit status did not reach the summary: %q", got)
+	}
+	got := unhealthyChecks(runs, statuses)
+	if len(got) != 1 {
+		t.Fatalf("expected only the failing status, got %+v", got)
+	}
+	if got[0].Name != "Vercel" || got[0].Conclusion != "failure" || got[0].URL == "" {
+		t.Fatalf("the status was not named usefully: %+v", got[0])
+	}
+}
+
+func TestUnhealthyChecksOrdersStatusFailuresWithTheRest(t *testing.T) {
+	runs := []checkRun{{Name: "e2e", Status: "queued"}, completed("unit", "failure")}
+	statuses := []commitStatus{{Context: "ci/circleci", State: "error"}, {Context: "deploy", State: "pending"}}
+	got := unhealthyChecks(runs, statuses)
+	if len(got) != 4 {
+		t.Fatalf("expected two failures and two pending, got %+v", got)
+	}
+	// Failures first regardless of which API reported them.
+	for _, run := range got[:2] {
+		if run.Conclusion != "failure" && run.Conclusion != "error" {
+			t.Fatalf("a pending entry outranked a failure: %+v", got)
+		}
+	}
+	for _, run := range got[2:] {
+		if run.Conclusion != "pending" {
+			t.Fatalf("a failure was sorted after a pending entry: %+v", got)
+		}
+	}
+}
+
+func TestUnhealthyChecksIgnoresPassingStatuses(t *testing.T) {
+	statuses := []commitStatus{{Context: "Vercel", State: "success"}, {Context: "cla", State: "success"}}
+	if got := unhealthyChecks(nil, statuses); len(got) != 0 {
+		t.Fatalf("passing statuses were recorded as noise: %+v", got)
 	}
 }
 

@@ -70,6 +70,12 @@ func (p *syncTracker) finish(success bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.value.Status = "failed"
+	// Shutting down mid-run is not a failure of the run. Reporting it as one
+	// puts a red "sync failed" in front of someone whose only crime was
+	// deploying, and buries a real failure among restarts.
+	if !success && p.value.ErrorCode == "interrupted" {
+		p.value.Status = "interrupted"
+	}
 	if !success && p.value.ErrorCode == "reconnect" {
 		p.db.Model(&OAuthToken{}).Where("session_id = ? AND git_hub_id > 0", p.sid).Update("authorization_error", "reconnect")
 	}
@@ -118,6 +124,10 @@ func (s *Server) getSyncProgress(c *gin.Context) {
 }
 
 // Store a bounded code, never upstream URLs, response bodies, or credentials.
+// That rule governs what is persisted and handed back to a client; the server
+// log is allowed to be more specific, and for a storage failure it has to be.
+// "storage" alone names the layer and nothing else, which leaves an operator
+// with no way to tell a constraint violation from a dropped connection.
 func (p *syncTracker) recordFailure(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -128,8 +138,6 @@ func (p *syncTracker) recordFailure(err error) {
 	var network *url.Error
 	switch {
 	case errors.Is(err, errHistoryStorage), errors.Is(err, errDetailStorage):
-		code = "storage"
-	case errors.Is(err, errHistoryStorage):
 		code = "storage"
 	case errors.Is(err, context.Canceled):
 		code = "interrupted"
@@ -162,7 +170,15 @@ func (p *syncTracker) recordFailure(err error) {
 		}
 	}
 	p.value.ErrorCode = code
-	log.Printf("GitHub sync failure: code=%s phase=%s completed=%d total=%d", code, p.value.Phase, p.value.Completed, p.value.Total)
+	// A storage failure is ours: the cause is a database error carrying no
+	// upstream URL, response body or credential, so it is safe to name and
+	// useless to withhold. Every other class can quote GitHub back at us, and
+	// stays summarized to the code.
+	if code == "storage" {
+		log.Printf("GitHub sync failure: code=%s phase=%s completed=%d total=%d cause=%v", code, p.value.Phase, p.value.Completed, p.value.Total, err)
+	} else {
+		log.Printf("GitHub sync failure: code=%s phase=%s completed=%d total=%d", code, p.value.Phase, p.value.Completed, p.value.Total)
+	}
 	p.save()
 }
 func (p *syncTracker) finishResult(success bool, result syncResult, ctxErr error) {

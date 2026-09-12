@@ -87,7 +87,9 @@ const PROPS = [
 ];
 
 // Every route worth a look, at the widths the stylesheets actually branch on.
-const ROUTES = ["/#/", "/#/attention", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
+// The filtered listing is included because it is the only state that shows the
+// repository chip above the follow-ups.
+const ROUTES = ["/#/", "/#/attention", "/#/attention?repo=fixture/reviewer", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
 // Desktop, then each width a stylesheet or container query branches at.
 const WIDTHS = [1280, 800, 760, 640, 400];
 

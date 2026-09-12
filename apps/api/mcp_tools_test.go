@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -30,22 +31,30 @@ func mcpFixture(t *testing.T, sid string) (*Server, *mcp.ClientSession, map[stri
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The reviewing row is the case the reason filters cannot express: its checks
+	// are red, but a branch somebody else owns is not this account's action item.
 	fixtures := []struct {
 		key      string
 		number   int
 		title    string
 		waiting  time.Duration
+		role     string
 		facts    string
 		conflict bool
 		checks   string
 		detail   string
 	}{
-		{"conflict", 11, "Long wait with a conflict", 30 * 24 * time.Hour, `{"role":"authored","conflict":true}`, true, "success", "[]"},
-		{"feedback", 12, "Fresh human feedback", 2 * time.Hour, `{"role":"authored","human_excerpt":"please rebase","human_at":"2026-09-12T00:00:00Z"}`, false, "inconclusive", string(checks)},
+		{"conflict", 11, "Long wait with a conflict", 30 * 24 * time.Hour, "authored", `{"role":"authored","conflict":true}`, true, "success", "[]"},
+		{"feedback", 12, "Fresh human feedback", 2 * time.Hour, "authored", `{"role":"authored","human_excerpt":"please rebase","human_at":"2026-09-12T00:00:00Z"}`, false, "inconclusive", string(checks)},
+		{"reviewing", 13, "Somebody else's red branch", time.Hour, "reviewer", `{"role":"reviewer","direct_request":true}`, false, "failure", "[]"},
+		// Requested through a team this account has not selected, so the inclusion
+		// rules drop it from the workspace while it stays in the pull request
+		// table. This is why the two surfaces cannot be added up together.
+		{"untracked", 14, "Red, and nobody asked this account", time.Hour, "reviewer", `{"role":"reviewer","review_teams":["fixture/maintainers"]}`, false, "failure", "[]"},
 	}
 	created := map[string]FollowUp{}
 	for _, fixture := range fixtures {
-		pr := PullRequest{SessionID: sid, Repo: "fixture/tools", Number: fixture.number, Title: fixture.title, State: "open", UpdatedAt: now, Role: "authored", HasConflicts: fixture.conflict, ChecksStatus: fixture.checks, ChecksJSON: fixture.detail, Author: "someone", URL: "https://github.com/fixture/tools/pull/1"}
+		pr := PullRequest{SessionID: sid, Repo: "fixture/tools", Number: fixture.number, Title: fixture.title, State: "open", UpdatedAt: now, Role: fixture.role, HasConflicts: fixture.conflict, ChecksStatus: fixture.checks, ChecksJSON: fixture.detail, Author: "someone", URL: fmt.Sprintf("https://github.com/fixture/tools/pull/%d", fixture.number)}
 		if err := db.Create(&pr).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -131,14 +140,14 @@ func TestListFollowUpsFiltersByReasonUnreadAndWait(t *testing.T) {
 
 	var unread followUpListPayload
 	callStructured(t, session, "list_follow_ups", map[string]any{"unread": true}, &unread)
-	if unread.Total != 2 {
-		t.Fatalf("both rows are ahead of their read version, got %d", unread.Total)
+	if unread.Total != 3 {
+		t.Fatalf("every row is ahead of its read version, got %d", unread.Total)
 	}
 
 	// Total counts every match, so a limited page still reports the real size.
 	var limited followUpListPayload
 	callStructured(t, session, "list_follow_ups", map[string]any{"limit": 1}, &limited)
-	if limited.Total != 2 || len(limited.FollowUps) != 1 {
+	if limited.Total != 3 || len(limited.FollowUps) != 1 {
 		t.Fatalf("a limited page misreported the total: total=%d returned=%d", limited.Total, len(limited.FollowUps))
 	}
 }
@@ -147,11 +156,13 @@ func TestListFollowUpsSortsByLongestWait(t *testing.T) {
 	_, session, _ := mcpFixture(t, "mcp-sort")
 	var sorted followUpListPayload
 	callStructured(t, session, "list_follow_ups", map[string]any{"sort": "waiting"}, &sorted)
-	if len(sorted.FollowUps) != 2 {
-		t.Fatalf("expected both rows, got %d", len(sorted.FollowUps))
+	if len(sorted.FollowUps) != 3 {
+		t.Fatalf("expected every row, got %d", len(sorted.FollowUps))
 	}
-	if sorted.FollowUps[0].WaitingDays < sorted.FollowUps[1].WaitingDays {
-		t.Fatalf("the longest wait is not first: %+v", sorted.FollowUps)
+	for i := 1; i < len(sorted.FollowUps); i++ {
+		if sorted.FollowUps[i-1].WaitingDays < sorted.FollowUps[i].WaitingDays {
+			t.Fatalf("the longest wait is not first: %+v", sorted.FollowUps)
+		}
 	}
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_follow_ups", Arguments: map[string]any{"sort": "sideways"}})
 	if err != nil {
@@ -292,6 +303,72 @@ func TestSyncStatusReportsFreshness(t *testing.T) {
 	}
 }
 
+// The progress record outlives the process that wrote it, so a failure keeps
+// being reported after the run that caused it is gone. Without the timestamp a
+// caller cannot tell that from a failure happening right now, and the only
+// other source is the browser API a bearer client cannot reach.
+func TestSyncStatusDatesTheVerdictSeparatelyFromTheData(t *testing.T) {
+	s, session, _ := mcpFixture(t, "mcp-reported")
+	// Data synced an hour ago; the failure verdict written three hours ago, so
+	// it predates the successful sync and belongs to a run that is over.
+	synced := time.Now().UTC().Add(-60 * time.Minute)
+	reported := time.Now().UTC().Add(-180 * time.Minute)
+	progress, err := json.Marshal(syncProgress{Status: "failed", Phase: "details", Completed: 56, Total: 56, ErrorCode: "storage", UpdatedAt: reported})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-reported").Updates(map[string]any{"history_synced_at": synced, "sync_progress": string(progress)}).Error; err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Status         string `json:"status"`
+		ErrorCode      string `json:"error_code"`
+		ReportedAt     string `json:"reported_at"`
+		ReportedAgeMin int    `json:"reported_age_minutes"`
+		StaleMinutes   int    `json:"stale_minutes"`
+	}
+	callStructured(t, session, "get_sync_status", map[string]any{}, &status)
+	if status.Status != "failed" || status.ErrorCode != "storage" {
+		t.Fatalf("the stored verdict was not reported: %+v", status)
+	}
+	if status.ReportedAt == "" {
+		t.Fatal("the verdict has no timestamp, so a stale failure reads as a current one")
+	}
+	if status.ReportedAgeMin < 175 || status.ReportedAgeMin > 185 {
+		t.Fatalf("the verdict age is wrong: %d minutes", status.ReportedAgeMin)
+	}
+	// The two clocks answer different questions and must not collapse into one.
+	if status.StaleMinutes < 55 || status.StaleMinutes > 65 {
+		t.Fatalf("the data age is wrong: %d minutes", status.StaleMinutes)
+	}
+	if status.ReportedAgeMin <= status.StaleMinutes {
+		t.Fatal("the verdict is reported as newer than the data it supposedly describes")
+	}
+}
+
+// A run still reporting is not stale, and its verdict is current.
+func TestSyncStatusReportsARunningSyncAsCurrent(t *testing.T) {
+	s, session, _ := mcpFixture(t, "mcp-running")
+	progress, err := json.Marshal(syncProgress{Status: "running", Phase: "details", Completed: 4, Total: 10, UpdatedAt: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.Model(&OAuthToken{}).Where("session_id = ?", "mcp-running").Update("sync_progress", string(progress)).Error; err != nil {
+		t.Fatal(err)
+	}
+	var status struct {
+		Status         string `json:"status"`
+		ReportedAgeMin int    `json:"reported_age_minutes"`
+	}
+	callStructured(t, session, "get_sync_status", map[string]any{}, &status)
+	if status.Status != "running" {
+		t.Fatalf("a live run was not reported as running: %+v", status)
+	}
+	if status.ReportedAgeMin != 0 {
+		t.Fatalf("a verdict written now is not current: %d minutes", status.ReportedAgeMin)
+	}
+}
+
 func TestListPullRequestsFiltersByStateAndRole(t *testing.T) {
 	_, session, _ := mcpFixture(t, "mcp-prs")
 	var open struct {
@@ -302,8 +379,8 @@ func TestListPullRequestsFiltersByStateAndRole(t *testing.T) {
 		Total int `json:"total"`
 	}
 	callStructured(t, session, "list_pull_requests", map[string]any{"state": "open"}, &open)
-	if open.Total != 2 {
-		t.Fatalf("expected both open pull requests, got %d", open.Total)
+	if open.Total != 4 {
+		t.Fatalf("expected every open pull request, got %d", open.Total)
 	}
 	var merged struct {
 		Total int `json:"total"`
@@ -313,11 +390,21 @@ func TestListPullRequestsFiltersByStateAndRole(t *testing.T) {
 		t.Fatalf("nothing is merged in the fixture, got %d", merged.Total)
 	}
 	var reviewer struct {
+		PullRequests []struct {
+			Number int `json:"number"`
+		} `json:"pull_requests"`
 		Total int `json:"total"`
 	}
+	// Both reviewing rows, including the one no follow-up tracks: this listing is
+	// the pull request table and does not apply the workspace inclusion rules.
 	callStructured(t, session, "list_pull_requests", map[string]any{"role": "reviewer"}, &reviewer)
-	if reviewer.Total != 0 {
-		t.Fatalf("the fixture authors everything, got %d as reviewer", reviewer.Total)
+	if reviewer.Total != 2 {
+		t.Fatalf("the role filter did not isolate the reviewing rows: %+v", reviewer)
+	}
+	for _, row := range reviewer.PullRequests {
+		if row.Number != 13 && row.Number != 14 {
+			t.Fatalf("an authored row answered the reviewer filter: %+v", reviewer)
+		}
 	}
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_pull_requests", Arguments: map[string]any{"state": "abandoned"}})
 	if err != nil {
@@ -325,5 +412,133 @@ func TestListPullRequestsFiltersByStateAndRole(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Fatal("an unknown state was accepted silently")
+	}
+}
+
+type numberedPullRequests struct {
+	PullRequests []struct {
+		Number int    `json:"number"`
+		Checks string `json:"checks"`
+	} `json:"pull_requests"`
+	Total int `json:"total"`
+}
+
+// The checks_failed reason is authored-only by design, so asking for it never
+// finds a red branch on a pull request this account only reviews. Answering
+// "which branches are failing" used to mean pulling every row and filtering by
+// hand; these filters are how that question gets asked instead.
+func TestChecksFilterReachesTheBranchesTheReasonCannot(t *testing.T) {
+	_, session, _ := mcpFixture(t, "mcp-checks-filter")
+
+	var byReason followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"reason": "checks_failed"}, &byReason)
+	if byReason.Total != 0 {
+		t.Fatalf("the only red branch is somebody else's, so no reason should match: %+v", byReason)
+	}
+
+	var byChecks followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"checks": "failure"}, &byChecks)
+	if byChecks.Total != 1 || byChecks.FollowUps[0].Number != 13 {
+		t.Fatalf("the checks filter missed the reviewing row: %+v", byChecks)
+	}
+
+	// The listing reaches further than the follow-up view above: it also carries
+	// the red branch the workspace never tracked.
+	var prs numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"checks": "failure"}, &prs)
+	if prs.Total != 2 {
+		t.Fatalf("the pull request listing missed a red branch: %+v", prs)
+	}
+	seen := map[int]bool{}
+	for _, row := range prs.PullRequests {
+		seen[row.Number] = true
+	}
+	if !seen[13] || !seen[14] {
+		t.Fatalf("the listing did not return both red branches: %+v", prs)
+	}
+
+	// A row no detail sync has reached stores nothing at all, which has to answer
+	// to unknown rather than disappearing from every filter.
+	var blank numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"checks": "unknown"}, &blank)
+	if blank.Total != 0 {
+		t.Fatalf("every fixture row has a recorded state: %+v", blank)
+	}
+
+	var conflicted followUpListPayload
+	callStructured(t, session, "list_follow_ups", map[string]any{"conflict": true}, &conflicted)
+	if conflicted.Total != 1 || conflicted.FollowUps[0].Number != 11 {
+		t.Fatalf("the conflict filter did not isolate one row: %+v", conflicted)
+	}
+
+	for _, tool := range []string{"list_follow_ups", "list_pull_requests"} {
+		result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: tool, Arguments: map[string]any{"checks": "red"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !result.IsError {
+			t.Fatalf("%s accepted an unknown check state silently", tool)
+		}
+	}
+}
+
+// Grouping failures by repository was the one question the summary could not
+// answer: it counted conflicts but left the caller to tally red branches.
+func TestListRepositoriesCountsFailingChecks(t *testing.T) {
+	_, session, _ := mcpFixture(t, "mcp-repos")
+	var listed struct {
+		Repositories []struct {
+			Repository    string `json:"repository"`
+			Open          int    `json:"open"`
+			Attention     int    `json:"needs_attention"`
+			Conflicts     int    `json:"conflicts"`
+			ChecksFailing int    `json:"checks_failing"`
+		} `json:"repositories"`
+	}
+	callStructured(t, session, "list_repositories", map[string]any{}, &listed)
+	if len(listed.Repositories) != 1 {
+		t.Fatalf("the fixture tracks one repository, got %+v", listed)
+	}
+	row := listed.Repositories[0]
+	if row.Repository != "fixture/tools" || row.Open != 3 || row.Conflicts != 1 {
+		t.Fatalf("the repository summary is wrong: %+v", row)
+	}
+	if row.ChecksFailing != 1 {
+		t.Fatalf("the red branch was not counted: %+v", row)
+	}
+	// The reviewing row is red but is nobody's action item here, which is exactly
+	// why the two counts have to be reported separately.
+	if row.Attention != 2 {
+		t.Fatalf("a branch somebody else owns became an action item: %+v", row)
+	}
+}
+
+// The documented relationship between the two surfaces, pinned so it cannot
+// drift into agreement or into a wider gap unnoticed: list_repositories counts
+// the follow-up workspace, list_pull_requests counts everything synchronized,
+// and a pull request the inclusion rules drop is the difference between them.
+func TestRepositoryCountsUndercountTheRedBranches(t *testing.T) {
+	_, session, _ := mcpFixture(t, "mcp-undercount")
+
+	var red numberedPullRequests
+	callStructured(t, session, "list_pull_requests", map[string]any{"checks": "failure"}, &red)
+	if red.Total != 2 {
+		t.Fatalf("both red branches are stored, got %+v", red)
+	}
+
+	var listed struct {
+		Repositories []struct {
+			ChecksFailing int `json:"checks_failing"`
+		} `json:"repositories"`
+	}
+	callStructured(t, session, "list_repositories", map[string]any{}, &listed)
+	if len(listed.Repositories) != 1 {
+		t.Fatalf("the fixture tracks one repository, got %+v", listed)
+	}
+	// One of the two is requested through an unselected team, so the workspace
+	// never sees it. Adding the per-repository counts up is the mistake this
+	// asymmetry exists to warn about.
+	if listed.Repositories[0].ChecksFailing != 1 {
+		t.Fatalf("checks_failing is %d; the workspace should not see the untracked branch: %+v", listed.Repositories[0].ChecksFailing, listed)
 	}
 }

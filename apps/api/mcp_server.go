@@ -16,8 +16,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// Reported to MCP clients during initialization.
-const mcpServerVersion = "1"
+// Reported to MCP clients during initialization, which is the only place a
+// client learns which deployment it reached. Set by the release build; a binary
+// built from a checkout answers "dev".
+var appVersion = "dev"
 
 // The MCP surface is deliberately narrower than the HTTP API: it reads the
 // follow-up workspace and changes local handling state, and it never touches
@@ -57,7 +59,9 @@ type listFollowUpsInput struct {
 	State          string `json:"state,omitempty" jsonschema:"Only return follow-ups in this state: action, waiting, follow_up, draft or archived"`
 	Role           string `json:"role,omitempty" jsonschema:"Only return follow-ups where you are the authored or reviewer party"`
 	Repository     string `json:"repository,omitempty" jsonschema:"Only return follow-ups for this owner/name repository"`
-	Reason         string `json:"reason,omitempty" jsonschema:"Only return follow-ups carrying this reason: human_feedback, conflict, checks_failed, changes_requested, review_requested, approval_revoked, author_updated, overdue or snooze_due"`
+	Reason         string `json:"reason,omitempty" jsonschema:"Only return follow-ups carrying this reason: human_feedback, conflict, checks_failed, changes_requested, review_requested, approval_revoked, author_updated, overdue or snooze_due. conflict and checks_failed are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix; filter on checks or conflict instead to see those too"`
+	Checks         string `json:"checks,omitempty" jsonschema:"Only return follow-ups whose checks are in this state: success, failure, pending, inconclusive or unknown. Unlike the checks_failed reason this applies whatever your role is"`
+	Conflict       bool   `json:"conflict,omitempty" jsonschema:"Only return follow-ups whose branch conflicts with its base, whatever your role is"`
 	Unread         bool   `json:"unread,omitempty" jsonschema:"Only return follow-ups with activity you have not marked read"`
 	MinWaitingDays int    `json:"min_waiting_days,omitempty" jsonschema:"Only return follow-ups whose waiting clock has run at least this many days"`
 	Sort           string `json:"sort,omitempty" jsonschema:"waiting to put the longest wait first, or activity for the most recently changed first (default)"`
@@ -130,6 +134,41 @@ func matchesReason(reasons []string, reason string) bool {
 	return false
 }
 
+// The five states a caller can filter checks on. "error" is GitHub's wording for
+// a red branch and reaches the column through rows written before checkSummary
+// normalized it, so it is folded into failure rather than offered separately.
+var checkStates = []string{"success", "failure", "pending", "inconclusive", "unknown"}
+
+// A pull request no detail sync has reached yet stores nothing at all, which is
+// the same thing as unknown and has to answer to that filter.
+func normalizedChecks(stored string) string {
+	switch stored {
+	case "":
+		return "unknown"
+	case "error":
+		return "failure"
+	}
+	return stored
+}
+
+// checksFilterSQL is the column-side counterpart of normalizedChecks, so the
+// paginated query in list_pull_requests counts exactly what the in-memory filter
+// in list_follow_ups would keep.
+const checksFilterSQL = "CASE COALESCE(checks_status, '') WHEN '' THEN 'unknown' WHEN 'error' THEN 'failure' ELSE checks_status END"
+
+func validChecksFilter(value string) bool {
+	for _, state := range checkStates {
+		if value == state {
+			return true
+		}
+	}
+	return false
+}
+
+func checksFilterError() error {
+	return errors.New("checks has to be " + strings.Join(checkStates[:len(checkStates)-1], ", ") + " or " + checkStates[len(checkStates)-1])
+}
+
 func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, in listFollowUpsInput) (*mcp.CallToolResult, listFollowUpsOutput, error) {
 	session, err := sessionFromContext(ctx)
 	if err != nil {
@@ -137,6 +176,9 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 	}
 	if in.Sort != "" && in.Sort != "waiting" && in.Sort != "activity" {
 		return nil, listFollowUpsOutput{}, errors.New("sort has to be waiting or activity")
+	}
+	if in.Checks != "" && !validChecksFilter(in.Checks) {
+		return nil, listFollowUpsOutput{}, checksFilterError()
 	}
 	rows, err := s.accountFollowUps(ctx, session.sessionID)
 	if err != nil {
@@ -162,6 +204,12 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 			continue
 		}
 		if in.Reason != "" && !matchesReason(row.Reasons, in.Reason) {
+			continue
+		}
+		if in.Checks != "" && normalizedChecks(row.PR.ChecksStatus) != in.Checks {
+			continue
+		}
+		if in.Conflict && !row.PR.HasConflicts {
 			continue
 		}
 		if in.Unread && !row.Unread {
@@ -307,6 +355,8 @@ type pullRequestInput struct {
 	Query      string `json:"query,omitempty" jsonschema:"Case-insensitive match against the title"`
 	State      string `json:"state,omitempty" jsonschema:"Only return pull requests that are open, closed or merged"`
 	Role       string `json:"role,omitempty" jsonschema:"Only return pull requests you authored or are a reviewer on"`
+	Checks     string `json:"checks,omitempty" jsonschema:"Only return pull requests whose checks are in this state: success, failure, pending, inconclusive or unknown"`
+	Conflict   bool   `json:"conflict,omitempty" jsonschema:"Only return pull requests whose branch conflicts with its base"`
 	Limit      int    `json:"limit,omitempty" jsonschema:"Maximum number of pull requests to return (default 30, maximum 200)"`
 }
 
@@ -358,6 +408,9 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	if in.Role != "" && in.Role != "authored" && in.Role != "reviewer" {
 		return nil, pullRequestListOutput{}, errors.New("role has to be authored or reviewer")
 	}
+	if in.Checks != "" && !validChecksFilter(in.Checks) {
+		return nil, pullRequestListOutput{}, checksFilterError()
+	}
 	query := s.db.WithContext(ctx).Model(&PullRequest{}).Where("session_id = ?", session.sessionID)
 	if in.Repository != "" {
 		query = query.Where("LOWER(repo) = LOWER(?)", in.Repository)
@@ -367,6 +420,12 @@ func (s *Server) mcpListPullRequests(ctx context.Context, _ *mcp.CallToolRequest
 	}
 	if in.Role != "" {
 		query = query.Where("role = ?", in.Role)
+	}
+	if in.Checks != "" {
+		query = query.Where(checksFilterSQL+" = ?", in.Checks)
+	}
+	if in.Conflict {
+		query = query.Where("has_conflicts = ?", true)
 	}
 	// GitHub reports a merged pull request as closed, so merged is a filter on
 	// the merge timestamp rather than on the state column.
@@ -403,6 +462,11 @@ type repositoryOutput struct {
 	Open       int    `json:"open"`
 	Attention  int    `json:"needs_attention"`
 	Conflicts  int    `json:"conflicts"`
+	// Counted whatever the role is, but only across the follow-up workspace like
+	// every other count here, so it is not the number of red branches: one that
+	// no follow-up tracks is absent, and so is a repository whose only such pull
+	// request is untracked. list_pull_requests answers the unqualified question.
+	ChecksFailing int `json:"checks_failing" jsonschema:"How many of this repository's tracked pull requests have failing checks, whatever your role. Scoped to the follow-up workspace like the other counts, so it undercounts red branches; filter list_pull_requests by checks for the complete answer"`
 }
 
 type repositoryListOutput struct {
@@ -436,6 +500,9 @@ func (s *Server) mcpListRepositories(ctx context.Context, _ *mcp.CallToolRequest
 		if row.PR.HasConflicts {
 			entry.Conflicts++
 		}
+		if failedChecks(row.PR.ChecksStatus) {
+			entry.ChecksFailing++
+		}
 	}
 	out := repositoryListOutput{Repositories: []repositoryOutput{}}
 	for _, repo := range order {
@@ -449,6 +516,8 @@ type syncStatusOutput struct {
 	Phase          string `json:"phase,omitempty"`
 	Completed      int    `json:"completed"`
 	Total          int    `json:"total"`
+	ReportedAt     string `json:"reported_at,omitempty" jsonschema:"When this status was written. A failure survives a restart, so an old timestamp means the failure belongs to a run that is already over"`
+	ReportedAgeMin int    `json:"reported_age_minutes" jsonschema:"Age of the status itself in minutes, which is not the age of the data"`
 	LastSyncedAt   string `json:"last_synced_at,omitempty" jsonschema:"When the last full synchronization finished; absent until the first one completes"`
 	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive"`
 	NextAutoSyncAt string `json:"next_auto_sync_at,omitempty"`
@@ -486,6 +555,16 @@ func (s *Server) mcpSyncStatus(ctx context.Context, _ *mcp.CallToolRequest, _ st
 	out := syncStatusOutput{
 		Status: progress.Status, Phase: progress.Phase, Completed: progress.Completed, Total: progress.Total,
 		Baseline: settings.BaselineAt != nil, ErrorCode: progress.ErrorCode,
+	}
+	// The progress record outlives the process that wrote it, so a failure from a
+	// run that ended before the last restart reads exactly like one happening
+	// now. Without this timestamp the only way to tell them apart is the browser
+	// API, which a bearer client cannot reach.
+	if !progress.UpdatedAt.IsZero() {
+		out.ReportedAt = progress.UpdatedAt.UTC().Format(time.RFC3339)
+		if minutes := int(now.Sub(progress.UpdatedAt).Minutes()); minutes > 0 {
+			out.ReportedAgeMin = minutes
+		}
 	}
 	if token.HistorySyncedAt != nil {
 		out.LastSyncedAt = token.HistorySyncedAt.UTC().Format(time.RFC3339)
@@ -546,13 +625,13 @@ func (s *Server) followUpAction(action string) mcp.ToolHandlerFor[followUpAction
 }
 
 func (s *Server) newMCPServer() *mcp.Server {
-	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: mcpServerVersion, Title: "PR Desk"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, unread or minimum waiting days, and sort by longest wait.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
+	server := mcp.NewServer(&mcp.Implementation{Name: "pr-desk", Version: appVersion, Title: "PR Desk"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_follow_ups", Description: "List pull requests that PR Desk is tracking for you, with the reason each one needs attention. Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days, and sort by longest wait.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListFollowUps)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up", Description: "Read one follow-up in full, including the stored comment thread rather than the truncated excerpt the listing carries.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpGetFollowUp)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_follow_up_summary", Description: "Count how many tracked pull requests need your action, are waiting on others, or are ready to follow up.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpFollowUpSummary)
 	mcp.AddTool(server, &mcp.Tool{Name: "get_sync_status", Description: "Report how fresh the synchronized data is and whether the first inventory finished, so an empty result can be judged.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpSyncStatus)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state or role.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
-	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize tracked repositories with their open, attention-needing and conflicting pull request counts.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_pull_requests", Description: "Search the synchronized pull requests of this account by repository, title, state, role, check state or conflict. Unlike list_follow_ups this covers pull requests you only review, so it is the way to find every branch with failing checks rather than only your own.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListPullRequests)
+	mcp.AddTool(server, &mcp.Tool{Name: "list_repositories", Description: "Summarize the follow-up workspace by repository: open, attention-needing, conflicting and check-failing counts. Every count is scoped to the pull requests a follow-up tracks, so a repository with no tracked pull request is absent entirely and the totals do not reconcile with list_pull_requests, which is what answers \"every branch that is red\".", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, s.mcpListRepositories)
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_read", Description: "Mark a follow-up as read. This does not mark the work as handled and does not touch GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("read"))
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("handled"))
 	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true}}, s.followUpAction("snooze"))

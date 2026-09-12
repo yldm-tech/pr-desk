@@ -72,6 +72,31 @@ func TestListFlagsAcceptsStateForBothListings(t *testing.T) {
 	}
 }
 
+// Both listings answer "what is failing"; the reason filter only ever covered
+// the pull requests this account authored.
+func TestListFlagsAcceptsChecksAndConflictForBothListings(t *testing.T) {
+	for _, command := range []string{"followups", "prs"} {
+		options, err := listFlags(command, []string{"--checks", "failure", "--conflict"})
+		if err != nil {
+			t.Fatalf("%s rejected the check filters: %v", command, err)
+		}
+		if options.arguments["checks"] != "failure" || options.arguments["conflict"] != true {
+			t.Fatalf("%s dropped a check filter: %+v", command, options.arguments)
+		}
+	}
+	// Left off, neither may be sent: conflict false would read as a filter for
+	// the pull requests that do not conflict.
+	options, err := listFlags("prs", []string{"--state", "open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"checks", "conflict"} {
+		if _, present := options.arguments[key]; present {
+			t.Fatalf("an unset %s reached the server", key)
+		}
+	}
+}
+
 func captureStdout(t *testing.T, run func() error) string {
 	t.Helper()
 	original := os.Stdout
@@ -134,6 +159,38 @@ func TestPrintSyncStatusExplainsALapsedAuthorization(t *testing.T) {
 	}
 	if !strings.Contains(out, "1d1h") {
 		t.Fatalf("the age was not made readable:\n%s", out)
+	}
+}
+
+// Reading a failure without knowing when it was decided is what sends someone
+// investigating a run that ended before the last restart.
+func TestPrintSyncStatusDatesTheVerdict(t *testing.T) {
+	body := []byte(`{"status":"failed","error_code":"storage","reported_at":"2026-09-11T14:00:00Z","reported_age_minutes":180,"last_synced_at":"2026-09-11T16:00:00Z","stale_minutes":60,"baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if !strings.Contains(out, "reported 3h0m ago") {
+		t.Fatalf("the verdict was printed without its age:\n%s", out)
+	}
+	if !strings.Contains(out, "1h0m ago") {
+		t.Fatalf("the data age is missing:\n%s", out)
+	}
+}
+
+// "interrupted" on its own still reads as something being wrong. It is not.
+func TestPrintSyncStatusExplainsAnInterruptedRun(t *testing.T) {
+	body := []byte(`{"status":"interrupted","error_code":"interrupted","reported_at":"2026-09-11T18:39:03Z","reported_age_minutes":2,"last_synced_at":"2026-09-11T18:27:07Z","stale_minutes":14,"baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if !strings.Contains(out, "restarted") || !strings.Contains(out, "no cooldown") {
+		t.Fatalf("an interrupted run was not explained:\n%s", out)
+	}
+}
+
+// A status with no timestamp must not render an age of zero, which would read
+// as "decided just now".
+func TestPrintSyncStatusOmitsTheAgeWhenItIsUnknown(t *testing.T) {
+	body := []byte(`{"status":"idle","baseline_complete":true}`)
+	out := captureStdout(t, func() error { return printSyncStatus(body) })
+	if strings.Contains(out, "reported") {
+		t.Fatalf("an unknown verdict age was rendered anyway:\n%s", out)
 	}
 }
 

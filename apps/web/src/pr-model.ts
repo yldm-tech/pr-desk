@@ -35,7 +35,7 @@ export function parsePRList(body: unknown) {
 }
 export type PR = ReturnType<typeof parsePRList>[number];
 
-const repositorySchema = z.object({ repo: z.string(), total: z.number().int().nonnegative(), open: z.number().int().nonnegative(), conflicts: z.number().int().nonnegative(), needs_attention: z.number().int().nonnegative() });
+const repositorySchema = z.object({ repo: z.string(), total: z.number().int().nonnegative(), open: z.number().int().nonnegative(), conflicts: z.number().int().nonnegative(), needs_attention: z.number().int().nonnegative(), checks_failing: z.number().int().nonnegative().default(0) });
 export type RepositorySummary = z.infer<typeof repositorySchema>;
 export function parseRepositoryList(body: unknown): RepositorySummary[] {
   return z

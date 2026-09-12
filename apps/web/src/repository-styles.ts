@@ -46,14 +46,14 @@ export const repositoryListCaption = [
   "@max-[760.02px]/dashboard:px-3.5 @max-[760.02px]/dashboard:pb-3.5",
 ].join(" ");
 
-export const repositoryColumns = ["grid grid-cols-[minmax(0,1fr)_88px_88px_88px_116px] items-center gap-3 px-5", "border-t border-[var(--border)] bg-[var(--canvas)] py-[11px] text-[11px] text-[var(--muted)]", "[&>span:not(:first-child)]:text-center @max-[760.02px]/dashboard:hidden"].join(" ");
+export const repositoryColumns = ["grid grid-cols-[minmax(0,1fr)_88px_88px_88px_88px_116px] items-center gap-3 px-5", "border-t border-[var(--border)] bg-[var(--canvas)] py-[11px] text-[11px] text-[var(--muted)]", "[&>span:not(:first-child)]:text-center @max-[760.02px]/dashboard:hidden"].join(" ");
 
 export const repositoryRows = "m-0 list-none p-0";
 
 export const repositoryRow = [
-  "grid grid-cols-[minmax(0,1fr)_88px_88px_88px_116px] items-center gap-3 px-5",
+  "grid grid-cols-[minmax(0,1fr)_88px_88px_88px_88px_116px] items-center gap-3 px-5",
   "border-t border-[var(--border-subtle)] py-[17px] transition-[background] duration-150 hover:bg-[var(--canvas)]",
-  "@max-[760.02px]/dashboard:grid-cols-3 @max-[760.02px]/dashboard:gap-x-3 @max-[760.02px]/dashboard:gap-y-4 @max-[760.02px]/dashboard:px-3.5 @max-[760.02px]/dashboard:py-[18px]",
+  "@max-[760.02px]/dashboard:grid-cols-2 @max-[760.02px]/dashboard:gap-x-3 @max-[760.02px]/dashboard:gap-y-4 @max-[760.02px]/dashboard:px-3.5 @max-[760.02px]/dashboard:py-[18px]",
 ].join(" ");
 
 export const repositoryIdentity = [

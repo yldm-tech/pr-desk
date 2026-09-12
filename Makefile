@@ -1,4 +1,4 @@
-.PHONY: db api web build cli production backup test
+.PHONY: db api web build cli install-cli production backup test
 db:
 	docker compose up -d postgres
 api:
@@ -11,6 +11,11 @@ build:
 	cd apps/api && go build -tags webembed -trimpath -o ../../dist/pr-desk .
 cli:
 	cd apps/api && go build -trimpath -o ../../dist/prdesk ./cmd/prdesk
+# Installs what this checkout builds, which reports "dev". Use scripts/install-cli.sh
+# for a released binary that reports its version.
+install-cli: cli
+	install -d $${PRDESK_INSTALL_DIR:-$$HOME/.local/bin}
+	install -m 0755 dist/prdesk $${PRDESK_INSTALL_DIR:-$$HOME/.local/bin}/prdesk
 production:
 	docker compose up -d --build api postgres
 backup:

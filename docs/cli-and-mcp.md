@@ -37,12 +37,12 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 
 | Tool | Scope | Notes |
 |------|-------|-------|
-| `list_follow_ups` | read | Filter by state, role, repository, reason, unread or minimum waiting days; sort by longest wait |
+| `list_follow_ups` | read | Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days; sort by longest wait |
 | `get_follow_up` | read | One follow-up with its stored comment thread rather than the truncated excerpt |
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
-| `get_sync_status` | read | How old the data is, so an empty result can be judged |
-| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state or role |
-| `list_repositories` | read | Per-repository open, attention and conflict counts |
+| `get_sync_status` | read | How old the data is and how old that verdict is, so an empty result can be judged |
+| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state, role, check state or conflict |
+| `list_repositories` | read | Per-repository open, attention, conflict and failing-check counts, all scoped to the follow-up workspace rather than to every synchronized pull request |
 | `mark_follow_up_read` | write | Does not mark the work handled |
 | `mark_follow_up_handled` | write | Restarts the waiting clock |
 | `snooze_follow_up` | write | Suppresses reminders for 1–365 days |
@@ -52,9 +52,48 @@ Every write tool takes the `version` returned by the listing. If new activity ar
 
 ### Reading the check state
 
-`checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names the runs behind anything that is not green, failures first.
+`checks` is `success`, `failure`, `pending`, `inconclusive` or `unknown`, and `failing_checks` names whatever is behind anything that is not green, failures first.
+
+GitHub reports through two APIs and both are read. Check runs are what GitHub Actions produces; commit statuses are the older mechanism still used by Vercel, Netlify, CircleCI and most external integrations. A pull request whose only failure is a commit status summarises as `failure` while contributing no check run at all, so a caller reading only check runs would see a red mark with nothing named behind it. Conclusions therefore come from either vocabulary: `failure`, `cancelled`, `stale`, `timed_out` and `action_required` from check runs, `failure`, `error` and `pending` from statuses.
 
 `inconclusive` means every run that did not pass was cancelled or marked stale — superseded by a newer push, stopped by a concurrency group, or otherwise abandoned. GitHub renders those as a red cross and its own API reports them next to real failures, but they decided nothing about the code, so they do not raise a `checks_failed` follow-up. A genuine failure, a timeout, a startup failure or a run awaiting manual action all still count as `failure`.
+
+### The reason and the state are not the same question
+
+The `checks_failed` and `conflict` reasons are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix and does not belong in your action queue. Filtering `list_follow_ups` by `reason` therefore answers "what is PR Desk asking me to do", and on an account that mostly reviews it can legitimately return nothing while plenty of branches are red.
+
+To ask the other question — which branches are failing, whoever owns them — filter on the state instead. `checks` and `conflict` are accepted by both `list_follow_ups` and `list_pull_requests` and apply whatever your role is.
+
+```
+prdesk prs --state open --checks failure --url    # every red branch, whoever owns it
+prdesk followups --reason checks_failed           # only the ones that are yours to fix
+```
+
+### Three places count failing checks, and none of them agree
+
+`checks_failing` appears in `list_repositories` and in the browser's repositories table, and a red branch is also what `list_pull_requests --checks failure` returns. They are counted over three different populations, so do not expect the totals to reconcile. `list_pull_requests` is the only one that answers "every branch that is red".
+
+| Surface | Counts over | Misses |
+|---------|-------------|--------|
+| `list_pull_requests --checks failure` | every synchronized pull request | nothing |
+| `list_repositories` → `checks_failing` | the follow-up workspace | pull requests no follow-up tracks: a review requested through a team you have not selected, anything the inclusion rules drop |
+| Browser repositories table | open pull requests you authored | every pull request you only review |
+
+Observed on one account: 13 red branches from `list_pull_requests`, 9 when the tool's per-repository counts are added up, and one repository absent from the tool's output altogether because its only tracked pull request was requested through an unselected team. All three numbers are correct for the question their own surface asks.
+
+The rest of the browser table is narrower again: its attention count is a query over stored columns, where the tool's is the follow-up state that read, handled and snooze all move. The page answers "how does my own work stand"; the tool answers "what is the follow-up workspace holding".
+
+### Reading the sync status
+
+Two clocks answer different questions, and confusing them has already cost an investigation.
+
+`stale_minutes` is the age of the **data**: how long ago the last full synchronization finished. `reported_age_minutes` is the age of the **verdict**: how long ago that status was written.
+
+The progress record is stored on the account and outlives the process that wrote it. A failure therefore survives a restart or a redeploy, and keeps being reported until the next run overwrites it. A `failed` status whose `reported_at` predates the current deployment belongs to a run that is already over; the next scheduled sync will replace it. Only a failure reported after the last restart is a live problem.
+
+`completed` counts the items of the phase that actually landed, not the ones attempted, so on a failed run the shortfall against `total` is how much of that phase was lost. The bounded `error_code` names the layer; for a storage failure the server log additionally names the cause, which is where a constraint violation is told apart from a dropped connection.
+
+`interrupted` is a status of its own and not a failure: the server stopped while the run was in flight, which a deployment does every time it rolls a pod. It carries no cooldown, so the next scheduled sync simply carries on. A failed run does cool down for fifteen minutes, because the point of that pause is to stop hammering an upstream that is refusing — and a restart tells you nothing about the upstream.
 
 ## Waiting time
 
@@ -62,13 +101,36 @@ Every write tool takes the `version` returned by the listing. If new activity ar
 
 ## Command line
 
-Build it with `make cli`, which produces `dist/prdesk`.
+### Installing
+
+```
+curl -fsSL https://raw.githubusercontent.com/yldm-tech/pr-desk/main/scripts/install-cli.sh | sh
+```
+
+The script resolves the latest release, downloads the binary for the detected platform, verifies it against the release's `SHA256SUMS` and refuses to install on a mismatch, then places it in `~/.local/bin`. Nothing needs root. `PRDESK_VERSION` pins a release, `PRDESK_INSTALL_DIR` changes the destination and `PRDESK_REPO` points at a fork. Releases carry `prdesk-{darwin,linux}-{arm64,amd64}`; anything else has to be built from source.
+
+`prdesk version` reports which release a binary came from, or `dev` for one built from a checkout.
+
+### Staying current
+
+```
+prdesk update            # replace this binary with the latest release
+prdesk update --check    # report whether a newer one exists, change nothing
+```
+
+`update` verifies the download against the release's `SHA256SUMS` exactly as the installer does, and refuses to replace anything on a mismatch. The replacement is staged beside the binary and renamed over it, which is atomic within the file system and safe while prdesk is running. Installing into a directory you cannot write to fails with the command to use instead rather than a bare permission error. `PRDESK_REPO` and `PRDESK_RELEASE_BASE` redirect where the release is fetched from; the checksum is verified whatever they point at.
+
+You do not have to remember to check. Every command that reaches the server compares its own release against the deployment's and, when they differ, prints a note **to standard error** — so `--json` stays a clean document for `jq`. Nothing is printed when the two agree, when either side is a development build, or when the server is old enough not to report its release at all.
+
+From a checkout, `make cli` produces `dist/prdesk` and `make install-cli` additionally copies it to `~/.local/bin`. Both report `dev`, since no release produced them, and a `dev` binary neither reports skew nor is nagged about it.
 
 ```
 prdesk login --host https://prdesk.example.com   # add --write to allow state changes
 prdesk followups --state action --sort waiting   # longest wait first
 prdesk followups --reason checks_failed --url    # everything red, with links
 prdesk followups --min-waiting 14 --unread       # stale and still unseen
+prdesk prs --state open --checks failure         # every red branch, whoever owns it
+prdesk repos                                     # per repository, including failing counts
 prdesk show 41                                   # one row in full, with its comments
 prdesk sync                                      # how old the answer is
 prdesk handled 41 7                              # id and version from the listing
