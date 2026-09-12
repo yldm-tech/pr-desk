@@ -42,7 +42,7 @@ export const repositoryControlLabel = [
 
 export const repositoryListCaption = [
   "flex justify-between gap-2.5 px-5 pb-4 text-[12px] text-[var(--muted)]",
-  "[&_button]:inline-flex [&_button]:items-center [&_button]:gap-[5px] [&_button]:border-0 [&_button]:bg-none [&_button]:text-[var(--accent-text)]",
+  "[&_button]:inline-flex [&_button]:items-center [&_button]:gap-[5px] [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-[var(--accent-text)]",
   "@max-[760.02px]/dashboard:px-3.5 @max-[760.02px]/dashboard:pb-3.5",
 ].join(" ");
 

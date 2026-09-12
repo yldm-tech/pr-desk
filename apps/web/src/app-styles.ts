@@ -98,7 +98,7 @@ export const filters = [
 
 export const searchChip = "inline-flex max-w-full items-center gap-2 rounded-md border border-[var(--accent-border)] bg-[var(--accent-soft)] px-[9px] py-[5px] text-[12px] text-[var(--accent-text)] [overflow-wrap:anywhere]";
 
-export const linkButton = "cursor-pointer border-0 bg-none p-0 text-[var(--accent)] [font:inherit]";
+export const linkButton = "cursor-pointer border-0 bg-transparent p-0 text-[var(--accent)] [font:inherit]";
 
 export const tableSurface = "overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]";
 

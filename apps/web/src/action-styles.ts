@@ -26,7 +26,7 @@ export const dangerAction = `${actionShape} min-h-[34px] px-3 py-1.5 text-[12px]
 
 // A button that reads as a link: used to retry a request without leaving the
 // sentence it sits in.
-export const linkAction = "cursor-pointer border-0 bg-none p-0 text-[var(--accent-text)] underline underline-offset-[3px] disabled:cursor-wait disabled:opacity-50 [font:inherit]";
+export const linkAction = "cursor-pointer border-0 bg-transparent p-0 text-[var(--accent-text)] underline underline-offset-[3px] disabled:cursor-wait disabled:opacity-50 [font:inherit]";
 
 // The panel shown when a list has nothing in it, or could not be loaded.
 export const emptyState =

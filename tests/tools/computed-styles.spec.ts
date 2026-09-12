@@ -170,7 +170,9 @@ test("capture computed styles", async ({ page }) => {
   for (const width of [1280, 640]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/#/pull-requests");
-    const activity = page.getByTestId("pr-activity").first();
+    // The hook is new on this branch; fall back to the class the base commit uses
+    // so both sides of a comparison open the same dialog.
+    const activity = page.getByTestId("pr-activity").or(page.locator("button.activity")).first();
     if (await activity.count()) {
       await activity.click();
       await page.waitForTimeout(250);
