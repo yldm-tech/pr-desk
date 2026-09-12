@@ -1,14 +1,15 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import * as Tabs from "@radix-ui/react-tabs";
 import { Check, Plus } from "lucide-react";
-import ky from "ky";
+import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 import { AccessSettings } from "./AccessSettings";
-import { compactAction, dangerAction, primaryAction, secondaryAction } from "./action-styles";
+import { compactAction, dangerAction, linkAction, primaryAction, secondaryAction } from "./action-styles";
+import { syncStatusError } from "./status-styles";
 import {
   destinationActions,
   destinationForm,
@@ -75,7 +76,7 @@ function isPrivateHost(value: string) {
 // allowPrivate mirrors NOTIFY_ALLOW_PRIVATE_HOSTS on the server: with it the
 // server also accepts plain http, because internal endpoints rarely have a
 // certificate, and the form has to accept the same addresses it does.
-function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string> {
+export function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string> {
   const found: Record<string, string> = {};
   if (!draft.name.trim()) found.name = "followup.required";
   else if (Array.from(draft.name.trim()).length > nameLimit) found.name = "followup.nameTooLong";
@@ -89,8 +90,11 @@ function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string
     else if (!allowPrivate && isPrivateHost(url)) found.url = "followup.privateUrl";
   }
   if (draft.kind === "email") {
-    if (!draft.host.trim()) found.host = "followup.required";
-    else if (!allowPrivate && isPrivateHost(draft.host)) found.host = "followup.privateUrl";
+    // Mirrors validateDestinationHost: a pasted "smtp.example.com:587" is refused by the server, which the form has no other way to explain.
+    const host = draft.host.trim();
+    if (!host) found.host = "followup.required";
+    else if (/[ /:]/.test(host)) found.host = "followup.invalidHost";
+    else if (!allowPrivate && isPrivateHost(host)) found.host = "followup.privateUrl";
     const port = Number(draft.port.trim());
     if (draft.port.trim() && !(Number.isInteger(port) && port >= 1 && port <= 65535)) found.port = "followup.invalidPort";
     if (!emailPattern.test(draft.from.trim())) found.from = "followup.invalidEmail";
@@ -99,6 +103,15 @@ function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string
     else if (recipients.length > recipientLimit) found.to = "followup.tooManyRecipients";
   }
   return found;
+}
+
+// A rejected destination comes back with the reason it was refused, which names
+// the offending field; anything else keeps the generic copy, because a status
+// line from a proxy is not something to show an operator as an explanation.
+export function addErrorMessage(error: unknown): string {
+  if (!(error instanceof HTTPError) || error.response.status !== 400) return "";
+  const body = z.object({ error: z.string().optional() }).safeParse(error.data);
+  return (body.success && body.data.error) || "";
 }
 
 function destinationPayload(draft: Draft) {
@@ -328,7 +341,9 @@ function NotificationDestinations() {
   const client = useQueryClient();
   const [draft, setDraft] = useState(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [addFailure, setAddFailure] = useState("");
   const [confirming, setConfirming] = useState(0);
+  const [cancelled, setCancelled] = useState(0);
   // Removing a destination takes the focused button with it and said nothing.
   const [announcement, setAnnouncement] = useState({ text: "", id: 0 });
   const region = useRef<HTMLDivElement>(null);
@@ -336,10 +351,24 @@ function NotificationDestinations() {
   useEffect(() => {
     if (announcement.id && document.activeElement === document.body) region.current?.focus();
   }, [announcement]);
+  // Asking for confirmation swaps the focused button for a different one, so the focus follows it there and back instead of falling to the document.
+  useEffect(() => {
+    if (confirming) document.getElementById(`destination-confirm-${confirming}`)?.focus();
+  }, [confirming]);
+  useEffect(() => {
+    if (!cancelled) return;
+    document.getElementById(`destination-remove-${cancelled}`)?.focus();
+    setCancelled(0);
+  }, [cancelled]);
+  const stopConfirming = (id: number) => {
+    setConfirming(0);
+    setCancelled(id);
+  };
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
   const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[]; allow_private_hosts?: boolean }>(), retry: false });
   const addDestination = useMutation({
     mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", retry: 0, json: destinationPayload(draft) }),
+    onError: (error) => setAddFailure(addErrorMessage(error)),
     onSuccess: () => {
       setDraft({ ...emptyDraft, kind: draft.kind });
       invalidate();
@@ -454,12 +483,21 @@ function NotificationDestinations() {
             </button>
             {addDestination.isError && (
               <p className={settingsFieldError} role="alert">
-                {t("followup.addError")}
+                {addFailure || t("followup.addError")}
               </p>
             )}
           </div>
         </form>
-        {destinations.isError ? (
+        {/* A failed refresh keeps the destinations that were already loaded: they are still accurate, and replacing them with an error hides what the operator came to read. */}
+        {destinations.isError && destinations.data && (
+          <p className={settingsWarning} role="status">
+            <span>{t("refreshFailedKeepData")}</span>
+            <button className={secondaryAction} type="button" onClick={() => destinations.refetch()}>
+              {t("followup.retry")}
+            </button>
+          </p>
+        )}
+        {destinations.isError && !destinations.data ? (
           <p className={settingsWarning} role="alert">
             <span>{t("followup.destinationsError")}</span>
             <button className={secondaryAction} type="button" onClick={() => destinations.refetch()}>
@@ -471,32 +509,42 @@ function NotificationDestinations() {
         ) : (
           <ul className={rowList}>
             {rows.map((destination) => (
-              <li key={destination.id} className={rowNarrow} data-testid="destination">
+              <li
+                key={destination.id}
+                className={rowNarrow}
+                data-testid="destination"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && confirming === destination.id) stopConfirming(destination.id);
+                }}
+              >
                 <strong>{destination.name}</strong>
                 <span className={rowTag}>{t(channelLabel(destination.kind || "telegram"))}</span>
                 {destination.failing && <span className={rowFailing}>{t("followup.destinationFailing")}</span>}
+                {/* The two steps are keyed apart because React otherwise reuses the focused Remove button as Cancel, and the next Enter cancels instead of confirming. */}
                 {confirming === destination.id ? (
-                  <>
-                    <span className={rowConfirm}>{t("followup.confirmRemove")}</span>
-                    <button className={dangerAction} type="button" disabled={deleteDestination.isPending} onClick={() => deleteDestination.mutate(destination.id)}>
+                  <Fragment key="confirm">
+                    <span className={rowConfirm} id={`destination-prompt-${destination.id}`}>
+                      {t("followup.confirmRemove")}
+                    </span>
+                    <button id={`destination-confirm-${destination.id}`} className={dangerAction} type="button" disabled={deleteDestination.isPending} aria-describedby={`destination-prompt-${destination.id}`} onClick={() => deleteDestination.mutate(destination.id)}>
                       {t("followup.remove")}
                     </button>
-                    <button className={compactAction} type="button" onClick={() => setConfirming(0)}>
+                    <button className={compactAction} type="button" onClick={() => stopConfirming(destination.id)}>
                       {t("followup.cancel")}
                     </button>
-                  </>
+                  </Fragment>
                 ) : (
-                  <>
+                  <Fragment key="actions">
                     <span className={rowState} data-state={destination.enabled ? "enabled" : "disabled"}>
                       {t(destination.enabled ? "followup.destinationEnabled" : "followup.destinationDisabled")}
                     </span>
                     <button className={compactAction} type="button" disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
                       {t(destination.enabled ? "followup.disable" : "followup.enable")}
                     </button>
-                    <button className={dangerAction} type="button" onClick={() => setConfirming(destination.id)}>
+                    <button id={`destination-remove-${destination.id}`} className={dangerAction} type="button" onClick={() => setConfirming(destination.id)}>
                       {t("followup.remove")}
                     </button>
-                  </>
+                  </Fragment>
                 )}
               </li>
             ))}
@@ -535,6 +583,12 @@ export function FollowUpSettings() {
       { replace: true },
     );
   };
+  // The open tab also changes from the URL on back and forward, so the set is
+  // kept up to date from the value rather than from the click that set it.
+  const [visited, setVisited] = useState<Set<SettingsTab>>(() => new Set([active]));
+  useEffect(() => {
+    setVisited((current) => (current.has(active) ? current : new Set(current).add(active)));
+  }, [active]);
   const query = useQuery({
     queryKey: ["follow-up-settings"],
     queryFn: ({ signal }) =>
@@ -545,7 +599,9 @@ export function FollowUpSettings() {
     retry: false,
   });
   if (query.isPending) return <p role="status">{t("loading")}</p>;
-  if (query.isError)
+  // A background refetch that fails leaves the settings in hand: replacing the
+  // page then would throw away a half-filled form along with what it shows.
+  if (query.isError && !query.data)
     return (
       <p role="alert">
         {t("followup.unavailable")} <a href={apiURL + "/api/v1/auth/github"}>{t("followup.reconnect")}</a>
@@ -553,8 +609,16 @@ export function FollowUpSettings() {
     );
   return (
     // Radix carries the roving tab order and the arrow-key handling that a
-    // tablist is expected to have, and only mounts the open panel.
+    // tablist is expected to have.
     <Tabs.Root className="grid items-start gap-5" value={active} onValueChange={select}>
+      {query.isError && (
+        <div className={syncStatusError} role="status">
+          <span>{t("refreshFailedKeepData")}</span>
+          <button className={linkAction} onClick={() => query.refetch()}>
+            {t("retry")}
+          </button>
+        </div>
+      )}
       {/* The strip runs the full width of the content area so it lines up with
           whatever the page puts above it; the panels keep a readable measure. */}
       <Tabs.List className="flex gap-1 overflow-x-auto border-b border-[var(--border)] [overscroll-behavior-x:contain] [scrollbar-width:thin]" aria-label={t("followup.settings")}>
@@ -568,13 +632,17 @@ export function FollowUpSettings() {
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="schedule">
+      {/* Radix unmounts a panel that is not open, which discards a half-filled
+          form on a tab switch. A panel that has been opened stays mounted and
+          is hidden instead; the ones never opened are not mounted at all, so
+          opening the page still issues one request rather than three. */}
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="schedule" forceMount={visited.has("schedule") ? true : undefined} hidden={active !== "schedule"}>
         <SettingsForm settings={query.data} />
       </Tabs.Content>
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="notifications">
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="notifications" forceMount={visited.has("notifications") ? true : undefined} hidden={active !== "notifications"}>
         <NotificationDestinations />
       </Tabs.Content>
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="access">
+      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="access" forceMount={visited.has("access") ? true : undefined} hidden={active !== "access"}>
         <AccessSettings />
       </Tabs.Content>
     </Tabs.Root>

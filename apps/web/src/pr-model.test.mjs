@@ -1,6 +1,6 @@
 import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { parsePRList } from "./pr-model.ts";
+import { oauthBanner, parsePRList } from "./pr-model.ts";
 const row = { id: 9, number: 81, repo: "https://api.github.com/repos/org/repo", title: "Example", state: "open" };
 
 test("PR links reject executable and off-site URLs", () => {
@@ -45,6 +45,16 @@ test("pagination and filters are sent to the backend", async () => {
   assert.equal(new URLSearchParams(listParameters("All", 1)).get("offset"), "50");
   assert.equal(new URLSearchParams(listParameters("Needs attention", 0)).get("attention"), "true");
   assert.equal(parsePRPage({ data: [row], total: 55 }).total, 55);
+});
+
+test("a cancelled authorization is reported once and removed from the URL", () => {
+  assert.deepEqual(oauthBanner("?oauth_error=access_denied"), { error: "access_denied", cleanedSearch: "" });
+  assert.deepEqual(oauthBanner("?oauth_error=access_denied&repo=foo&page=2"), { error: "access_denied", cleanedSearch: "?repo=foo&page=2" });
+  assert.deepEqual(oauthBanner("?connected=1"), { error: null, cleanedSearch: "" });
+});
+test("a search without OAuth flags is left exactly as it was", () => {
+  assert.deepEqual(oauthBanner("?repo=foo&page=2"), { error: null, cleanedSearch: "?repo=foo&page=2" });
+  assert.deepEqual(oauthBanner(""), { error: null, cleanedSearch: "" });
 });
 
 test("repository filtering composes with attention, search and pagination", async () => {

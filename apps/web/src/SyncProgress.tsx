@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import ky from "ky";
 import { z } from "zod";
-import { shouldRefreshAfterSync, type SyncSnapshot } from "./sync-model";
+import { shouldRefreshAfterSync, syncPollInterval, syncRunInFlight, type SyncSnapshot } from "./sync-model";
 
 const progressSchema = z.object({
   last_synced_at: z.string().nullable().optional(),
@@ -26,7 +26,7 @@ const progressSchema = z.object({
   retry_at: z.number(),
 });
 export function SyncProgress({ connected, pending, onRunningChange, hidden = false }: { connected: boolean; pending: boolean; onRunningChange: (value: boolean) => void; hidden?: boolean }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const reducedMotion = useReducedMotion();
   const client = useQueryClient();
   const previous = useRef<SyncSnapshot | undefined>(undefined);
@@ -38,8 +38,9 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
         .get(apiURL + "/api/v1/sync/progress", { credentials: "include", signal, retry: 0 })
         .json()
         .then((value) => progressSchema.parse(value)),
-    refetchInterval: (q) => (pending || q.state.data?.status === "queued" || q.state.data?.status === "running" ? 1000 : 5000),
-    refetchIntervalInBackground: true,
+    refetchInterval: (q) => syncPollInterval(pending, q.state.data?.status),
+    // A hidden tab still has to follow a run it is showing progress for, because the invalidation timer below keeps firing while it does. Idle polling stops instead.
+    refetchIntervalInBackground: syncRunInFlight(pending, previous.current?.status),
   });
   const running = connected && (query.data?.status === "queued" || query.data?.status === "running");
   useEffect(() => {
@@ -75,7 +76,7 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
     return (
       <div className={autoSyncNote} role="status">
         <p>{query.data?.status === "idle" && !Number.isFinite(lastSynced) ? t("firstSyncQueued") : t("autoSyncSchedule")}</p>
-        {Number.isFinite(lastSynced) && <p>{t("lastSynced", { time: new Date(lastSynced).toLocaleString() })}</p>}
+        {Number.isFinite(lastSynced) && <p>{t("lastSynced", { time: new Date(lastSynced).toLocaleString(i18n.resolvedLanguage) })}</p>}
       </div>
     );
   }
@@ -124,8 +125,12 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
       )}
       {failed && <p role="alert">{errorLabel}</p>}
       <div className="flex flex-wrap justify-between gap-3 text-[var(--muted)]" role="status">
-        <span>{total > 0 ? t(countKey, { completed: completed.toLocaleString(), total: total.toLocaleString() }) : t(failed ? "syncStoppedBeforeCount" : "syncDiscovering")}</span>
-        {failed && Number.isFinite(retryTime) ? <span>{t("syncNextRetry", { time: new Date(retryTime).toLocaleTimeString() })}</span> : phase === "waiting" && data?.retry_at ? <span>{t("syncResumeAt", { time: new Date(data.retry_at * 1000).toLocaleTimeString() })}</span> : null}
+        <span>{total > 0 ? t(countKey, { completed: completed.toLocaleString(i18n.resolvedLanguage), total: total.toLocaleString(i18n.resolvedLanguage) }) : t(failed ? "syncStoppedBeforeCount" : "syncDiscovering")}</span>
+        {failed && Number.isFinite(retryTime) ? (
+          <span>{t("syncNextRetry", { time: new Date(retryTime).toLocaleTimeString(i18n.resolvedLanguage) })}</span>
+        ) : phase === "waiting" && data?.retry_at ? (
+          <span>{t("syncResumeAt", { time: new Date(data.retry_at * 1000).toLocaleTimeString(i18n.resolvedLanguage) })}</span>
+        ) : null}
       </div>
     </section>
   );

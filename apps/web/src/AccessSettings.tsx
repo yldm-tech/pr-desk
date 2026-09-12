@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { Fragment, useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Check, Copy } from "lucide-react";
@@ -16,27 +16,44 @@ const serverOrigin = () => (apiURL || window.location.origin).replace(/\/$/, "")
 const tokenSchema = z.object({ data: z.array(z.object({ id: z.number(), name: z.string(), client_id: z.string(), scopes: z.array(z.string()), created_at: z.string(), expires_at: z.string(), last_used_at: z.string().nullable() })) });
 type IssuedToken = z.infer<typeof tokenSchema>["data"][number];
 
+// navigator.clipboard is undefined outside a secure context, which a self-hosted
+// instance served over plain http is, and a denied permission rejects. Both used
+// to leave the button doing nothing at all, so the attempt reports its outcome.
+export async function writeClipboard(value: string, clipboard: Clipboard | undefined = navigator.clipboard): Promise<boolean> {
+  if (!clipboard) return false;
+  try {
+    await clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function CopyButton({ value, label }: { value: string; label: string }) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
-    <button
-      type="button"
-      className={copyAction}
-      aria-label={label}
-      onClick={() => {
-        void navigator.clipboard?.writeText(value).then(
-          () => {
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-          },
-          () => setCopied(false),
-        );
-      }}
-    >
-      {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-      {t(copied ? "access.copied" : "access.copy")}
-    </button>
+    <div className="grid shrink-0 justify-items-start gap-1.5">
+      <button
+        type="button"
+        className={copyAction}
+        aria-label={label}
+        onClick={() => {
+          void writeClipboard(value).then((written) => {
+            setState(written ? "copied" : "failed");
+            if (written) setTimeout(() => setState("idle"), 2000);
+          });
+        }}
+      >
+        {state === "copied" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        {t(state === "copied" ? "access.copied" : "access.copy")}
+      </button>
+      {state === "failed" && (
+        <p className={settingsNote} role="status">
+          {t("access.copyManual")}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -66,6 +83,28 @@ function IssuedTokens() {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const [confirming, setConfirming] = useState(0);
+  const [cancelled, setCancelled] = useState(0);
+  // Revoking takes the focused button with it and said nothing, and the confirm
+  // step swaps it for a different button, so the focus follows both and the
+  // result is announced.
+  const [announcement, setAnnouncement] = useState({ text: "", id: 0 });
+  const region = useRef<HTMLDivElement>(null);
+  const announce = (text: string) => setAnnouncement((previous) => ({ text, id: previous.id + 1 }));
+  useEffect(() => {
+    if (announcement.id && document.activeElement === document.body) region.current?.focus();
+  }, [announcement]);
+  useEffect(() => {
+    if (confirming) document.getElementById(`token-confirm-${confirming}`)?.focus();
+  }, [confirming]);
+  useEffect(() => {
+    if (!cancelled) return;
+    document.getElementById(`token-revoke-${cancelled}`)?.focus();
+    setCancelled(0);
+  }, [cancelled]);
+  const stopConfirming = (id: number) => {
+    setConfirming(0);
+    setCancelled(id);
+  };
   const tokens = useQuery({
     queryKey: ["api-tokens"],
     queryFn: ({ signal }) =>
@@ -79,18 +118,30 @@ function IssuedTokens() {
     mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/api-tokens/${id}`, { credentials: "include", retry: 0 }),
     onSuccess: () => {
       setConfirming(0);
+      announce(t("access.announceRevoked"));
       void client.invalidateQueries({ queryKey: ["api-tokens"] });
     },
   });
   const when = (value: string | null) => (value ? new Date(value).toLocaleDateString(i18n.resolvedLanguage) : t("access.never"));
   const rows = tokens.data?.data || [];
   return (
-    <div className={settingsGroup}>
+    <div className={settingsGroup} ref={region} tabIndex={-1}>
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement.text}
+      </p>
       <div className={settingsHeading}>
         <h2 id="authorized-clients-heading">{t("access.tokens")}</h2>
         <p>{t("access.tokensHelp")}</p>
       </div>
-      {tokens.isError ? (
+      {tokens.isError && tokens.data && (
+        <p className={settingsWarning} role="status">
+          <span>{t("refreshFailedKeepData")}</span>
+          <button className={secondaryAction} type="button" onClick={() => tokens.refetch()}>
+            {t("followup.retry")}
+          </button>
+        </p>
+      )}
+      {tokens.isError && !tokens.data ? (
         <p className={settingsWarning} role="alert">
           <span>{t("access.tokensError")}</span>
           <button className={secondaryAction} type="button" onClick={() => tokens.refetch()}>
@@ -102,22 +153,31 @@ function IssuedTokens() {
       ) : (
         <ul className={rowList}>
           {rows.map((token: IssuedToken) => (
-            <li key={token.id} className={row} data-testid="issued-token">
+            <li
+              key={token.id}
+              className={row}
+              data-testid="issued-token"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && confirming === token.id) stopConfirming(token.id);
+              }}
+            >
               <strong>{token.name}</strong>
               <span className={rowTag}>{token.scopes.includes("followups:write") ? t("access.scopeWrite") : t("access.scopeRead")}</span>
               <span className="text-[12px] whitespace-nowrap text-[var(--muted)] [@media(max-width:640px)]:basis-full">{t("access.lastUsed", { date: when(token.last_used_at) })}</span>
               {confirming === token.id ? (
-                <>
-                  <span className={rowConfirm}>{t("access.confirmRevoke")}</span>
-                  <button className={dangerAction} type="button" disabled={revoke.isPending} onClick={() => revoke.mutate(token.id)}>
+                <Fragment key="confirm">
+                  <span className={rowConfirm} id={`token-prompt-${token.id}`}>
+                    {t("access.confirmRevoke")}
+                  </span>
+                  <button id={`token-confirm-${token.id}`} className={dangerAction} type="button" disabled={revoke.isPending} aria-describedby={`token-prompt-${token.id}`} onClick={() => revoke.mutate(token.id)}>
                     {t("access.revoke")}
                   </button>
-                  <button className={compactAction} type="button" onClick={() => setConfirming(0)}>
+                  <button className={compactAction} type="button" onClick={() => stopConfirming(token.id)}>
                     {t("followup.cancel")}
                   </button>
-                </>
+                </Fragment>
               ) : (
-                <button className={dangerAction} type="button" onClick={() => setConfirming(token.id)}>
+                <button key="revoke" id={`token-revoke-${token.id}`} className={dangerAction} type="button" onClick={() => setConfirming(token.id)}>
                   {t("access.revoke")}
                 </button>
               )}
