@@ -129,6 +129,7 @@ export default function App() {
   const route = useLocation();
   const navigate = useNavigate();
   const filter = Object.keys(filterPaths).find((key) => filterPaths[key] === route.pathname) || "Overview";
+  const prListActive = !["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter);
   const [params, setParams] = useSearchParams();
   const parsedPage = Number(params.get("page") || 1);
   const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 && parsedPage <= 100000 ? parsedPage - 1 : 0;
@@ -323,8 +324,17 @@ export default function App() {
     const timer = window.setTimeout(() => setSyncFeedback(null), 6000);
     return () => window.clearTimeout(timer);
   }, [syncFeedback]);
+  const activeNavButton = React.useRef<HTMLButtonElement | null>(null);
+  const activeFilterButton = React.useRef<HTMLButtonElement | null>(null);
+  // Both strips scroll horizontally when they do not fit, and neither has a scroll affordance, so landing on /approved from a bookmark would otherwise show a row of pills that are all unselected. "nearest" leaves a strip that already shows the selection alone.
+  React.useEffect(() => {
+    activeNavButton.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    activeFilterButton.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [filter]);
+  // The activity sheet is component state with no history entry of its own, so a platform back gesture — which on touch is the habitual "dismiss this" — changed the route underneath and left a full-screen sheet mounted over a different page.
+  React.useEffect(() => setSelected(null), [filter]);
   return (
-    <div className={`${appShell} max-[900px]:block ${filter === "Overview" ? overviewCanvas : ""}`}>
+    <div className={`${appShell} ${filter === "Overview" ? overviewCanvas : ""}`}>
       <a
         className={skipLink}
         href="#main-content"
@@ -335,53 +345,48 @@ export default function App() {
       >
         {t("skipContent")}
       </a>
-      <aside
-        className={`${sidebar} ${filter === "Overview" ? overviewAside : asideBorder} min-[901px]:w-[208px] min-[901px]:max-[1200px]:px-3 max-[900px]:static max-[900px]:grid max-[900px]:h-auto max-[900px]:w-full max-[900px]:grid-cols-[minmax(0,1fr)_auto] max-[900px]:gap-3 max-[900px]:overflow-visible max-[900px]:border-r-0 max-[900px]:border-b max-[900px]:p-4`}
-      >
-        <a href="#/" className={`${brand} max-[900px]:p-0 max-[900px]:self-center max-[480px]:text-[17px] max-[480px]:gap-1.5`}>
+      <aside className={`${sidebar} ${filter === "Overview" ? overviewAside : asideBorder}`}>
+        {/* Below `roomy` only the mark is shown: the wordmark had 36px to render in and truncated to "PR…", which reads as a bug rather than as a brand. The aria-label is what keeps the link named once the text is gone, and the product name is not translated anywhere else either. */}
+        <a href="#/" aria-label="PR Desk" className={`${brand} max-roomy:gap-1.5 max-roomy:text-[length:1.0625rem] max-roomy:[&>span]:hidden pointer-coarse:min-h-11 pointer-coarse:min-w-11`}>
           <img className={brandLogo} src="/favicon.svg" alt="" />
-          <span className="flex flex-col gap-0.5 leading-tight">
-            <span>PR Desk</span>
-            <span className="text-[11px] font-normal tracking-normal text-[var(--muted)]">{projectVersion}</span>
+          <span className="flex min-w-0 flex-col gap-0.5 leading-tight">
+            <span className="truncate">PR Desk</span>
+            <span className="text-[length:0.6875rem] font-normal tracking-normal text-[var(--muted)]">{projectVersion}</span>
           </span>
         </a>
-        <nav
-          aria-label={t("mainNavigation")}
-          className={`${nav} max-[900px]:mb-0 max-[900px]:col-span-2 max-[900px]:row-start-2 max-[900px]:grid max-[900px]:grid-cols-5 max-[480px]:grid-cols-5 max-[900px]:[&>button]:px-2 max-[900px]:[&>button]:text-center max-[900px]:[&>button]:justify-center max-[480px]:[&>button]:flex-col max-[480px]:[&>button]:gap-1 max-[480px]:[&>button>span]:max-w-full max-[480px]:[&>button>span]:wrap-anywhere max-[480px]:[&>button]:text-[11px]`}
-        >
-          <button className={navButton(filter === "Overview")} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
+        <nav aria-label={t("mainNavigation")} className={nav}>
+          <button ref={filter === "Overview" ? activeNavButton : null} className={navButton(filter === "Overview")} aria-current={filter === "Overview" ? "page" : undefined} onClick={() => setFilter("Overview")}>
             <LayoutDashboard size={17} aria-hidden="true" />
             <span>{t("navOverview")}</span>
           </button>
-          <button className={navButton(filter === "Needs attention")} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
+          <button ref={filter === "Needs attention" ? activeNavButton : null} className={navButton(filter === "Needs attention")} aria-current={filter === "Needs attention" ? "page" : undefined} onClick={() => setFilter("Needs attention")}>
             <Inbox size={17} aria-hidden="true" />
             <span>{t("navAttention")}</span>
             {(authLoading || auth?.connected) && (
               <b style={{ visibility: authLoading || followUps.isPending ? "hidden" : undefined }} aria-hidden={authLoading || followUps.isPending || undefined}>
-                {attentionCount ?? "—"}
+                {/* The count is unbounded and the badge sits beside a label that already has no room to spare, so four digits are spelled as three. */}
+                {attentionCount === undefined ? "—" : attentionCount > 99 ? "99+" : attentionCount}
               </b>
             )}
           </button>
-          <button className={navButton(!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter))} aria-current={!["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter) ? "page" : undefined} onClick={() => setFilter("All")}>
+          <button ref={prListActive ? activeNavButton : null} className={navButton(prListActive)} aria-current={prListActive ? "page" : undefined} onClick={() => setFilter("All")}>
             <GitPullRequest size={17} aria-hidden="true" />
             <span>{t("navAll")}</span>
           </button>
-          <button className={navButton(filter === "Repositories")} aria-current={filter === "Repositories" ? "page" : undefined} onClick={() => setFilter("Repositories")}>
+          <button ref={filter === "Repositories" ? activeNavButton : null} className={navButton(filter === "Repositories")} aria-current={filter === "Repositories" ? "page" : undefined} onClick={() => setFilter("Repositories")}>
             <FolderGit2 size={17} aria-hidden="true" />
             <span>{t("navRepositories")}</span>
           </button>
-          <button className={navButton(filter === "About")} aria-current={filter === "About" ? "page" : undefined} onClick={() => setFilter("About")}>
+          <button ref={filter === "About" ? activeNavButton : null} className={navButton(filter === "About")} aria-current={filter === "About" ? "page" : undefined} onClick={() => setFilter("About")}>
             <Info size={17} aria-hidden="true" />
             <span>{t("navAbout")}</span>
           </button>
         </nav>
-        <div
-          className={`${sidebarBottom} max-[900px]:pt-0 max-[900px]:col-start-2 max-[900px]:row-start-1 max-[900px]:m-0 max-[900px]:flex max-[900px]:items-center max-[900px]:gap-2 max-[900px]:[&>a]:m-0 max-[900px]:[&>a]:w-auto max-[900px]:[&>button]:w-auto max-[900px]:[&>*]:whitespace-nowrap max-[480px]:[&>*]:p-2 max-[480px]:[&>*]:text-xs`}
-        >
+        <div className={sidebarBottom}>
           {auth?.connected && (
-            <button className={filter === "Settings" ? sidebarActionActive : sidebarAction} aria-current={filter === "Settings" ? "page" : undefined} aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
+            <button className={filter === "Settings" ? sidebarActionActive : sidebarAction} aria-current={filter === "Settings" ? "page" : undefined} title={t("followup.settings")} aria-label={t("followup.settings")} onClick={() => setFilter("Settings")}>
               <Settings2 size={16} aria-hidden="true" />
-              <span className="max-[480px]:hidden">{t("followup.settings")}</span>
+              <span>{t("followup.settings")}</span>
             </button>
           )}
           {auth?.connected && (
@@ -407,18 +412,18 @@ export default function App() {
               rel="noopener noreferrer"
             >
               <Building2 size={16} aria-hidden="true" />
-              <span className="max-[480px]:hidden">{t("organizationAccess")}</span>
+              <span>{t("organizationAccess")}</span>
             </a>
           )}
           {auth?.connected && (
             <button className={syncButton} disabled={!auth?.connected || syncing} aria-busy={syncing} onClick={() => syncMutation.mutate()}>
               <RefreshCw size={16} className={syncing ? spinning : ""} />
-              {syncing ? t("syncing") : t("sync")}
+              <span>{syncing ? t("syncing") : t("sync")}</span>
             </button>
           )}
         </div>
       </aside>
-      <main id="main-content" tabIndex={-1} className={`min-w-0 focus:outline-none @container/dashboard flex-1 mx-auto max-w-[1600px] px-[clamp(16px,2.5vw,40px)] py-6 max-[900px]:px-4 max-[900px]:py-5`}>
+      <main id="main-content" tabIndex={-1} className={`min-w-0 focus:outline-none @container/dashboard flex-1 mx-auto max-w-[1600px] px-4 py-5 shell:px-[clamp(16px,2.5vw,40px)] shell:py-6 short:py-3`}>
         <header className={`${pageHeader} ${filter === "Overview" ? overviewHeaderGap : pageHeaderGap}`}>
           <div className={headerTitleSlot}>
             <h1 className={filter === "Overview" ? `${pageTitle} ${overviewHeading}` : pageTitle}>
@@ -444,7 +449,7 @@ export default function App() {
             {oauthError && (
               <p className="flex items-center gap-2 text-[var(--danger)]" role="alert">
                 {t("oauthCancelled")}
-                <button className="cursor-pointer border-0 bg-transparent p-0 text-[18px] leading-none text-inherit" aria-label={t("dismissMessage")} onClick={() => setOauthError(null)}>
+                <button className="grid cursor-pointer place-items-center border-0 bg-transparent p-0 text-[length:1.125rem] leading-none text-inherit pointer-coarse:-m-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:p-2" aria-label={t("dismissMessage")} onClick={() => setOauthError(null)}>
                   ×
                 </button>
               </p>
@@ -509,18 +514,18 @@ export default function App() {
                 </button>
               </div>
             )}
-            <section className={`${stats} @max-[760px]/dashboard:grid-cols-2 @max-[760px]/dashboard:gap-3`} aria-label={t("overview")}>
+            <section className={stats} aria-label={t("overview")}>
               {[
                 [t("open"), summary ? String(summary.open) : "—", GitPullRequest, "purple"],
                 [t("needsReview"), summary ? String(summary.needs_review) : "—", MessageSquare, "blue"],
                 [t("conflicts"), summary ? String(summary.conflicts) : "—", AlertTriangle, "red"],
                 [t("mergedMonth"), summary ? String(summary.merged) : "—", GitMerge, "green"],
               ].map(([l, v, I]: any) => (
-                <div key={l} className={`${stat} @max-[620px]/dashboard:min-h-[76px] @max-[620px]/dashboard:p-3.5`}>
+                <div key={l} className={stat}>
                   <div className={statIcon}>
                     <I size={18} />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <span>{l}</span>
                     <strong>{summaryLoading ? <Skeleton width={48} height={26} /> : v}</strong>
                   </div>
@@ -553,13 +558,13 @@ export default function App() {
                       aria-label={t("clearRepositoryFilter", { repo: repository })}
                     >
                       {repository}
-                      <X size={14} />
+                      <X size={14} className="shrink-0" />
                     </button>
                   )}
                   {search && (
                     <button className={searchChip} onClick={clearSearch} aria-label={t("clearFilters")}>
                       {search}
-                      <X size={14} />
+                      <X size={14} className="shrink-0" />
                     </button>
                   )}
                 </div>
@@ -567,14 +572,14 @@ export default function App() {
                   {searchControl}
                   {/* "Needs attention" returns FollowUpWorkspace further up, so this branch only ever renders the PR list. */}
                   {
-                    <div className={`${filters} max-w-full overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap`}>
+                    <div className={`${filters} max-w-full`}>
                       {[
                         ["All", t("filterAll")],
                         ["Review requested", t("filterReview")],
                         ["Changes requested", t("filterChanges")],
                         ["Approved", t("filterApproved")],
                       ].map(([value, label]) => (
-                        <button key={value} onClick={() => setFilter(value, true)} className={filter === value ? "selected" : ""} aria-pressed={filter === value}>
+                        <button key={value} ref={filter === value ? activeFilterButton : null} onClick={() => setFilter(value, true)} className={filter === value ? "selected" : ""} aria-pressed={filter === value}>
                           {label}
                         </button>
                       ))}
@@ -641,6 +646,7 @@ export default function App() {
                         <span role="columnheader">{t("updated")}</span>
                         <span role="columnheader">{t("activity")}</span>
                       </div>
+                      {/* DOM order is the card's reading order — title, activity, repository, status, updated — and the table order is restored by explicit column placement at `row`. Source order used to be the table's, which painted the comment button at the top right of a card while leaving it last in the tab order, two rows below the status pills a reader reaches first. */}
                       {shown.map((p) => (
                         <div key={`${p.repo}-${p.number}`} className={tableRow} role="row">
                           <div className={prTitle} role="cell">
@@ -654,7 +660,13 @@ export default function App() {
                               </small>
                             </div>
                           </div>
-                          <div role="cell" className="min-w-0 max-[640px]:col-start-1 max-[640px]:row-start-2">
+                          <div role="cell" className={rowActivity}>
+                            <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
+                              <MessageSquare size={15} />
+                              {p.comments}
+                            </button>
+                          </div>
+                          <div role="cell" className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
                             <a className={prRepository} title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
                               {p.repo}
                             </a>
@@ -676,16 +688,10 @@ export default function App() {
                           <span className={`${muted} ${prUpdated}`} role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
                             {p.updated_at && !Number.isNaN(Date.parse(p.updated_at)) ? new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(p.updated_at)) : t("unknown")}
                           </span>
-                          <div role="cell" className={rowActivity}>
-                            <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
-                              <MessageSquare size={15} />
-                              {p.comments}
-                            </button>
-                          </div>
                         </div>
                       ))}
                     </div>
-                    <div className={`${pagination} flex-wrap`}>
+                    <div className={pagination}>
                       {/* Disabled only while a page is actually on its way: a paused fetch, offline or otherwise, would otherwise leave both controls dead with no way back. */}
                       <button disabled={page === 0 || (isPlaceholderData && isFetching)} onClick={() => setPage(page - 1)}>
                         {t("previous")}
@@ -708,18 +714,19 @@ export default function App() {
         <ActivityDialog title={`${t("comments")} · ${selected.repo} #${selected.number}`} onClose={() => setSelected(null)}>
           {commentsQuery.isLoading && <ActivitySkeleton />}
           {commentsQuery.isError && (
-            <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[13px] text-[var(--warning)] [&_ul]:pl-5" role="alert">
+            <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[length:0.8125rem] text-[var(--warning)] [&_ul]:pl-5" role="alert">
               {t("unableComments")}
             </div>
           )}
           {commentsQuery.data && <ActivityPanel data={commentsQuery.data} />}
-          <div className="sticky bottom-0 z-[2] mt-auto flex justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] py-4">
+          {/* Viewport tokens, not container ones: <dialog> is a sibling of <main> and lives in the top layer, so it has no ancestor container and a container query here would match nothing and fall through to base. */}
+          <div className="sticky bottom-0 z-[2] mt-auto flex flex-wrap justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] py-4 max-roomy:flex-col max-roomy:items-stretch">
             <a className={secondaryAction} href={selected.url || `https://github.com/${selected.repo}/pull/${selected.number}`} target="_blank" rel="noopener noreferrer">
               {t("viewGitHub")}
               <ExternalLink size={14} />
             </a>
             <button className={secondaryAction} disabled={commentsQuery.isFetching} onClick={() => commentsQuery.refetch()}>
-              <RefreshCw size={15} className={commentsQuery.isFetching ? "spinning" : ""} />
+              <RefreshCw size={15} className={commentsQuery.isFetching ? spinning : ""} />
               {commentsQuery.isFetching ? t("refreshing") : t("refresh")}
             </button>
           </div>
