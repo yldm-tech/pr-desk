@@ -72,6 +72,17 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 			t.Fatal(index.name + " was not actually dropped")
 		}
 	}
+	// A database deployed before pr_session_url existed carries a standalone index on
+	// session_id, which the composite now supersedes. AutoMigrate never drops
+	// anything, so it is put back here: unless the migration removes it by name it
+	// outlives the model that stopped asking for it.
+	superseded := db.NamingStrategy.IndexName(db.NamingStrategy.TableName("PullRequest"), "session_id")
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS " + superseded + " ON " + db.NamingStrategy.TableName("PullRequest") + " (session_id)").Error; err != nil {
+		t.Fatal("could not restore the superseded index:", err)
+	}
+	if !db.Migrator().HasIndex(&PullRequest{}, superseded) {
+		t.Fatal("the superseded index was not created, so its removal proves nothing")
+	}
 
 	// Re-running the migration is what a rollout does to the live database.
 	if err := migrateDatabase(db); err != nil {
@@ -93,6 +104,9 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	}
 	if !db.Migrator().HasIndex(&OAuthToken{}, "oauth_github_account") {
 		t.Fatal("the dropped partial unique index was not rebuilt")
+	}
+	if db.Migrator().HasIndex(&PullRequest{}, superseded) {
+		t.Fatal("the superseded single-column index on session_id outlived the migration")
 	}
 	// The name alone would also be satisfied by a one-column index: dropping either
 	// half of the composite tag leaves an index still called pr_session_url that no
