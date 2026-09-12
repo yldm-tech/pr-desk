@@ -228,7 +228,8 @@ export function FollowUpWorkspace() {
       {repo && (
         <p data-testid="repository-chip" className={searchChip}>
           <span>{repo}</span>
-          <button className={linkButton} type="button" onClick={clearRepository} aria-label={t("clearRepositoryFilter", { repo })}>
+          {/* linkButton is p-0 at the chip's 12px, so the bare glyph is about a 7x18px target, and this is the only control in the page that clears the repo= parameter — missing it on a phone leaves the reader stuck in a filtered view. The negative margin cancels the padding, so the chip keeps its compact shape while the button reaches 44px. */}
+          <button className={`${linkButton} inline-flex items-center justify-center pointer-coarse:-m-2 pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:p-2`} type="button" onClick={clearRepository} aria-label={t("clearRepositoryFilter", { repo })}>
             ×
           </button>
         </p>
