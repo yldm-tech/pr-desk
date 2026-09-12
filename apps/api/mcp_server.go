@@ -546,7 +546,7 @@ type syncStatusOutput struct {
 	ReportedAt     string `json:"reported_at,omitempty" jsonschema:"When this status was written. A failure survives a restart, so an old timestamp means the failure belongs to a run that is already over"`
 	ReportedAgeMin int    `json:"reported_age_minutes" jsonschema:"Age of the status itself in minutes, which is not the age of the data"`
 	LastSyncedAt   string `json:"last_synced_at,omitempty" jsonschema:"When the last full synchronization finished; absent until the first one completes"`
-	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive"`
+	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive. Only meaningful when last_synced_at is present: until the first synchronization finishes there is no data to age and this stays zero, which does not mean the data is fresh"`
 	NextAutoSyncAt string `json:"next_auto_sync_at,omitempty"`
 	Baseline       bool   `json:"baseline_complete" jsonschema:"False while the first inventory is still importing"`
 	ErrorCode      string `json:"error_code,omitempty" jsonschema:"reconnect means the GitHub authorization lapsed and nothing can refresh until it is renewed"`

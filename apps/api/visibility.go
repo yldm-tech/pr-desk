@@ -67,9 +67,9 @@ func (s *Server) ensureRepositoryVisibility(c *gin.Context) error {
 			if result.Private == nil {
 				return fmt.Errorf("missing repository visibility")
 			}
-			if err := markVisibilityChecked(s.db.WithContext(ctx), requestSessionID(c), repo); err != nil {
-				return err
-			}
+			// No separate attempt record here: storing the answer takes the repository
+			// out of the repo_private IS NULL set the query selects from, so a second
+			// write over the same rows would change nothing.
 			return storeRepositoryVisibility(s.db.WithContext(ctx), requestSessionID(c), repo, result.GetPrivate())
 		})
 	}
