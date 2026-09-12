@@ -30,11 +30,12 @@ jobs:
       - run: vp install --frozen-lockfile
       - run: bun audit
       - run: vp check
+      # ripgrep is not part of the hosted Ubuntu image. Installed rather than rewritten as portable grep because the patterns rely on `\b`, which BSD grep on the developers' macOS does not support, so a portable rewrite would weaken the check locally to strengthen it here. lint:responsive is a source check and deliberately not part of `bun run build`: that script also runs inside apps/api/Dockerfile, where the image has no ripgrep and a linter has no business gating a release artefact.
+      - run: command -v rg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y ripgrep; }
+      - run: bun run lint:responsive
       - run: bun run test:web
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:browser
-      # `bun run build` gates on lint:responsive, which is a ripgrep invocation, and ripgrep is not part of the hosted Ubuntu image. Installed here rather than rewritten as portable grep because the patterns rely on `\b`, which BSD grep on the developers' macOS does not support, so a portable rewrite would weaken the check locally to strengthen it in CI.
-      - run: command -v rg >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y ripgrep; }
       - run: bun run build
   api:
     name: API race and PostgreSQL tests
