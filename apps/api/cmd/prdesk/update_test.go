@@ -56,6 +56,39 @@ func TestChecksumFor(t *testing.T) {
 	}
 }
 
+// The mirror that serves the assets is no use if the version behind them can
+// only be looked up on api.github.com, which is the one step PRDESK_RELEASE_BASE
+// never reached.
+func TestLatestReleaseUsesTheConfiguredApiBase(t *testing.T) {
+	status, payload := http.StatusOK, `{"tag_name":"v0.1.200"}`
+	mux := http.NewServeMux()
+	mux.HandleFunc("/repos/"+releaseRepo()+"/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		w.Write([]byte(payload))
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	t.Setenv("PRDESK_RELEASE_API", server.URL+"/")
+
+	latest, err := latestRelease()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest != "0.1.200" {
+		t.Fatalf("the release was %q, wanted 0.1.200", latest)
+	}
+
+	status, payload = http.StatusNotFound, ""
+	if _, err := latestRelease(); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("a missing release was not reported with its status: %v", err)
+	}
+
+	status, payload = http.StatusOK, `{}`
+	if _, err := latestRelease(); err == nil || !strings.Contains(err.Error(), "no tag") {
+		t.Fatalf("an untagged release was not reported: %v", err)
+	}
+}
+
 // releaseServer stands in for the GitHub release download host.
 func releaseServer(t *testing.T, tag string, payload []byte, sums string) *httptest.Server {
 	t.Helper()

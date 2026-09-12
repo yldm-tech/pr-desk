@@ -4,6 +4,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 )
@@ -68,12 +70,15 @@ The identifier and version come from the listing; passing a stale version is
 refused so that nothing is marked away after new activity arrived.
 `
 
-func main() {
-	if len(os.Args) < 2 {
+func main() { os.Exit(dispatch(os.Args[1:])) }
+
+// Split from main so the exit status of a command is something a test can read.
+func dispatch(arguments []string) int {
+	if len(arguments) < 1 {
 		fmt.Print(usage)
-		os.Exit(2)
+		return 2
 	}
-	command, args := os.Args[1], os.Args[2:]
+	command, args := arguments[0], arguments[1:]
 	var err error
 	switch command {
 	case "login":
@@ -92,16 +97,21 @@ func main() {
 		err = runUpdate(args)
 	case "version", "--version":
 		fmt.Println(version)
-		return
+		return 0
 	case "help", "-h", "--help":
 		fmt.Print(usage)
-		return
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n%s", command, usage)
-		os.Exit(2)
+		return 2
+	}
+	// Asking a subcommand for help is not a failure: the flag list has already been printed on stdout, so saying "error:" here and exiting non-zero would abort any wrapper script that runs under set -e.
+	if errors.Is(err, flag.ErrHelp) {
+		return 0
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error: "+err.Error())
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

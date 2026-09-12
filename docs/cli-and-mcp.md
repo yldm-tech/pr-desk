@@ -20,7 +20,9 @@ PR Desk acts as its own OAuth 2.1 authorization server. Only the authorization c
 
 The authorize endpoint requires an authenticated browser session, so authorization always happens as a signed-in account holder looking at a consent page that names the client and the permissions. A code is valid for one minute, is stored only as a hash, and is consumed by the first redemption attempt — including a failed one, so a stolen code cannot be brute forced against the verifier.
 
-Tokens are stored as SHA-256 hashes with a 90 day lifetime. A token stops working as soon as its account disconnects from GitHub, because the data behind it can no longer be refreshed.
+Tokens are stored as SHA-256 hashes with a 90 day lifetime. A token stops working as soon as its account disconnects from GitHub, because there is no longer an account behind it.
+
+A lapsed GitHub authorization is a different case and does not end the token. The data already synchronized is still readable, so the tools keep answering and `get_sync_status` reports `status: failed` with `error_code: reconnect` — which is the only way a bearer client learns that nothing will refresh until the account reconnects in a browser. Refusing the token instead would answer every call with a `401`, and a `401` from an MCP endpoint means "get a new token", so a client would re-authorize in a loop and never see the cause.
 
 ### Scopes
 
@@ -37,11 +39,11 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 
 | Tool | Scope | Notes |
 |------|-------|-------|
-| `list_follow_ups` | read | Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days; sort by longest wait |
+| `list_follow_ups` | read | Filter by state, role, repository, reason, check state, conflict, unread or minimum waiting days; sort by longest wait; page with `limit` and `offset` |
 | `get_follow_up` | read | One follow-up with its stored comment thread rather than the truncated excerpt |
 | `get_follow_up_summary` | read | Counts per state, plus whether the first inventory finished |
 | `get_sync_status` | read | How old the data is and how old that verdict is, so an empty result can be judged |
-| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state, role, check state or conflict |
+| `list_pull_requests` | read | Search synchronized pull requests by repository, title, state, role, check state or conflict; page with `limit` and `offset` |
 | `list_repositories` | read | Per-repository open, attention, conflict and failing-check counts, all scoped to the follow-up workspace rather than to every synchronized pull request |
 | `mark_follow_up_read` | write | Does not mark the work handled |
 | `mark_follow_up_handled` | write | Restarts the waiting clock |
@@ -49,6 +51,14 @@ The endpoint is `POST /api/v1/mcp`, speaking the Streamable HTTP transport. An u
 | `unsnooze_follow_up` | write | Cancels a snooze without touching read or handled state |
 
 Every write tool takes the `version` returned by the listing. If new activity arrived in between, the call is refused rather than applied, so an agent cannot mark away something it never saw. Nothing in this surface posts to GitHub, and there is deliberately no tool that starts a synchronization: an agent can see how stale the data is without being able to spend the account's GitHub rate limit.
+
+Every tool is annotated `openWorldHint: false`, because none of them reaches anything outside this deployment's database, and the four write tools are additionally `destructiveHint: false`: no row is deleted, only local handling flags move, and the version check refuses a stale write. A host that auto-approves closed-world non-destructive tools can therefore run a triage pass without prompting per call.
+
+### Paging
+
+`list_follow_ups` and `list_pull_requests` return at most 200 rows however large `limit` is. `total` is the number of rows matching the filter, `has_more` says whether any are left after this page, and `offset` skips that many matches before the page starts — so an account with 1,340 pull requests is read with `offset` 0, 200, 400 and so on until `has_more` is false. The text result names the next offset to pass. `list_pull_requests` orders by GitHub activity time with the row id as the tie-break, and `list_follow_ups` pages over the state ranking it already returns, or over the wait ordering when `sort` is `waiting`; either way a page boundary only moves when a sync changes a row between calls.
+
+Only `list_follow_ups` and `get_follow_up` return an `id`, and it is always a follow-up id — the one the write tools accept. `list_pull_requests` deliberately returns none: its rows come from a different table whose primary keys overlap the follow-up ids completely, so an id from there would have resolved to an unrelated follow-up instead of erroring. A pull request is identified by `repository` and `number`.
 
 ### Reading the check state
 
@@ -109,7 +119,7 @@ The progress record is stored on the account and outlives the process that wrote
 curl -fsSL https://raw.githubusercontent.com/yldm-tech/pr-desk/main/scripts/install-cli.sh | sh
 ```
 
-The script resolves the latest release, downloads the binary for the detected platform, verifies it against the release's `SHA256SUMS` and refuses to install on a mismatch, then places it in `~/.local/bin`. Nothing needs root. `PRDESK_VERSION` pins a release, `PRDESK_INSTALL_DIR` changes the destination and `PRDESK_REPO` points at a fork. Releases carry `prdesk-{darwin,linux}-{arm64,amd64}`; anything else has to be built from source.
+The script resolves the latest release, downloads the binary for the detected platform, verifies it against the release's `SHA256SUMS` and refuses to install on a mismatch, then places it in `~/.local/bin`. Nothing needs root. `PRDESK_VERSION` pins a release, `PRDESK_INSTALL_DIR` changes the destination and `PRDESK_REPO` points at a fork. On a network that only reaches a mirror, `PRDESK_RELEASE_API` redirects the release lookup and `PRDESK_RELEASE_BASE` the asset download; they are separate because a GitHub Enterprise host serves its API from `<host>/api/v3` while downloads stay under `<host>/<repo>/releases/download`. `prdesk update` reads the same two variables, so an installer and an update agree about where releases come from. Releases carry `prdesk-{darwin,linux}-{arm64,amd64}`; anything else has to be built from source.
 
 `prdesk version` reports which release a binary came from, or `dev` for one built from a checkout.
 
@@ -120,7 +130,7 @@ prdesk update            # replace this binary with the latest release
 prdesk update --check    # report whether a newer one exists, change nothing
 ```
 
-`update` verifies the download against the release's `SHA256SUMS` exactly as the installer does, and refuses to replace anything on a mismatch. The replacement is staged beside the binary and renamed over it, which is atomic within the file system and safe while prdesk is running. Installing into a directory you cannot write to fails with the command to use instead rather than a bare permission error. `PRDESK_REPO` and `PRDESK_RELEASE_BASE` redirect where the release is fetched from; the checksum is verified whatever they point at.
+`update` verifies the download against the release's `SHA256SUMS` exactly as the installer does, and refuses to replace anything on a mismatch. The replacement is staged beside the binary and renamed over it, which is atomic within the file system and safe while prdesk is running. Installing into a directory you cannot write to fails with the command to use instead rather than a bare permission error. `PRDESK_REPO`, `PRDESK_RELEASE_API` and `PRDESK_RELEASE_BASE` redirect where the release is looked up and fetched from; the checksum is verified whatever they point at.
 
 You do not have to remember to check. Every command that reaches the server compares its own release against the deployment's and, when they differ, prints a note **to standard error** — so `--json` stays a clean document for `jq`. Nothing is printed when the two agree, when either side is a development build, or when the server is old enough not to report its release at all.
 
@@ -133,6 +143,7 @@ prdesk followups --reason checks_failed --url    # everything red, with links
 prdesk followups --min-waiting 14 --unread       # stale and still unseen
 prdesk prs --state open --checks failure         # every red branch, whoever owns it
 prdesk repos                                     # per repository, including failing counts
+prdesk followups --limit 200 --offset 200        # the page after the first two hundred
 prdesk show 41                                   # one row in full, with its comments
 prdesk sync                                      # how old the answer is
 prdesk handled 41 7                              # id and version from the listing

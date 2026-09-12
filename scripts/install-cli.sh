@@ -8,13 +8,19 @@
 #                       (default: the latest release)
 #   PRDESK_INSTALL_DIR  where to put the binary (default: ~/.local/bin)
 #   PRDESK_REPO         owner/name to install from (default: yldm-tech/pr-desk)
+#   PRDESK_RELEASE_API  where releases are looked up (default: https://api.github.com)
+#   PRDESK_RELEASE_BASE where release assets are downloaded from (default: https://github.com)
+#
+# The two bases are separate because they redirect separately: a GitHub Enterprise
+# host serves its API from <host>/api/v3 while downloads stay under
+# <host>/<repo>/releases/download. `prdesk update` reads the same two variables.
 #
 # Nothing here needs root: the default target is inside the home directory.
 set -eu
 
 repo="${PRDESK_REPO:-yldm-tech/pr-desk}"
 install_dir="${PRDESK_INSTALL_DIR:-$HOME/.local/bin}"
-api="https://api.github.com/repos/$repo"
+api="${PRDESK_RELEASE_API:-https://api.github.com}/repos/$repo"
 
 fail() {
 	echo "prdesk install: $1" >&2
@@ -62,7 +68,7 @@ v*) tag="$version" ;;
 esac
 
 asset="prdesk-$os-$arch"
-base="https://github.com/$repo/releases/download/$tag"
+base="${PRDESK_RELEASE_BASE:-https://github.com}/$repo/releases/download/$tag"
 
 work=$(mktemp -d)
 # Leaving a half-downloaded binary in a temporary directory helps nobody.

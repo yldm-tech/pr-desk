@@ -9,7 +9,56 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 )
+
+// Go's flag package stops parsing at the first non-flag token, so "show 41 --json" would hand the flag to nobody. Split the tokens first, then refuse a positional count the command cannot use rather than dropping the extras in silence.
+func parseWithPositionals(flags *flag.FlagSet, args []string, usageLine string, min, max int) ([]string, error) {
+	flagArgs, positionals := []string{}, []string{}
+	for i := 0; i < len(args); i++ {
+		argument := args[i]
+		if argument == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if len(argument) < 2 || !strings.HasPrefix(argument, "-") {
+			positionals = append(positionals, argument)
+			continue
+		}
+		flagArgs = append(flagArgs, argument)
+		name, _, joined := strings.Cut(strings.TrimLeft(argument, "-"), "=")
+		if joined || i+1 == len(args) {
+			continue
+		}
+		// Only a flag that declares a value may claim the token after it, which is what keeps the 41 in "show --json 41" a positional.
+		if declared := flags.Lookup(name); declared != nil && takesValue(declared) {
+			i++
+			flagArgs = append(flagArgs, args[i])
+		}
+	}
+	var messages strings.Builder
+	flags.SetOutput(&messages)
+	if err := flags.Parse(flagArgs); err != nil {
+		// Parse writes the flag list here. Asking for help is not a failure, so it leaves on stdout and main exits zero; anything else is reported on stderr.
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Println(usageLine)
+			fmt.Print(messages.String())
+			return nil, err
+		}
+		fmt.Fprint(os.Stderr, messages.String())
+		return nil, err
+	}
+	if len(positionals) < min || len(positionals) > max {
+		return nil, errors.New(usageLine)
+	}
+	return positionals, nil
+}
+
+// The flag package marks a boolean with this method on its Value, and that is the only way to know "--unread 41" is not a value for --unread.
+func takesValue(declared *flag.Flag) bool {
+	boolean, ok := declared.Value.(interface{ IsBoolFlag() bool })
+	return !ok || !boolean.IsBoolFlag()
+}
 
 // Each tool's schema rejects unknown fields outright, so a flag that does not
 // apply is reported here rather than surfacing as a confusing server refusal.
@@ -17,8 +66,8 @@ var listCommands = map[string]struct {
 	tool   string
 	accept map[string]bool
 }{
-	"followups": {"list_follow_ups", map[string]bool{"state": true, "role": true, "repository": true, "reason": true, "checks": true, "conflict": true, "unread": true, "min_waiting_days": true, "sort": true, "limit": true}},
-	"prs":       {"list_pull_requests", map[string]bool{"state": true, "role": true, "repository": true, "query": true, "checks": true, "conflict": true, "limit": true}},
+	"followups": {"list_follow_ups", map[string]bool{"state": true, "role": true, "repository": true, "reason": true, "checks": true, "conflict": true, "unread": true, "min_waiting_days": true, "sort": true, "limit": true, "offset": true}},
+	"prs":       {"list_pull_requests", map[string]bool{"state": true, "role": true, "repository": true, "query": true, "checks": true, "conflict": true, "limit": true, "offset": true}},
 	"repos":     {"list_repositories", map[string]bool{}},
 	"summary":   {"get_follow_up_summary", map[string]bool{}},
 	"sync":      {"get_sync_status", map[string]bool{}},
@@ -28,6 +77,7 @@ type listOptions struct {
 	arguments map[string]any
 	asJSON    bool
 	showURL   bool
+	offset    int
 }
 
 func listFlags(command string, args []string) (listOptions, error) {
@@ -41,11 +91,12 @@ func listFlags(command string, args []string) (listOptions, error) {
 	sortBy := flags.String("sort", "", "waiting for the longest wait first, or activity")
 	minWaiting := flags.Int("min-waiting", 0, "only rows waiting at least this many days")
 	limit := flags.Int("limit", 0, "maximum rows")
+	offset := flags.Int("offset", 0, "skip this many matching rows before the page starts")
 	conflict := flags.Bool("conflict", false, "only rows whose branch conflicts with its base")
 	unread := flags.Bool("unread", false, "only rows with activity you have not read")
 	showURL := flags.Bool("url", false, "add a column with the pull request URL")
 	asJSON := flags.Bool("json", false, "print raw JSON")
-	if err := flags.Parse(args); err != nil {
+	if _, err := parseWithPositionals(flags, args, "usage: prdesk "+command+" [flags] (it takes no positional arguments)", 0, 0); err != nil {
 		return listOptions{}, err
 	}
 	arguments := map[string]any{}
@@ -57,6 +108,9 @@ func listFlags(command string, args []string) (listOptions, error) {
 	if *limit > 0 {
 		arguments["limit"] = *limit
 	}
+	if *offset > 0 {
+		arguments["offset"] = *offset
+	}
 	if *minWaiting > 0 {
 		arguments["min_waiting_days"] = *minWaiting
 	}
@@ -66,14 +120,14 @@ func listFlags(command string, args []string) (listOptions, error) {
 	if *unread {
 		arguments["unread"] = true
 	}
-	flagNames := map[string]string{"state": "--state", "role": "--role", "repository": "--repo", "query": "--query", "reason": "--reason", "checks": "--checks", "conflict": "--conflict", "sort": "--sort", "min_waiting_days": "--min-waiting", "unread": "--unread", "limit": "--limit"}
+	flagNames := map[string]string{"state": "--state", "role": "--role", "repository": "--repo", "query": "--query", "reason": "--reason", "checks": "--checks", "conflict": "--conflict", "sort": "--sort", "min_waiting_days": "--min-waiting", "unread": "--unread", "limit": "--limit", "offset": "--offset"}
 	accept := listCommands[command].accept
 	for key := range arguments {
 		if !accept[key] {
 			return listOptions{}, fmt.Errorf("%s does not apply to: prdesk %s", flagNames[key], command)
 		}
 	}
-	return listOptions{arguments: arguments, asJSON: *asJSON, showURL: *showURL}, nil
+	return listOptions{arguments: arguments, asJSON: *asJSON, showURL: *showURL, offset: *offset}, nil
 }
 
 func runList(command string, args []string) error {
@@ -95,9 +149,9 @@ func runList(command string, args []string) error {
 	}
 	switch command {
 	case "followups":
-		return printFollowUps(body, options.showURL)
+		return printFollowUps(body, options.showURL, options.offset)
 	case "prs":
-		return printPullRequests(body, options.showURL)
+		return printPullRequests(body, options.showURL, options.offset)
 	case "repos":
 		return printRepositories(body)
 	case "sync":
@@ -116,6 +170,29 @@ func dateOnly(timestamp string) string {
 }
 
 func newTable() *tabwriter.Writer { return tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0) }
+
+// Titles and comment bodies are other people's text on its way to a terminal, where an escape sequence can repaint the screen over a verdict this tool exists to report, or dress a link up as another. Tabs go with them: these strings land in tabwriter cells, and one would split a column. Everything else is left alone, so CJK and emoji arrive as written.
+func safeText(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '�'
+		}
+		return r
+	}, value)
+}
+
+// A comment body is printed as prose rather than into a tabwriter cell, so its indentation is content and survives; everything an escape sequence could do to the terminal still does not.
+func safeBodyText(value string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) {
+			return '\uFFFD'
+		}
+		return r
+	}, value)
+}
 
 func truncate(value string, width int) string {
 	runes := []rune(value)
@@ -154,7 +231,7 @@ type followUpRow struct {
 	UpdatedAt     string     `json:"updated_at"`
 }
 
-func printFollowUps(body []byte, showURL bool) error {
+func printFollowUps(body []byte, showURL bool, offset int) error {
 	var payload struct {
 		FollowUps []followUpRow `json:"follow_ups"`
 		Total     int           `json:"total"`
@@ -163,7 +240,7 @@ func printFollowUps(body []byte, showURL bool) error {
 		return err
 	}
 	if len(payload.FollowUps) == 0 {
-		fmt.Println("Nothing is waiting for you.")
+		fmt.Println(emptyPage(offset, payload.Total, "Nothing is waiting for you."))
 		return nil
 	}
 	table := newTable()
@@ -173,26 +250,40 @@ func printFollowUps(body []byte, showURL bool) error {
 	}
 	fmt.Fprintln(table, header)
 	for _, row := range payload.FollowUps {
-		title := truncate(row.Title, 48)
+		title := truncate(safeText(row.Title), 48)
 		if row.Unread {
 			title = "* " + title
 		}
-		fmt.Fprintf(table, "%d\t%d\t%s\t%s\t#%d\t%dd\t%s\t%s", row.ID, row.Version, row.State, row.Repository, row.Number, row.WaitingDays, strings.Join(row.Reasons, ","), title)
+		fmt.Fprintf(table, "%d\t%d\t%s\t%s\t#%d\t%dd\t%s\t%s", row.ID, row.Version, row.State, safeText(row.Repository), row.Number, row.WaitingDays, strings.Join(row.Reasons, ","), title)
 		if showURL {
-			fmt.Fprintf(table, "\t%s", row.URL)
+			fmt.Fprintf(table, "\t%s", safeText(row.URL))
 		}
 		fmt.Fprintln(table)
 	}
 	if err := table.Flush(); err != nil {
 		return err
 	}
-	if payload.Total > len(payload.FollowUps) {
-		fmt.Printf("\nShowing %d of %d; pass --limit to see more.\n", len(payload.FollowUps), payload.Total)
-	}
+	printPageHint(offset, len(payload.FollowUps), payload.Total)
 	return nil
 }
 
-func printPullRequests(body []byte, showURL bool) error {
+// An empty page past the end of a list is not an empty list, and saying so would hide rows the caller has already seen.
+func emptyPage(offset, total int, nothing string) string {
+	if offset > 0 && total > 0 {
+		return fmt.Sprintf("No rows at offset %d; %d match.", offset, total)
+	}
+	return nothing
+}
+
+// A limit alone cannot reach past the server's ceiling of two hundred, so the hint has to name the offset that reads the next page rather than telling somebody to raise a limit that will be refused.
+func printPageHint(offset, shown, total int) {
+	if offset+shown >= total {
+		return
+	}
+	fmt.Printf("\nShowing %d-%d of %d; pass --offset %d for the next page.\n", offset+1, offset+shown, total, offset+shown)
+}
+
+func printPullRequests(body []byte, showURL bool, offset int) error {
 	var payload struct {
 		PullRequests []struct {
 			Repository  string `json:"repository"`
@@ -213,7 +304,7 @@ func printPullRequests(body []byte, showURL bool) error {
 		return err
 	}
 	if len(payload.PullRequests) == 0 {
-		fmt.Println("No pull requests match.")
+		fmt.Println(emptyPage(offset, payload.Total, "No pull requests match."))
 		return nil
 	}
 	table := newTable()
@@ -233,18 +324,16 @@ func printPullRequests(body []byte, showURL bool) error {
 		if row.Merged {
 			flags = append(flags, "merged")
 		}
-		fmt.Fprintf(table, "%s\t#%d\t%s\t%s\t%s\t%s\t%s\t%s", row.Repository, row.Number, row.State, row.ReviewState, row.Checks, strings.Join(flags, ","), dateOnly(row.UpdatedAt), truncate(row.Title, 48))
+		fmt.Fprintf(table, "%s\t#%d\t%s\t%s\t%s\t%s\t%s\t%s", safeText(row.Repository), row.Number, row.State, row.ReviewState, row.Checks, strings.Join(flags, ","), dateOnly(row.UpdatedAt), truncate(safeText(row.Title), 48))
 		if showURL {
-			fmt.Fprintf(table, "\t%s", row.URL)
+			fmt.Fprintf(table, "\t%s", safeText(row.URL))
 		}
 		fmt.Fprintln(table)
 	}
 	if err := table.Flush(); err != nil {
 		return err
 	}
-	if payload.Total > len(payload.PullRequests) {
-		fmt.Printf("\nShowing %d of %d; pass --limit to see more.\n", len(payload.PullRequests), payload.Total)
-	}
+	printPageHint(offset, len(payload.PullRequests), payload.Total)
 	return nil
 }
 
@@ -363,12 +452,9 @@ func runShow(args []string) error {
 	flags := flag.NewFlagSet("show", flag.ContinueOnError)
 	comments := flags.Int("comments", 0, "how many recent comments to print (default 20)")
 	asJSON := flags.Bool("json", false, "print raw JSON")
-	if err := flags.Parse(args); err != nil {
+	rest, err := parseWithPositionals(flags, args, "usage: prdesk show <id> (the identifier comes from the listing)", 1, 1)
+	if err != nil {
 		return err
-	}
-	rest := flags.Args()
-	if len(rest) < 1 {
-		return errors.New("usage: prdesk show <id> (the identifier comes from the listing)")
 	}
 	id, err := strconv.ParseUint(rest[0], 10, 64)
 	if err != nil {
@@ -409,12 +495,12 @@ func printFollowUpDetail(body []byte) error {
 		return err
 	}
 	row := payload.FollowUp
-	fmt.Printf("%s #%d  %s\n%s\n\n", row.Repository, row.Number, row.Title, row.URL)
+	fmt.Printf("%s #%d  %s\n%s\n\n", safeText(row.Repository), row.Number, safeText(row.Title), safeText(row.URL))
 	table := newTable()
 	fmt.Fprintf(table, "State\t%s\n", row.State)
 	fmt.Fprintf(table, "Role\t%s\n", row.Role)
 	if row.Author != "" {
-		fmt.Fprintf(table, "Author\t%s\n", row.Author)
+		fmt.Fprintf(table, "Author\t%s\n", safeText(row.Author))
 	}
 	fmt.Fprintf(table, "Waiting\t%d days\n", row.WaitingDays)
 	if len(row.Reasons) > 0 {
@@ -452,7 +538,7 @@ func printFollowUpDetail(body []byte) error {
 		fmt.Println("\nChecks not passing:")
 		checks := newTable()
 		for _, check := range row.FailingChecks {
-			fmt.Fprintf(checks, "  %s\t%s\t%s\n", check.Conclusion, truncate(check.Name, 44), check.URL)
+			fmt.Fprintf(checks, "  %s\t%s\t%s\n", check.Conclusion, truncate(safeText(check.Name), 44), safeText(check.URL))
 		}
 		if err := checks.Flush(); err != nil {
 			return err
@@ -463,9 +549,9 @@ func printFollowUpDetail(body []byte) error {
 	}
 	fmt.Printf("\nComments (%d of %d stored, newest first):\n", len(payload.Comments), payload.Total)
 	for _, comment := range payload.Comments {
-		fmt.Printf("\n  %s  %s  [%s]\n", comment.Author, dateOnly(comment.CreatedAt), comment.Kind)
-		for _, line := range strings.Split(strings.TrimRight(comment.Body, "\n"), "\n") {
-			fmt.Printf("  | %s\n", line)
+		fmt.Printf("\n  %s  %s  [%s]\n", safeText(comment.Author), dateOnly(comment.CreatedAt), safeText(comment.Kind))
+		for _, line := range strings.Split(strings.TrimRight(comment.Body, "\r\n"), "\n") {
+			fmt.Printf("  | %s\n", safeBodyText(strings.TrimSuffix(line, "\r")))
 		}
 	}
 	return nil
@@ -473,16 +559,14 @@ func printFollowUpDetail(body []byte) error {
 
 func runAction(command string, args []string) error {
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
-	if err := flags.Parse(args); err != nil {
-		return err
-	}
-	rest := flags.Args()
 	needed := 2
 	if command == "snooze" {
 		needed = 3
 	}
-	if len(rest) < needed {
-		return fmt.Errorf("usage: prdesk %s <id> <version>%s (both come from the listing)", command, map[bool]string{true: " <days>"}[command == "snooze"])
+	usageLine := fmt.Sprintf("usage: prdesk %s <id> <version>%s (both come from the listing)", command, map[bool]string{true: " <days>"}[command == "snooze"])
+	rest, err := parseWithPositionals(flags, args, usageLine, needed, needed)
+	if err != nil {
+		return err
 	}
 	id, err := strconv.ParseUint(rest[0], 10, 64)
 	if err != nil {
