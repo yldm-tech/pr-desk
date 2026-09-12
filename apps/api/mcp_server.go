@@ -59,7 +59,7 @@ type listFollowUpsInput struct {
 	State          string `json:"state,omitempty" jsonschema:"Only return follow-ups in this state: action, waiting, follow_up, draft or archived"`
 	Role           string `json:"role,omitempty" jsonschema:"Only return follow-ups where you are the authored or reviewer party"`
 	Repository     string `json:"repository,omitempty" jsonschema:"Only return follow-ups for this owner/name repository"`
-	Reason         string `json:"reason,omitempty" jsonschema:"Only return follow-ups carrying this reason: human_feedback, conflict, checks_failed, changes_requested, review_requested, approval_revoked, author_updated, overdue or snooze_due. conflict and checks_failed are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix; filter on checks or conflict instead to see those too"`
+	Reason         string `json:"reason,omitempty" jsonschema:"Only return follow-ups carrying this reason: human_feedback, review_requested, conflict, checks_failed, overdue or snooze_due. conflict and checks_failed are raised only on pull requests you authored, because a red branch on somebody else's pull request is not yours to fix; filter on checks or conflict instead to see those too"`
 	Checks         string `json:"checks,omitempty" jsonschema:"Only return follow-ups whose checks are in this state: success, failure, pending, inconclusive or unknown. Unlike the checks_failed reason this applies whatever your role is"`
 	Conflict       bool   `json:"conflict,omitempty" jsonschema:"Only return follow-ups whose branch conflicts with its base, whatever your role is"`
 	Unread         bool   `json:"unread,omitempty" jsonschema:"Only return follow-ups with activity you have not marked read"`
@@ -169,6 +169,20 @@ func checksFilterError() error {
 	return errors.New("checks has to be " + strings.Join(checkStates[:len(checkStates)-1], ", ") + " or " + checkStates[len(checkStates)-1])
 }
 
+// presentableReasons is every reason FollowUp.presentation can attach to a row.
+// The schema on listFollowUpsInput.Reason quotes the same set; a name that is
+// only ever an event reason would filter to nothing.
+var presentableReasons = []string{"human_feedback", "review_requested", "conflict", "checks_failed", "overdue", "snooze_due"}
+
+func presentableReason(name string) bool {
+	for _, reason := range presentableReasons {
+		if reason == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, in listFollowUpsInput) (*mcp.CallToolResult, listFollowUpsOutput, error) {
 	session, err := sessionFromContext(ctx)
 	if err != nil {
@@ -179,6 +193,19 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 	}
 	if in.Checks != "" && !validChecksFilter(in.Checks) {
 		return nil, listFollowUpsOutput{}, checksFilterError()
+	}
+	// A filter value nothing can match would return an empty list, which reads as
+	// "no work" rather than "you asked for something that does not exist".
+	switch in.State {
+	case "", "action", "waiting", "follow_up", "draft", "archived":
+	default:
+		return nil, listFollowUpsOutput{}, errors.New("state has to be action, waiting, follow_up, draft or archived")
+	}
+	if in.Role != "" && in.Role != "authored" && in.Role != "reviewer" {
+		return nil, listFollowUpsOutput{}, errors.New("role has to be authored or reviewer")
+	}
+	if in.Reason != "" && !presentableReason(in.Reason) {
+		return nil, listFollowUpsOutput{}, errors.New("reason has to be " + strings.Join(presentableReasons, ", "))
 	}
 	rows, err := s.accountFollowUps(ctx, session.sessionID)
 	if err != nil {
@@ -234,7 +261,7 @@ func (s *Server) mcpListFollowUps(ctx context.Context, _ *mcp.CallToolRequest, i
 
 type getFollowUpInput struct {
 	ID       uint `json:"id" jsonschema:"The follow-up identifier returned by list_follow_ups"`
-	Comments int  `json:"comments,omitempty" jsonschema:"How many of the most recent comments to include (default 20, maximum 100, 0 for none)"`
+	Comments int  `json:"comments,omitempty" jsonschema:"How many of the most recent comments to include (default 20, maximum 100; pass a negative number for none)"`
 }
 
 type commentOutput struct {
@@ -519,7 +546,7 @@ type syncStatusOutput struct {
 	ReportedAt     string `json:"reported_at,omitempty" jsonschema:"When this status was written. A failure survives a restart, so an old timestamp means the failure belongs to a run that is already over"`
 	ReportedAgeMin int    `json:"reported_age_minutes" jsonschema:"Age of the status itself in minutes, which is not the age of the data"`
 	LastSyncedAt   string `json:"last_synced_at,omitempty" jsonschema:"When the last full synchronization finished; absent until the first one completes"`
-	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive"`
+	StaleMinutes   int    `json:"stale_minutes" jsonschema:"Age of the data in minutes, so a caller can judge whether an empty result is conclusive. Only meaningful when last_synced_at is present: until the first synchronization finishes there is no data to age and this stays zero, which does not mean the data is fresh"`
 	NextAutoSyncAt string `json:"next_auto_sync_at,omitempty"`
 	Baseline       bool   `json:"baseline_complete" jsonschema:"False while the first inventory is still importing"`
 	ErrorCode      string `json:"error_code,omitempty" jsonschema:"reconnect means the GitHub authorization lapsed and nothing can refresh until it is renewed"`
@@ -575,6 +602,9 @@ func (s *Server) mcpSyncStatus(ctx context.Context, _ *mcp.CallToolRequest, _ st
 	}
 	if token.GitHubID > 0 && (token.AuthorizationError != "" || token.Token == "") {
 		out.Status, out.ErrorCode = "failed", "reconnect"
+	}
+	if token.HistorySyncedAt == nil {
+		return toolResult(fmt.Sprintf("Sync is %s; the first synchronization has not finished, so there is no data to age yet.", out.Status)), out, nil
 	}
 	return toolResult(fmt.Sprintf("Sync is %s; data is %d minutes old.", out.Status, out.StaleMinutes)), out, nil
 }
@@ -644,7 +674,11 @@ func (s *Server) newMCPServer() *mcp.Server {
 // points a client at the metadata document.
 func (s *Server) mcpHandler() gin.HandlerFunc {
 	server := s.newMCPServer()
-	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	// Without a timeout a session is only reclaimed by an explicit DELETE, which a
+	// client that crashes or loses its network never sends. The SDK pauses the
+	// timer around POSTs, so this bounds idle sessions without cutting off a call
+	// in progress.
+	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{SessionTimeout: 30 * time.Minute})
 	guarded := auth.RequireBearerToken(s.verifyMCPToken, &auth.RequireBearerTokenOptions{
 		Scopes:              []string{scopeFollowUpsRead},
 		ResourceMetadataURL: issuerURL() + "/.well-known/oauth-protected-resource",

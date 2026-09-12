@@ -55,7 +55,6 @@ Filters for prs:
 Global:
   --json              print raw JSON instead of a table
   --url               add the pull request URL to the table
-  --host URL          server to talk to (default: stored host, then http://localhost:8080)
 
 A checks state of "inconclusive" means nothing failed: every run that did not
 pass was cancelled or superseded. Use show to see which runs those were.

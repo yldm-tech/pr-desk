@@ -44,7 +44,10 @@ func (s *Server) syncGitHub(c *gin.Context) {
 	now := time.Now().UTC()
 	full := c.Query("full") == "1" || token.FullSyncPending
 	mode := "full"
-	if token.HistorySyncedAt != nil && !full {
+	// The same condition syncSession decides on, or the queued record announces a
+	// walk the run then skips: a completed walk is enough to go incremental even
+	// when the phases after it never finished.
+	if (token.HistorySyncedAt != nil || token.HistoryWalkedAt != nil) && !full {
 		mode = "incremental"
 	}
 	progress, _ := json.Marshal(syncProgress{Status: "queued", Phase: "account", Mode: mode, UpdatedAt: now})

@@ -35,13 +35,18 @@ export function useFollowUps(enabled = true) {
   });
 }
 
+// The announcement names the action that was taken. A chain of ternaries sent
+// everything that was not a snooze or a read to "Followed up", including
+// handled, which is a different thing to say.
+const actionLabels: Record<string, string> = { snooze: "snooze", read: "read", handled: "handled", followed_up: "followedUp" };
+
 function FollowUpCard({ item, onChanged }: { item: FollowUp; onChanged: (message: string) => void }) {
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const [date, setDate] = useState("");
   const mutation = useMutation({
     mutationFn: (action: { action: string; until?: string }) => ky.post(apiURL + `/api/v1/follow-ups/${item.id}`, { credentials: "include", retry: 0, json: { ...action, version: item.version } }),
-    onSuccess: (_result, action) => onChanged(t("followup.announceAction", { action: t(`followup.${action.action === "snooze" ? "snooze" : action.action === "read" ? "read" : "followedUp"}`), title: item.pr.title })),
+    onSuccess: (_result, action) => onChanged(t("followup.announceAction", { action: t(`followup.${actionLabels[action.action] ?? "followedUp"}`), title: item.pr.title })),
     onSettled: () => client.invalidateQueries({ queryKey: ["follow-ups"] }),
   });
   const snooze = (days: number) => mutation.mutate({ action: "snooze", until: new Date(Date.now() + days * 86400000).toISOString() });

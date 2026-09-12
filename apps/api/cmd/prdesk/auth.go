@@ -49,7 +49,10 @@ func credentialsPath() (string, error) {
 	return filepath.Join(base, "credentials.json"), nil
 }
 
-func loadCredentials() (credentials, error) {
+// storedCredentials reads the file without judging the token. Signing in again
+// needs the host it was signed into, and that is exactly the moment the token
+// has usually expired.
+func storedCredentials() (credentials, error) {
 	path, err := credentialsPath()
 	if err != nil {
 		return credentials{}, err
@@ -61,6 +64,14 @@ func loadCredentials() (credentials, error) {
 	var stored credentials
 	if json.Unmarshal(raw, &stored) != nil || stored.Token == "" {
 		return credentials{}, errors.New("the stored credentials are unreadable; run: prdesk login")
+	}
+	return stored, nil
+}
+
+func loadCredentials() (credentials, error) {
+	stored, err := storedCredentials()
+	if err != nil {
+		return credentials{}, err
 	}
 	if !stored.ExpiresAt.IsZero() && !stored.ExpiresAt.After(time.Now()) {
 		return credentials{}, errors.New("the stored token expired; run: prdesk login")
@@ -118,7 +129,7 @@ func runLogin(args []string) error {
 	}
 	target := strings.TrimRight(*host, "/")
 	if target == "" {
-		if existing, err := loadCredentials(); err == nil {
+		if existing, err := storedCredentials(); err == nil {
 			target = existing.Host
 		}
 	}

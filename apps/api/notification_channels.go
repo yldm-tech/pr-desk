@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	netmail "net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -252,7 +253,15 @@ func sendEmailNotification(ctx context.Context, config destinationConfig, subjec
 			return err
 		}
 	}
-	if err := client.Mail(config.From); err != nil {
+	// The envelope sender is the bare address. A stored From may carry a display
+	// name, which the form deliberately accepts, and smtp.Client.Mail wraps
+	// whatever it is given in angle brackets — producing a reverse-path a real
+	// MTA rejects. The header below keeps the display name.
+	sender := config.From
+	if parsed, err := netmail.ParseAddress(config.From); err == nil {
+		sender = parsed.Address
+	}
+	if err := client.Mail(sender); err != nil {
 		return err
 	}
 	for _, recipient := range config.To {

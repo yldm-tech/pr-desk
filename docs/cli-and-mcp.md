@@ -89,6 +89,8 @@ Two clocks answer different questions, and confusing them has already cost an in
 
 `stale_minutes` is the age of the **data**: how long ago the last full synchronization finished. `reported_age_minutes` is the age of the **verdict**: how long ago that status was written.
 
+Both are meaningless until the first synchronization completes. `last_synced_at` is absent until then and `stale_minutes` stays zero, which reads as brand-new data rather than as no data at all — check `last_synced_at` before trusting it, and treat `baseline_complete: false` as "an empty result is not conclusive".
+
 The progress record is stored on the account and outlives the process that wrote it. A failure therefore survives a restart or a redeploy, and keeps being reported until the next run overwrites it. A `failed` status whose `reported_at` predates the current deployment belongs to a run that is already over; the next scheduled sync will replace it. Only a failure reported after the last restart is a live problem.
 
 `completed` counts the items of the phase that actually landed, not the ones attempted, so on a failed run the shortfall against `total` is how much of that phase was lost. The bounded `error_code` names the layer; for a storage failure the server log additionally names the cause, which is where a constraint violation is told apart from a dropped connection.

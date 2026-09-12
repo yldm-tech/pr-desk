@@ -41,9 +41,10 @@ type NotificationDelivery struct {
 	CreatedAt     time.Time
 }
 
-// Twelve attempts with the capped exponential backoff spans a little over a
-// day. A destination that has accepted nothing in that window is broken, not
-// briefly unavailable.
+// The backoff doubles to a 64-minute cap, so the eleven waits between twelve
+// attempts are 1+2+4+8+16+32 minutes and then five more at the cap: 63 + 320
+// minutes, six hours and twenty-three minutes. A destination that has accepted
+// nothing in that window is broken, not briefly unavailable.
 const deliveryAttemptLimit = 12
 
 type notificationSender func(context.Context, NotificationDestination, NotificationDelivery) error
@@ -126,17 +127,24 @@ func notificationParts(body string) []string {
 	return parts
 }
 
+// Every reason that can reach a notification, in both languages the product
+// ships notifications in. The two maps carry the same keys: a reason present in
+// one and missing from the other reaches the message with no label at all, which
+// names the pull request and not why it needs anybody.
+var (
+	reasonLabels   = map[string]string{"human_feedback": "New human feedback", "review_requested": "Review requested", "changes_requested": "Changes requested", "author_updated": "Author updated the PR", "approval_revoked": "Approval dismissed", "conflict": "Merge conflict", "checks_failed": "Checks failed", "overdue": "Waiting over the follow-up period", "snooze_due": "Reminder due"}
+	reasonLabelsZH = map[string]string{"human_feedback": "新的人工反馈", "review_requested": "请求你审核", "changes_requested": "有人要求修改", "author_updated": "作者更新了 PR", "approval_revoked": "批准已撤回", "conflict": "存在合并冲突", "checks_failed": "检查失败", "overdue": "等待超过设定期限", "snooze_due": "提醒已到期"}
+)
+
 func followUpNotification(pr PullRequest, follow FollowUp, reasons []string, now time.Time, language ...string) string {
 	facts := follow.facts()
-	labels := map[string]string{"human_feedback": "New human feedback", "review_requested": "Review requested", "author_updated": "Author updated the PR", "approval_revoked": "Approval dismissed", "conflict": "Merge conflict", "checks_failed": "Checks failed", "overdue": "Waiting over the follow-up period", "snooze_due": "Reminder due"}
 	parts := []string{fmt.Sprintf("%s #%d · %s", pr.Repo, pr.Number, pr.Title)}
-	zh := len(language) > 0 && language[0] == "zh-CN"
+	labels := reasonLabels
+	if len(language) > 0 && language[0] == "zh-CN" {
+		labels = reasonLabelsZH
+	}
 	for _, reason := range reasons {
-		label := labels[reason]
-		if label != "" {
-			if zh {
-				label = map[string]string{"human_feedback": "新的人工反馈", "review_requested": "请求你审核", "author_updated": "作者更新了 PR", "approval_revoked": "批准已撤回", "conflict": "存在合并冲突", "checks_failed": "检查失败", "overdue": "等待超过设定期限", "snooze_due": "提醒已到期"}[reason]
-			}
+		if label := labels[reason]; label != "" {
 			parts = append(parts, label)
 		}
 	}

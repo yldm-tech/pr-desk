@@ -205,7 +205,10 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 				if !settings.includes(facts) {
 					return nil
 				}
-				if err := tx.Model(&pr).Update("review_tracked", true).Error; err != nil {
+				// UpdateColumn, not Update: gorm appends its own updated_at to a
+				// map-valued update, which would overwrite the GitHub activity time
+				// this sync just preserved. Same trap as storeRepositoryVisibility.
+				if err := tx.Model(&pr).UpdateColumn("review_tracked", true).Error; err != nil {
 					return err
 				}
 			}

@@ -147,8 +147,9 @@ func (s *Server) registerOAuthClient(c *gin.Context) {
 		return
 	}
 	for _, redirect := range in.RedirectURIs {
+		// Registration is unauthenticated, so the row it writes has to be bounded.
 		parsed, err := url.Parse(redirect)
-		if err != nil || parsed.Fragment != "" || (parsed.Scheme != "https" && !loopbackRedirect(redirect)) {
+		if err != nil || len(redirect) > 512 || parsed.Fragment != "" || (parsed.Scheme != "https" && !loopbackRedirect(redirect)) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_redirect_uri"})
 			return
 		}
