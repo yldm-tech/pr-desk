@@ -41,10 +41,10 @@ type NotificationDelivery struct {
 	CreatedAt     time.Time
 }
 
-// The backoff doubles to a 64-minute cap, so twelve attempts span 1+2+4+8+16+32
-// minutes and then five hours at the cap: six hours and twenty-three minutes. A
-// destination that has accepted nothing in that window is broken, not briefly
-// unavailable.
+// The backoff doubles to a 64-minute cap, so the eleven waits between twelve
+// attempts are 1+2+4+8+16+32 minutes and then five more at the cap: 63 + 320
+// minutes, six hours and twenty-three minutes. A destination that has accepted
+// nothing in that window is broken, not briefly unavailable.
 const deliveryAttemptLimit = 12
 
 type notificationSender func(context.Context, NotificationDestination, NotificationDelivery) error

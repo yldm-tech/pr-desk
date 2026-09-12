@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -41,18 +42,35 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	}
 
 	// The migration has to have work to do, or re-running it proves nothing. A
-	// rollout meets a schema that is behind the binary, so the schema is put
-	// behind on purpose: a column dropped and an index removed, under live rows.
+	// rollout meets a schema that is behind the binary, so the schema is put behind
+	// on purpose: a column dropped and both indexes dropped, under live rows.
 	if err := db.Migrator().DropColumn(&PullRequest{}, "role"); err != nil {
 		t.Fatal("could not regress the schema:", err)
 	}
-	if db.Migrator().HasIndex(&PullRequest{}, "idx_pull_requests_url") {
-		if err := db.Migrator().DropIndex(&PullRequest{}, "idx_pull_requests_url"); err != nil {
-			t.Fatal("could not regress the schema:", err)
-		}
-	}
 	if db.Migrator().HasColumn(&PullRequest{}, "role") {
 		t.Fatal("the column was not actually dropped, so the migration has nothing to add back")
+	}
+	// Each name is asserted to exist before it is dropped: an index the schema
+	// never had makes this a no-op that only looks like a regression.
+	// pr_session_url is the composite the per-pull-request sync lookup needs;
+	// oauth_github_account is partial and is created by raw SQL guarded with IF NOT
+	// EXISTS, so without dropping it the two accounts above are never indexed by
+	// the migration under test. DROP INDEX is issued directly because the driver's
+	// Migrator.DropIndex qualifies the name with a literal CURRENT_SCHEMA, which
+	// PostgreSQL rejects; the fixture's search_path makes the bare name unambiguous.
+	for _, index := range []struct {
+		model any
+		name  string
+	}{{&PullRequest{}, "pr_session_url"}, {&OAuthToken{}, "oauth_github_account"}} {
+		if !db.Migrator().HasIndex(index.model, index.name) {
+			t.Fatal("the schema never had " + index.name + ", so dropping it regresses nothing")
+		}
+		if err := db.Exec("DROP INDEX " + index.name).Error; err != nil {
+			t.Fatal("could not regress the schema:", err)
+		}
+		if db.Migrator().HasIndex(index.model, index.name) {
+			t.Fatal(index.name + " was not actually dropped")
+		}
 	}
 
 	// Re-running the migration is what a rollout does to the live database.
@@ -72,6 +90,26 @@ func TestMigrateIsSafeOnAPopulatedDatabase(t *testing.T) {
 	}
 	if !db.Migrator().HasColumn(&PullRequest{}, "role") {
 		t.Fatal("the dropped column was not restored")
+	}
+	if !db.Migrator().HasIndex(&OAuthToken{}, "oauth_github_account") {
+		t.Fatal("the dropped partial unique index was not rebuilt")
+	}
+	// The name alone would also be satisfied by a one-column index: dropping either
+	// half of the composite tag leaves an index still called pr_session_url that no
+	// longer serves the session_id + url lookup it exists for, and the name itself
+	// contains both words. The indexed columns are what is checked.
+	var columns []string
+	if err := db.Raw(`SELECT a.attname FROM pg_index i
+			JOIN pg_class ic ON ic.oid = i.indexrelid
+			JOIN pg_class c ON c.oid = i.indrelid
+			JOIN pg_namespace n ON n.oid = ic.relnamespace
+			JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = ANY(i.indkey)
+			WHERE n.nspname = current_schema() AND ic.relname = ? ORDER BY a.attname`, "pr_session_url").
+		Pluck("attname", &columns).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(columns, ",") != "session_id,url" {
+		t.Fatalf("pr_session_url covers %v, not session_id and url", columns)
 	}
 	var follows int64
 	db.Model(&FollowUp{}).Where("session_id = ?", "migrate").Count(&follows)
