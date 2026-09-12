@@ -21,7 +21,15 @@ func migrateDatabase(db *gorm.DB) error {
 	if err := db.AutoMigrate(&PullRequest{}, &OAuthToken{}, &ReviewComment{}, &BrowserSession{}, &FollowUp{}, &FollowUpSettings{}, &FollowUpEvent{}, &NotificationDestination{}, &NotificationDelivery{}, &APIToken{}, &OAuthClient{}, &OAuthCode{}); err != nil {
 		return err
 	}
-	return db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS oauth_github_account ON " + db.NamingStrategy.TableName("OAuthToken") + "(git_hub_id) WHERE git_hub_id > 0").Error
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS oauth_github_account ON " + db.NamingStrategy.TableName("OAuthToken") + "(git_hub_id) WHERE git_hub_id > 0").Error; err != nil {
+		return err
+	}
+	// pr_session_url leads with session_id, so a standalone index on that column
+	// answers nothing the composite cannot. AutoMigrate only ever adds, so the one
+	// earlier versions created has to be dropped by name; on a database that never
+	// had it this is a no-op. It is dropped after AutoMigrate, which is what makes
+	// the composite certain to be in place before the single-column index goes.
+	return db.Exec("DROP INDEX IF EXISTS " + db.NamingStrategy.IndexName(db.NamingStrategy.TableName("PullRequest"), "session_id")).Error
 }
 
 func (s *Server) resolveBrowserSession(c *gin.Context) {

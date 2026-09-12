@@ -35,7 +35,7 @@ type PullRequest struct {
 	Draft         bool       `json:"draft"`
 	RepoPrivate   *bool      `json:"repo_private" gorm:"index"`
 	ID            uint       `json:"id" gorm:"primaryKey"`
-	SessionID     string     `json:"-" gorm:"index;index:pr_session_url,priority:1;not null"`
+	SessionID     string     `json:"-" gorm:"index:pr_session_url,priority:1;not null"`
 	Number        int        `json:"number"`
 	Repo          string     `json:"repo" gorm:"index"`
 	Title         string     `json:"title"`
