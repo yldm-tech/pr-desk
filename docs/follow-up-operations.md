@@ -34,6 +34,8 @@ IANA timezone data is embedded into the Go executable with `time/tzdata`, so tim
 
 The outbox implements five-minute event aggregation, per-destination delivery records/retries, a single initial inventory, daily local-time summaries and long-message splitting. Credentials are encrypted at rest with `TOKEN_ENCRYPTION_KEY`; sending never marks tasks read or handled. The worker runs on the background scheduler and retries failures with backoff. Do not send a live test message without explicit authorization.
 
+A destination that has exhausted its retries is reported as failing in the settings list, and the report clears as soon as it accepts a message again or its configuration is saved. Delivered and abandoned messages, along with dispatched follow-up events, are removed by the hourly sweep thirty days after the fact: nothing the queue reads survives that long, because the message keys that make queueing at-most-once are a local date, a follow-up event id that is never reused, and the one inventory message the settings row itself guards. Deleting a destination removes its queued and delivered messages with it, and an account holds at most ten destinations, since every message is fanned out to all of them through a single drain shared by the whole deployment.
+
 ## Notification channels
 
 Each destination carries a channel that is fixed when it is created; rebuild the destination to move it to another provider. Destinations stored before channels existed have no channel recorded and are delivered as Telegram.

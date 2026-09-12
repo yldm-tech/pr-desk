@@ -22,12 +22,15 @@ type NotificationDestination struct {
 	Kind         string    `gorm:"not null;default:telegram" json:"kind"`
 	Enabled      bool      `json:"enabled"`
 	ConfigCipher string    `json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	// Health is carried by the destination rather than derived from delivery history, so it can be cleared the moment the destination accepts a message again and it survives the retention sweep below. migrateDatabase seeds it from the delivery history that used to answer this question, so an upgrade does not report a dead endpoint as healthy.
+	Failing   bool      `gorm:"not null;default:false" json:"failing"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type NotificationDelivery struct {
-	ID            uint   `gorm:"primaryKey"`
+	// The claim below orders by id and reads only rows that are neither sent nor parked, so the partial index leads with id and covers exactly the live backlog: delivered rows leave it instead of being scanned past on every tick.
+	ID            uint   `gorm:"primaryKey;index:notification_outbox_pending,where:sent_at IS NULL AND skipped_at IS NULL"`
 	SessionID     string `gorm:"index;not null"`
 	DestinationID uint   `gorm:"uniqueIndex:destination_message;not null"`
 	MessageKey    string `gorm:"uniqueIndex:destination_message;not null"`
@@ -198,9 +201,11 @@ func (s *Server) queueAccountNotifications(ctx context.Context, sid string, now 
 			byID[pr.ID] = pr
 		}
 		included := follows[:0]
+		includedIDs := []uint{}
 		for _, follow := range follows {
 			if settings.includes(follow.facts()) {
 				included = append(included, follow)
+				includedIDs = append(includedIDs, follow.ID)
 			}
 		}
 		follows = included
@@ -290,6 +295,22 @@ func (s *Server) queueAccountNotifications(ctx context.Context, sid string, now 
 				return err
 			}
 		}
+		// Events of a follow-up the current filter excludes are never reached by the loop above, so they would stay pending and be delivered as news on the day their team is selected again. They are retired where they were skipped instead. Only the rows this tick actually read are retired: a follow-up created after the snapshot carries its own clock, so a blanket predicate would silently swallow the first event of a pull request that arrived while this transaction was open.
+		selected := map[uint]bool{}
+		for _, id := range includedIDs {
+			selected[id] = true
+		}
+		stale := []uint{}
+		for _, event := range events {
+			if !selected[event.FollowUpID] {
+				stale = append(stale, event.ID)
+			}
+		}
+		if len(stale) > 0 {
+			if err := tx.Model(&FollowUpEvent{}).Where("id IN ?", stale).Update("dispatched_at", now).Error; err != nil {
+				return err
+			}
+		}
 		if date, due := digestDue(settings, now); due && !firstInventory {
 			lines := []string{}
 			since := now.Add(-24 * time.Hour)
@@ -350,10 +371,15 @@ func (s *Server) deliverOneNotification(ctx context.Context, now time.Time, send
 	sendCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	err = send(sendCtx, destination, delivery)
+	// The message may already be accepted upstream by the time shutdown cancels ctx, and a refused outcome write leaves the row claimable again two minutes later, so the outcome is recorded on a handle that shutdown cannot cancel. The next claim still runs on ctx and ends the loop. The budget starts here rather than before the send, or a send that used its own thirty seconds would leave nothing to record the result with — which is precisely the slow upstream whose message must not be sent twice.
+	outcomeCtx, cancelOutcome := context.WithTimeout(context.WithoutCancel(ctx), outcomeWriteBudget)
+	defer cancelOutcome()
 	updates := map[string]any{"leased_until": nil}
+	failing := destination.Failing
 	if err == nil {
 		updates["sent_at"] = now
 		updates["last_error"] = ""
+		failing = false
 	} else if delivery.Attempts >= deliveryAttemptLimit {
 		// By now the backoff is an hour and the destination has been failing for
 		// about a day. Retrying forever keeps a dead endpoint in the queue and
@@ -361,6 +387,7 @@ func (s *Server) deliverOneNotification(ctx context.Context, now time.Time, send
 		// failing where the account holder can see it.
 		updates["skipped_at"] = now
 		updates["last_error"] = "gave_up"
+		failing = true
 		log.Printf("Notification outbox: destination %d gave up after %d attempts: %s", destination.ID, delivery.Attempts, deliveryErrorSummary(err))
 	} else {
 		delay := time.Minute * time.Duration(1<<min(delivery.Attempts-1, 6))
@@ -371,5 +398,24 @@ func (s *Server) deliverOneNotification(ctx context.Context, now time.Time, send
 		updates["last_error"] = "delivery_failed"
 		log.Printf("Notification outbox: destination %d attempt %d failed: %s", destination.ID, delivery.Attempts, deliveryErrorSummary(err))
 	}
-	return true, s.db.WithContext(ctx).Model(&NotificationDelivery{}).Where("id = ? AND attempts = ?", delivery.ID, delivery.Attempts).Updates(updates).Error
+	// The outcome goes first: it is what keeps a delivered message from being sent again, and the health of the destination can wait for the next attempt.
+	if err := s.db.WithContext(outcomeCtx).Model(&NotificationDelivery{}).Where("id = ? AND attempts = ?", delivery.ID, delivery.Attempts).Updates(updates).Error; err != nil {
+		return true, err
+	}
+	if failing == destination.Failing {
+		return true, nil
+	}
+	return true, s.db.WithContext(outcomeCtx).Model(&NotificationDestination{}).Where("id = ?", destination.ID).Update("failing", failing).Error
+}
+
+// How long the outcome write is given after the send returns. A variable so a test can shorten it; nothing changes it at runtime.
+var outcomeWriteBudget = 10 * time.Second
+
+// A sent or parked row is kept only as a ledger: the claim above never reads it again and the settings page reads the destination's own flag, so nothing but an operator looking at history depends on it. Thirty days is far beyond the lifetime of every dedupe key the unique index protects, which is what decides the floor here: a digest key carries a local date and can only come up again within a day of it, even if a timezone change moves the local date backwards, an event key carries follow-up event ids that are never reused, and the single inventory message is guarded by the settings row rather than by its delivery. Dispatched events go with them because the materializer only ever selects rows with dispatched_at IS NULL.
+const notificationRetention = 30 * 24 * time.Hour
+
+func (s *Server) purgeDeliveredNotifications(now time.Time) {
+	cutoff := now.Add(-notificationRetention)
+	_ = s.db.Where("(sent_at IS NOT NULL AND sent_at < ?) OR (skipped_at IS NOT NULL AND skipped_at < ?)", cutoff, cutoff).Delete(&NotificationDelivery{}).Error
+	_ = s.db.Where("dispatched_at IS NOT NULL AND dispatched_at < ?", cutoff).Delete(&FollowUpEvent{}).Error
 }

@@ -15,6 +15,8 @@ import (
 const (
 	destinationNameLimit      = 100
 	destinationRecipientLimit = 20
+	// Every message is fanned out to every enabled destination and the outbox drains in one serial loop for the whole deployment, so an account with hundreds of destinations would push every other account's notifications behind its own.
+	destinationLimit = 10
 )
 
 type destinationInput struct {
@@ -44,19 +46,12 @@ func (s *Server) listNotificationDestinations(c *gin.Context) {
 		return
 	}
 	// A destination that gave up would otherwise fail in silence: nothing in the
-	// UI distinguishes "nothing to send" from "everything was dropped".
-	var abandoned []uint
-	if err := s.db.Model(&NotificationDelivery{}).Where("session_id = ? AND last_error = ?", account.SessionID, "gave_up").Distinct("destination_id").Pluck("destination_id", &abandoned).Error; err != nil {
-		c.JSON(500, gin.H{"error": "Unable to load notification destinations"})
-		return
-	}
-	failing := map[uint]bool{}
-	for _, id := range abandoned {
-		failing[id] = true
-	}
+	// UI distinguishes "nothing to send" from "everything was dropped". The flag
+	// lives on the destination, so it clears on the next accepted message instead
+	// of on whatever is left of the delivery history.
 	out := make([]gin.H, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, gin.H{"id": r.ID, "name": r.Name, "kind": destinationKind(r.Kind), "enabled": r.Enabled, "failing": failing[r.ID]})
+		out = append(out, gin.H{"id": r.ID, "name": r.Name, "kind": destinationKind(r.Kind), "enabled": r.Enabled, "failing": r.Failing})
 	}
 	// The form mirrors the outbound address policy, so it has to know whether this
 	// deployment opted into private addresses.
@@ -187,6 +182,18 @@ func (s *Server) saveNotificationDestination(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Unknown notification channel"})
 		return
 	}
+	// Only a new destination is counted, so renaming or disabling one stays possible at the cap.
+	if row.ID == 0 {
+		var existing int64
+		if err := s.db.Model(&NotificationDestination{}).Where("session_id = ?", account.SessionID).Count(&existing).Error; err != nil {
+			c.JSON(500, gin.H{"error": "Unable to save destination"})
+			return
+		}
+		if existing >= destinationLimit {
+			c.JSON(400, gin.H{"error": "An account can have at most ten notification destinations"})
+			return
+		}
+	}
 	config, err := destinationConfigFor(kind, in, stored)
 	if err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
@@ -202,6 +209,8 @@ func (s *Server) saveNotificationDestination(c *gin.Context) {
 	row.Kind = kind
 	row.Enabled = *in.Enabled
 	row.ConfigCipher = cipher
+	// Saving a destination is the account holder acting on the warning; the flag is raised again if the next dozen attempts still fail.
+	row.Failing = false
 	if err := s.db.Save(&row).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Unable to save destination"})
 		return
@@ -219,6 +228,8 @@ func (s *Server) deleteNotificationDestination(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	// Queued and delivered rows are only ever reached through their destination, so they would otherwise keep a deleted destination's message bodies forever.
+	_ = s.db.Where("session_id = ? AND destination_id = ?", account.SessionID, id).Delete(&NotificationDelivery{}).Error
 	c.Status(http.StatusNoContent)
 }
 
