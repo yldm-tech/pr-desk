@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
+	_ "embed"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -24,6 +26,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -68,12 +71,14 @@ type OAuthToken struct {
 	// lands after the phases that follow it, so without this a failure in one of
 	// those repeats the whole walk.
 	HistoryWalkedAt *time.Time `json:"-"`
-	HistoryTotal    int
-	ID              uint   `gorm:"primaryKey"`
-	SessionID       string `gorm:"index;not null"`
-	Username        string
-	Token           string
-	CreatedAt       time.Time
+	// When the walk a resumed run belongs to first started. Everything before the cursor was read then, so the finished walk has to be stamped with this rather than with the resuming run's clock.
+	HistoryWalkStartedAt *time.Time `json:"-"`
+	HistoryTotal         int
+	ID                   uint   `gorm:"primaryKey"`
+	SessionID            string `gorm:"index;not null"`
+	Username             string
+	Token                string
+	CreatedAt            time.Time
 }
 type ReviewComment struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -91,6 +96,8 @@ type ReviewComment struct {
 type Server struct {
 	db        *gorm.DB
 	workerCtx context.Context
+	// Syncs detached from their request keep running after the worker context is cancelled, just long enough to write the interrupted checkpoint. Shutdown waits on this so that write is not lost.
+	workers sync.WaitGroup
 }
 
 var appServer *Server
@@ -125,6 +132,32 @@ func newSessionID() (string, error) {
 // The startup probe tolerates two minutes, which is the ceiling this respects.
 const databaseBootTimeout = 45 * time.Second
 
+// database/sql defaults to an unlimited number of connections and two idle ones, which is the wrong shape for this process: one sync pins a connection for its whole run through the advisory lock (sync_lock.go) and opens up to four more for the details phase, so a burst of first logins can walk straight into PostgreSQL's default max_connections of 100 and take every query down with it, /health included. The numbers assume what is actually deployed — one container beside one PostgreSQL: 25 open leaves room for several concurrent syncs plus request traffic and still leaves the database headroom, 8 idle matches a single sync's connection footprint so the details phase stops reopening connections between bursts, and the 30 minute lifetime rotates connections after a failover instead of holding one to a demoted primary.
+const (
+	poolMaxOpenConns = 25
+	poolMaxIdleConns = 8
+	// One sync needs its pinned lock connection plus four detail workers plus progress writes, so anything below this deadlocks a sync against itself.
+	poolMinOpenConns = 8
+)
+
+func applyPoolLimits(sqlDB *sql.DB) {
+	maxOpen := poolMaxOpenConns
+	if configured, err := strconv.Atoi(os.Getenv("DATABASE_MAX_OPEN_CONNS")); err == nil && configured > 0 {
+		maxOpen = configured
+	}
+	if maxOpen < poolMinOpenConns {
+		maxOpen = poolMinOpenConns
+	}
+	idle := poolMaxIdleConns
+	if idle > maxOpen {
+		idle = maxOpen
+	}
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(idle)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+}
+
 func openDatabase(dsn string, within time.Duration) (*gorm.DB, error) {
 	config := &gorm.Config{Logger: logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{LogLevel: logger.Warn, SlowThreshold: time.Second, ParameterizedQueries: true})}
 	deadline := time.Now().Add(within)
@@ -132,6 +165,11 @@ func openDatabase(dsn string, within time.Duration) (*gorm.DB, error) {
 	for {
 		db, err := gorm.Open(postgres.Open(dsn), config)
 		if err == nil {
+			sqlDB, poolErr := db.DB()
+			if poolErr != nil {
+				return nil, poolErr
+			}
+			applyPoolLimits(sqlDB)
 			return db, nil
 		}
 		attempt++
@@ -141,6 +179,67 @@ func openDatabase(dsn string, within time.Duration) (*gorm.DB, error) {
 		log.Printf("Database not ready (attempt %d); retrying", attempt)
 		time.Sleep(time.Second)
 	}
+}
+
+// The request is not described because its parameters and cookies are private, which leaves the correlation id as the only thing tying this line to the person who hit it.
+func recoverRequest(c *gin.Context, _ any) {
+	log.Printf("Request panic recovered; sensitive request details omitted id=%s", c.GetString("request_id"))
+	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+}
+
+// A correlation id is echoed back in a header and written to the request log, so a client-supplied one is only trusted when it cannot forge either: anything longer than 64 bytes or outside this alphabet is replaced by a freshly minted id.
+func safeRequestID(candidate string) string {
+	if candidate == "" || len(candidate) > 64 {
+		return ""
+	}
+	for _, r := range candidate {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '.' && r != '_' && r != '-' {
+			return ""
+		}
+	}
+	return candidate
+}
+
+func requestIDMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		requestID := safeRequestID(c.GetHeader("X-Request-ID"))
+		if requestID == "" {
+			b := make([]byte, 16)
+			if _, err := rand.Read(b); err == nil {
+				requestID = base64.RawURLEncoding.EncodeToString(b)
+			}
+		}
+		if requestID != "" {
+			c.Header("X-Request-ID", requestID)
+			c.Set("request_id", requestID)
+		}
+		c.Next()
+	}
+}
+
+// The one place response headers are set for every route. API answers are authenticated by a cookie and carry one person's pull requests, so a shared proxy or CDN in front of a multi-user deployment must never be free to store them. The policy is defense in depth for the SPA, which renders titles and comment bodies from arbitrary repositories; it deliberately stops at the API, whose only HTML is the OAuth consent page and whose inline script is what submits it, and at the Swagger bundle. github.com/<login>.png redirects to avatars.githubusercontent.com and a redirected image is matched against the policy again, so both hosts have to be named or every account avatar is blocked. Inline styles are the handful of React style attributes.
+func securityHeaders(c *gin.Context) {
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("X-Frame-Options", "DENY")
+	c.Header("Referrer-Policy", "no-referrer")
+	path := c.Request.URL.Path
+	if path == "/api" || strings.HasPrefix(path, "/api/") {
+		c.Header("Cache-Control", "no-store")
+	} else if !strings.HasPrefix(path, "/swagger") {
+		c.Header("Content-Security-Policy", "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; img-src 'self' https://github.com https://avatars.githubusercontent.com data:; style-src 'self' 'unsafe-inline'; connect-src 'self'")
+	}
+	c.Next()
+}
+
+//go:embed docs/swagger.json
+var swaggerSpec []byte
+
+// Swagger UI resolves its definition relative to /swagger/, so without an explicit URL it asks for /swagger/doc.json, which only a swag-generated docs package can answer — this module has none, so the page reported "failed to load API definition" on every deployment. The spec is embedded rather than served from disk because a relative StaticFile path resolves against the process working directory, which is the repository root for a locally built binary and holds no swagger.json.
+func registerSwagger(r *gin.Engine) {
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/swagger.json")))
+	r.GET("/swagger.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", swaggerSpec)
+	})
 }
 
 func main() {
@@ -164,35 +263,14 @@ func main() {
 	appServer = s
 	r := gin.New()
 	// Do not log OAuth query parameters, cookies, or private search terms.
-	r.Use(safeRequestLogger(), gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, _ any) {
-		log.Print("Request panic recovered; sensitive request details omitted")
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-	}))
+	r.Use(safeRequestLogger(), gin.CustomRecoveryWithWriter(io.Discard, recoverRequest))
 	registerWeb(r, frontendFiles())
 	r.Use(func(c *gin.Context) {
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.Next()
 	})
-	r.Use(func(c *gin.Context) {
-		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
-			b := make([]byte, 16)
-			if _, err := rand.Read(b); err == nil {
-				requestID = base64.RawURLEncoding.EncodeToString(b)
-			}
-		}
-		if requestID != "" {
-			c.Header("X-Request-ID", requestID)
-			c.Set("request_id", requestID)
-		}
-		c.Next()
-	})
-	r.Use(func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("Referrer-Policy", "no-referrer")
-		c.Next()
-	})
+	r.Use(requestIDMiddleware())
+	r.Use(securityHeaders)
 	r.Use(func(c *gin.Context) {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 		c.Next()
@@ -217,8 +295,7 @@ func main() {
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "database": "ok"})
 	})
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	r.StaticFile("/swagger.json", "docs/swagger.json")
+	registerSwagger(r)
 	api := r.Group("/api/v1")
 	api.Use(s.resolveBrowserSession)
 	api.GET("/pull-requests", s.listPRs)
@@ -283,12 +360,27 @@ func main() {
 	case <-workersStopped.Done():
 	case <-ctx.Done():
 	}
+	s.waitForSyncWorkers(ctx)
+}
+
+// cron waits for its own jobs, but a login or a manual sync runs in a goroutine nobody holds, and after cancellation it still needs the round trips that store status "interrupted". Exiting before those land leaves the account stuck on "running", which suppresses its automatic sync for twenty minutes and disables the manual one. The same 10 second shutdown budget bounds the wait.
+func (s *Server) waitForSyncWorkers(ctx context.Context) {
+	drained := make(chan struct{})
+	go func() {
+		s.workers.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-ctx.Done():
+	}
 }
 func (s *Server) logout(c *gin.Context) {
 	sid := requestSessionID(c)
 	if c.GetBool("account_session") {
 		err := s.db.WithContext(c.Request.Context()).Transaction(func(tx *gorm.DB) error {
-			if err := tx.Where("id = ?", c.GetString("browser_session")).Delete(&BrowserSession{}).Error; err != nil {
+			// Disconnect is the only sign-out control and it pauses the account everywhere, so every browser holding this account has to lose it. Deleting only the calling browser's row left the one on the machine somebody signed out of with full account access for the rest of its thirty days, and reconnecting revived it rather than replacing it.
+			if err := tx.Where("account_id IN (?)", tx.Model(&OAuthToken{}).Select("id").Where("session_id = ?", sid)).Delete(&BrowserSession{}).Error; err != nil {
 				return err
 			}
 			return tx.Model(&OAuthToken{}).Where("session_id = ?", sid).Updates(map[string]any{"token": "", "authorization_error": "disconnected"}).Error
@@ -321,8 +413,14 @@ func (s *Server) authStatus(c *gin.Context) {
 	c.JSON(200, gin.H{"connected": connected, "username": t.Username, "sync_paused": connected && (t.AuthorizationError != "" || t.Token == ""), "last_synced_at": t.HistorySyncedAt})
 }
 func (s *Server) comments(c *gin.Context) {
+	// The two sibling routes on this id answer 404 for an id that is not a number; handing the raw string to a bigint column made this one report a mistyped URL as a server fault.
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(404, gin.H{"error": "not found"})
+		return
+	}
 	var v []ReviewComment
-	if err := sessionPRQuery(c, s.db).Where("pull_request_id = ?", c.Param("id")).Order("created_at desc").Find(&v).Error; err != nil {
+	if err := sessionPRQuery(c, s.db).Where("pull_request_id = ?", id).Order("created_at desc").Find(&v).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Unable to load comments"})
 		return
 	}
@@ -511,7 +609,21 @@ type syncResult struct {
 	body   gin.H
 }
 
+// go-github turns both quota refusals into their own types, so a bare 403 stays what it usually is here — a repository this token cannot read — and does not stop the rest of the phase.
+func isRateLimited(err error) bool {
+	var secondary *github.AbuseRateLimitError
+	var primary *github.RateLimitError
+	if errors.As(err, &secondary) || errors.As(err, &primary) {
+		return true
+	}
+	var response *github.ErrorResponse
+	return errors.As(err, &response) && response.Response != nil && response.Response.StatusCode == http.StatusTooManyRequests
+}
+
 func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bool) (result syncResult) {
+	// Registered before anything else so it is released last, after the deferred checkpoint write below. A shutdown that does not wait for that write leaves the account reporting a sync that is no longer running.
+	s.workers.Add(1)
+	defer s.workers.Done()
 	var t OAuthToken
 	if sid == "" || connectionQuery(s.db).Where("session_id = ?", sid).First(&t).Error != nil {
 		return syncResult{401, gin.H{"error": "not connected"}}
@@ -563,7 +675,8 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		return syncResult{401, gin.H{"error": "GitHub connection cannot be decrypted; reconnect GitHub"}}
 	}
 	gh := githubClient(token)
-	from := time.Date(2008, 1, 1, 0, 0, 0, 0, time.UTC)
+	epoch := time.Date(2008, 1, 1, 0, 0, 0, 0, time.UTC)
+	from := epoch
 	query := "author:@me type:pr"
 	if t.Username != "" {
 		user, response, e := gh.Users.Get(ctx, "")
@@ -599,9 +712,18 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	// before the cursor is already stored, so re-reading it would only spend
 	// search quota to arrive at the same rows.
 	historyFrom := from
-	if !incremental && t.HistoryCursor != nil && t.HistoryCursor.After(from) && t.HistoryCursor.Before(syncStarted) {
-		historyFrom = t.HistoryCursor.Add(time.Second)
-		log.Printf("Resuming interrupted history sync from %s", historyFrom.Format(time.RFC3339))
+	// The walk is stamped with the time it started, not the time it finished resuming. Rows before the cursor were read by the earlier run, so stamping this run's clock would put everything that changed during the interruption out of reach of both the incremental query and the reopened-PR search — permanently, since nothing else re-reads a pre-cursor row.
+	walkStarted := syncStarted
+	if !incremental {
+		if t.HistoryCursor != nil && t.HistoryCursor.After(from) && t.HistoryCursor.Before(syncStarted) {
+			historyFrom = t.HistoryCursor.Add(time.Second)
+			if t.HistoryWalkStartedAt != nil && t.HistoryWalkStartedAt.Before(syncStarted) {
+				walkStarted = *t.HistoryWalkStartedAt
+			}
+			log.Printf("Resuming interrupted history sync from %s", historyFrom.Format(time.RFC3339))
+		} else if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Update("history_walk_started_at", syncStarted).Error; err != nil {
+			return syncResult{500, gin.H{"error": "Unable to start history sync"}}
+		}
 	}
 	ctx = context.WithValue(ctx, historyPageSinkKey{}, historyPageSink(func(items []*github.Issue) error { return s.saveHistoryPage(ctx, sid, items) }))
 	if !incremental {
@@ -628,7 +750,7 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	// end means a failure in the later stages costs a retry of those stages,
 	// not another hundred search requests.
 	if !incremental {
-		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"full_sync_pending": false, "history_cursor": nil, "history_walked_at": syncStarted}).Error; err != nil {
+		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"full_sync_pending": false, "history_cursor": nil, "history_walk_started_at": nil, "history_walked_at": walkStarted}).Error; err != nil {
 			return syncResult{500, gin.H{"error": "Unable to save sync checkpoint"}}
 		}
 	}
@@ -643,7 +765,12 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	progress.set("details", 0, openTotal)
 	group := new(errgroup.Group)
 	group.SetLimit(4)
-	enrich := func(x *github.Issue) error { return s.syncPRDetails(ctx, token, sid, x) }
+	// An ordinary failure does not stop the siblings: one repository nobody can read must not cost every other pull request its details. A rate limit is the exception, because it is the account's whole quota rather than this pull request's problem — every queued request would be rejected anyway and only extends GitHub's block — so the first one cancels the rest and is kept, otherwise the cancelled siblings would report the run as merely interrupted.
+	detailCtx, stopDetails := context.WithCancel(ctx)
+	defer stopDetails()
+	var limitOnce sync.Once
+	var limitErr error
+	enrich := func(x *github.Issue) error { return s.syncPRDetails(detailCtx, token, sid, x) }
 	for _, item := range items {
 		item := item
 		if item.GetState() != "open" {
@@ -657,18 +784,29 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 			err := enrich(item)
 			if err == nil {
 				progress.advance()
+				return nil
+			}
+			if isRateLimited(err) {
+				limitOnce.Do(func() {
+					limitErr = err
+					stopDetails()
+				})
 			}
 			return err
 		})
 	}
 	if err := group.Wait(); err != nil {
+		if limitErr != nil && errors.Is(err, context.Canceled) {
+			err = limitErr
+		}
 		progress.recordFailure(err)
 		if errors.Is(err, errDetailStorage) {
 			return syncResult{500, gin.H{"error": "Unable to save PR details; retry sync"}}
 		}
 		return syncResult{502, gin.H{"error": "Some PR details could not be loaded; list data has been saved"}}
 	}
-	if err := s.syncReviewRequests(ctx, t, token, from, syncStarted); err != nil {
+	// Review discovery searches other people's pull requests, whose creation dates have nothing to do with when this account signed up. Flooring them at the user's own GitHub creation date hid every open pull request older than the reviewer's account, which no later query could recover.
+	if err := s.syncReviewRequests(ctx, t, token, epoch, syncStarted); err != nil {
 		progress.recordFailure(err)
 		return syncResult{502, gin.H{"error": "Unable to complete review inbox sync; retry to refresh"}}
 	}
@@ -677,7 +815,8 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	if err := s.db.Model(&PullRequest{}).Where("session_id = ? AND role = ?", sid, "authored").Count(&historyTotal).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to count saved history"}}
 	}
-	if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"history_synced_at": syncStarted, "history_total": historyTotal, "full_sync_pending": false}).Error; err != nil {
+	// Same clock as the walk above: this is the timestamp the next incremental run asks GitHub about, so a resumed walk has to hand it the moment the walk began.
+	if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Updates(map[string]interface{}{"history_synced_at": walkStarted, "history_total": historyTotal, "full_sync_pending": false}).Error; err != nil {
 		return syncResult{500, gin.H{"error": "Unable to save sync checkpoint"}}
 	}
 	if t.GitHubID > 0 {
@@ -767,15 +906,19 @@ func (s *Server) createPR(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid pull request payload"})
 		return
 	}
+	// The sequence owns the primary key. A body that carried its own id inserted around nextval, and the sync insert that later reached that value failed on a duplicate key.
+	p.ID = 0
 	p.SessionID = requestSessionID(c)
 	var connection OAuthToken
 	if p.SessionID == "" || connectionQuery(s.db).Where("session_id = ?", p.SessionID).First(&connection).Error != nil {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
-	if err := s.db.Create(&p).Error; err != nil {
+	// The identity the sync path stores under. Nothing enforces it in the schema, so posting the same pull request twice used to leave two rows that every count sees and only one of which detail refreshes ever reach.
+	var stored PullRequest
+	if err := s.db.Where("session_id = ? AND number = ? AND url = ?", p.SessionID, p.Number, p.URL).Assign(p).FirstOrCreate(&stored, PullRequest{SessionID: p.SessionID, Number: p.Number, URL: p.URL}).Error; err != nil {
 		c.JSON(500, gin.H{"error": "Unable to save pull request"})
 		return
 	}
-	c.JSON(201, p)
+	c.JSON(201, stored)
 }

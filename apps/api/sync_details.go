@@ -195,6 +195,17 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 				}
 			}
 		}
+		// The prose somebody writes when they submit a review is a third namespace again, and it is the text the follow-up excerpt most often quotes. Without it stored, a request for the thread behind "Please cover the timezone boundary" came back empty. An unsubmitted draft is only ever visible to its own author, and a review with no body is the envelope around inline comments already stored above.
+		for _, review := range reviews {
+			if review.State == "PENDING" || strings.TrimSpace(review.Body) == "" {
+				continue
+			}
+			key := ReviewComment{SessionID: sid, PullRequestID: pr.ID, GitHubID: uint64(review.ID), CommentType: "summary"}
+			if err := tx.Where("session_id = ? AND pull_request_id = ? AND git_hub_id = ? AND comment_type = ?", sid, pr.ID, uint64(review.ID), "summary").
+				Assign(map[string]any{"author": review.User.Login, "body": review.Body, "url": review.HTMLURL, "created_at": review.SubmittedAt}).FirstOrCreate(&key).Error; err != nil {
+				return err
+			}
+		}
 		if account.GitHubID > 0 {
 			facts.Role = pr.Role
 			if pr.Role == "reviewer" {

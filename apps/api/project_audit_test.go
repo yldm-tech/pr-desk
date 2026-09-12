@@ -87,6 +87,87 @@ func TestDetailsIncludeActionsAndRefreshCommentNamespaces(t *testing.T) {
 	}
 }
 
+// The excerpt a follow-up shows is most often the prose somebody submitted with a review, and get_follow_up answered "here is the full thread" with nothing at all until those bodies were stored beside the comments.
+func TestReviewProseIsStoredAsItsOwnComment(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	pr := PullRequest{SessionID: "reviews", Number: 2, Repo: "o/r", URL: "https://github.com/o/r/pull/2", State: "open"}
+	if err := db.Create(&pr).Error; err != nil {
+		t.Fatal(err)
+	}
+	var issue github.Issue
+	if err := json.Unmarshal([]byte(`{"number":2,"state":"open","html_url":"https://github.com/o/r/pull/2","repository_url":"https://api.github.com/repos/o/r"}`), &issue); err != nil {
+		t.Fatal(err)
+	}
+	previous := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = previous })
+	body := "Please cover the timezone boundary."
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		payload := "[]"
+		switch r.URL.Path {
+		case "/repos/o/r/pulls/2":
+			payload = `{"mergeable":true,"head":{"sha":"abc"}}`
+		case "/repos/o/r/commits/abc/status":
+			payload = `{"state":"success","total_count":1,"statuses":[{"context":"ci","state":"success"}]}`
+		case "/repos/o/r/commits/abc/check-runs":
+			payload = `{"total_count":0,"check_runs":[]}`
+		case "/repos/o/r/pulls/2/reviews":
+			// An unsubmitted draft is visible to nobody but its author, and a review with no prose is only the envelope around inline comments that are stored separately.
+			payload = `[{"id":31,"state":"CHANGES_REQUESTED","body":"` + body + `","html_url":"https://github.com/o/r/pull/2#pullrequestreview-31","submitted_at":"2026-09-01T00:00:00Z","user":{"login":"reviewer"}},
+				{"id":32,"state":"COMMENTED","body":"","submitted_at":"2026-09-02T00:00:00Z","user":{"login":"reviewer"}},
+				{"id":33,"state":"PENDING","body":"still writing","submitted_at":"2026-09-03T00:00:00Z","user":{"login":"reviewer"}}]`
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(payload)), Request: r}, nil
+	})}
+	if err := s.syncPRDetails(context.Background(), "fixture", pr.SessionID, &issue); err != nil {
+		t.Fatal(err)
+	}
+	var stored []ReviewComment
+	db.Where("session_id = ?", pr.SessionID).Find(&stored)
+	if len(stored) != 1 {
+		t.Fatalf("expected only the submitted review body: %+v", stored)
+	}
+	if stored[0].CommentType != "summary" || stored[0].Body != body || stored[0].Author != "reviewer" || stored[0].URL == "" {
+		t.Fatalf("review prose stored incorrectly: %+v", stored[0])
+	}
+	body = "Edited after a rethink."
+	if err := s.syncPRDetails(context.Background(), "fixture", pr.SessionID, &issue); err != nil {
+		t.Fatal(err)
+	}
+	db.Where("session_id = ?", pr.SessionID).Find(&stored)
+	if len(stored) != 1 || stored[0].Body != body {
+		t.Fatalf("edited review prose was not refreshed: %+v", stored)
+	}
+}
+
+// Both timestamps come from the same submission, and the review key sorts above the comment key, so the empty envelope used to win the tie and leave the excerpt blank.
+func TestEmptyReviewKeepsTheExcerptOfItsInlineComment(t *testing.T) {
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	inline := activityComment{ID: 7, Body: "This misses the leap second.", URL: "https://github.com/o/r/pull/2#discussion_r7", CreatedAt: at}
+	inline.User.Login = "reviewer"
+	review := githubReview{ID: 31, State: "COMMENTED", SubmittedAt: at}
+	review.User.Login = "reviewer"
+	var facts FollowUpFacts
+	snapshotHumanFacts(&facts, "author", []activityComment{inline}, []githubReview{review})
+	if facts.HumanExcerpt != inline.Body {
+		t.Fatalf("empty review body replaced the excerpt: %q", facts.HumanExcerpt)
+	}
+}
+
+// Most approvals are a button press and nothing else. Dropping a review that carries no prose would leave the author with no notification, no unread mark and a waiting clock still running.
+func TestAnApprovalWithNoProseIsStillHumanActivity(t *testing.T) {
+	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	for _, state := range []string{"APPROVED", "DISMISSED"} {
+		review := githubReview{ID: 31, State: state, SubmittedAt: at}
+		review.User.Login = "reviewer"
+		var facts FollowUpFacts
+		snapshotHumanFacts(&facts, "author", nil, []githubReview{review})
+		if !facts.HumanAt.Equal(at) || facts.HumanVersion == "" {
+			t.Fatalf("a bare %s review registered no activity: %+v", state, facts)
+		}
+	}
+}
+
 func TestGitHubJSONPreservesTypedErrorsWithoutDisclosingBody(t *testing.T) {
 	previous := githubHTTPClient
 	t.Cleanup(func() { githubHTTPClient = previous })

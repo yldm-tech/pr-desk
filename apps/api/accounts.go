@@ -24,6 +24,10 @@ func migrateDatabase(db *gorm.DB) error {
 	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS oauth_github_account ON " + db.NamingStrategy.TableName("OAuthToken") + "(git_hub_id) WHERE git_hub_id > 0").Error; err != nil {
 		return err
 	}
+	// NotificationDestination.Failing replaces a flag that used to be derived from the delivery history on every read. Without this an upgraded deployment reports a destination that gave up days ago as healthy until it fails again, which for a dead endpoint is never. Delivered rows are pruned after thirty days, so this can only ever seed what is still on record, which is what the old derivation saw too.
+	if err := db.Exec("UPDATE " + db.NamingStrategy.TableName("NotificationDestination") + " SET failing = true WHERE failing = false AND id IN (SELECT destination_id FROM " + db.NamingStrategy.TableName("NotificationDelivery") + " WHERE last_error = 'gave_up')").Error; err != nil {
+		return err
+	}
 	// pr_session_url leads with session_id, so a standalone index on that column
 	// answers nothing the composite cannot. AutoMigrate only ever adds, so the one
 	// earlier versions created has to be dropped by name; on a database that never
@@ -68,14 +72,21 @@ func (s *Server) connectAccount(ctx context.Context, candidate OAuthToken, githu
 	if githubID <= 0 || browserID == "" {
 		return OAuthToken{}, errors.New("invalid account identity")
 	}
-	// Resolved before the transaction: it calls GitHub, and the transaction
-	// below holds an advisory lock for this account.
-	donor, err := findCacheDonor(ctx, s.db.WithContext(ctx), candidate, githubID)
-	if err != nil {
-		return OAuthToken{}, err
+	// A cache donor only matters for a first login, and every sign-in arrives with a freshly minted partition, so the donor search never short-circuits on its own. Probing here keeps a returning user from paying for a GitHub round trip whose answer the create branch below would discard. The probe is advisory: if two first logins race, both may resolve a donor, and the advisory lock below still decides which one creates the account.
+	var existing OAuthToken
+	donor := ""
+	s.db.WithContext(ctx).Select("id").Where("git_hub_id = ?", githubID).Limit(1).Find(&existing)
+	if existing.ID == 0 {
+		// Resolved before the transaction: it calls GitHub, and the transaction
+		// below holds an advisory lock for this account.
+		found, err := findCacheDonor(ctx, s.db.WithContext(ctx), candidate, githubID)
+		if err != nil {
+			return OAuthToken{}, err
+		}
+		donor = found
 	}
 	var account OAuthToken
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Serialize first logins and reauthorizations for the same GitHub ID.
 		if err := tx.Exec("SELECT pg_advisory_xact_lock(?)", githubID).Error; err != nil {
 			return err
