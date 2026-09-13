@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func TestFollowUpMutationIsolationAndConcurrentActivity(t *testing.T) {
@@ -130,5 +131,58 @@ func TestReviewerPRsDoNotPolluteContributions(t *testing.T) {
 		if path == "/overview" && response.Summary.Total != 1 || path == "/prs" && response.Total != 1 {
 			t.Fatal("review counted as authored", w.Body.String())
 		}
+	}
+}
+
+// `handled` overwrites WaitingSince with now and clears NeedsConfirmation, so before undo existed a mis-tap permanently destroyed the one number the product is built on — how long the thing has been waiting. `unsnooze` was not an inverse for it and says so in its own comment.
+func TestUndoRestoresTheStepBeforeTheLastAction(t *testing.T) {
+	db := integrationPoolDB(t)
+	s := &Server{db: db}
+	waiting := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	row := FollowUp{SessionID: "undo", PullRequestID: 1, Version: 3, ReadVersion: 1, NeedsConfirmation: true, WaitingSince: waiting, FactsJSON: `{"Role":"authored"}`}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	scope := func(tx *gorm.DB) *gorm.DB { return tx.Where("session_id = ?", "undo") }
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "handled", 3, nil, now, scope); err != nil || status != 200 {
+		t.Fatalf("handled: status %d err %v", status, err)
+	}
+	var handled FollowUp
+	if err := db.Where("id = ?", row.ID).First(&handled).Error; err != nil {
+		t.Fatal(err)
+	}
+	if handled.NeedsConfirmation || !handled.WaitingSince.Equal(now) {
+		t.Fatalf("handled did not take effect: confirm=%v waiting=%v", handled.NeedsConfirmation, handled.WaitingSince)
+	}
+	if handled.PrevWaitingSince == nil {
+		t.Fatal("no step was recorded to go back to")
+	}
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "undo", 3, nil, now, scope); err != nil || status != 200 {
+		t.Fatalf("undo: status %d err %v", status, err)
+	}
+	var restored FollowUp
+	if err := db.Where("id = ?", row.ID).First(&restored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !restored.WaitingSince.UTC().Equal(waiting) {
+		t.Fatalf("WaitingSince not restored: %v", restored.WaitingSince)
+	}
+	if !restored.NeedsConfirmation || restored.ReadVersion != 1 {
+		t.Fatalf("state not restored: confirm=%v read=%d", restored.NeedsConfirmation, restored.ReadVersion)
+	}
+	// One step, not a stack: the snapshot is consumed, so a second undo has nothing to go back to and must not silently redo the action.
+	if restored.PrevWaitingSince != nil {
+		t.Fatal("the snapshot was not consumed")
+	}
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "undo", 3, nil, now, scope); err != nil || status != 200 {
+		t.Fatalf("second undo should be a no-op, got status %d err %v", status, err)
+	}
+	var again FollowUp
+	if err := db.Where("id = ?", row.ID).First(&again).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !again.WaitingSince.UTC().Equal(waiting) || !again.NeedsConfirmation {
+		t.Fatal("a second undo changed state it had no snapshot for")
 	}
 }

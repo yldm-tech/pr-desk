@@ -25,7 +25,7 @@ type reviewTimelineEvent struct {
 
 func snapshotHumanFacts(facts *FollowUpFacts, username string, comments []activityComment, reviews []githubReview) {
 	latestKey := ""
-	add := func(at time.Time, key, body string) {
+	add := func(at time.Time, key, body, by string) {
 		// A submitted review with no prose still counts as human activity — an approval usually carries none — but it must not displace the excerpt of something said at the same instant. That tie is the ordinary shape of a review whose words are all in its inline comments, which are added before this loop reaches the review that carried them.
 		if at.Equal(facts.HumanAt) && body == "" && facts.HumanExcerpt != "" {
 			return
@@ -35,15 +35,17 @@ func snapshotHumanFacts(facts *FollowUpFacts, username string, comments []activi
 			latestKey = key
 			facts.HumanVersion = fmt.Sprintf("%s:%s:%x", at.UTC().Format(time.RFC3339Nano), key, sha256.Sum256([]byte(body)))
 			runes := []rune(body)
-			if len(runes) > 240 {
+			facts.HumanTruncated = len(runes) > 240
+			if facts.HumanTruncated {
 				runes = runes[:240]
 			}
 			facts.HumanExcerpt = string(runes)
+			facts.HumanBy = by
 		}
 	}
 	for _, c := range comments {
 		if c.AuthorIsHumanOther(username) {
-			add(latestTime(c.CreatedAt, c.UpdatedAt), fmt.Sprintf("comment:%s:%d", c.URL, c.ID), c.Body)
+			add(latestTime(c.CreatedAt, c.UpdatedAt), fmt.Sprintf("comment:%s:%d", c.URL, c.ID), c.Body, c.User.Login)
 		}
 	}
 	var myReview githubReview
@@ -55,7 +57,7 @@ func snapshotHumanFacts(facts *FollowUpFacts, username string, comments []activi
 				}
 			}
 		} else if r.State != "PENDING" && humanActor(r.User.Login, r.User.Type) {
-			add(r.SubmittedAt, fmt.Sprintf("review:%d:%s", r.ID, r.State), strings.TrimSpace(r.Body))
+			add(r.SubmittedAt, fmt.Sprintf("review:%d:%s", r.ID, r.State), strings.TrimSpace(r.Body), r.User.Login)
 		}
 	}
 	facts.MyReview, facts.MyReviewID = myReview.State, myReview.ID
