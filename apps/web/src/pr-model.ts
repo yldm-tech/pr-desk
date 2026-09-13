@@ -68,6 +68,8 @@ export function listParameters(filter: string, page: number, search = "", reposi
   if (search.trim()) q.set("search", search.trim());
   // The two states only the author can clear — a merge conflict and a red build — were the only ones the table could not filter to, while listPRs has honoured `attention=true` since it was written (apps/api/main.go) with the same predicate the Blocked stat tile counts.
   if (filter === "Blocked") q.set("attention", "true");
+  // The other half of the honest pair: the default view is open and unmerged, and this is the only way to reach what the reader actually finished.
+  else if (filter === "Merged") q.set("merged", "true");
   else if (filter !== "All") {
     q.set("state", "open");
     const states: Record<string, string> = { "Review requested": "review_requested", "Changes requested": "changes_requested", Approved: "approved" };

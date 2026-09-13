@@ -1,5 +1,5 @@
 import { apiURL } from "./api-url";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { OverviewSkeleton, AccessSkeleton } from "./LoadingSkeleton";
 import { useMemo, useEffect, useRef, useState } from "react";
 import Skeleton from "react-loading-skeleton";
@@ -24,6 +24,7 @@ import {
   outcomesLegend,
   outcomesRing,
   overviewPage,
+  overviewSectionHeading,
   panelDescription,
   panelHeading,
   panelKicker,
@@ -310,9 +311,10 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   );
   const states = useMemo(
     () => [
-      { label: t("merged"), value: s.merged, color: "var(--accent)", share: percentage(s.merged) },
-      { label: t("openStatus"), value: s.open, color: "var(--warning)", share: percentage(s.open) },
-      { label: t("closed"), value: s.closed, color: "var(--chart-other)", share: percentage(s.closed) },
+      // Merged and open now name lists the reader can open: the default pull request route is open-and-unmerged, and /merged replaces that default rather than intersecting with it. Closed has no route of its own, so it stays a plain row instead of pointing somewhere that would answer with the wrong set.
+      { label: t("merged"), value: s.merged, color: "var(--accent)", share: percentage(s.merged), to: "/merged" },
+      { label: t("openStatus"), value: s.open, color: "var(--warning)", share: percentage(s.open), to: "/pull-requests" },
+      { label: t("closed"), value: s.closed, color: "var(--chart-other)", share: percentage(s.closed), to: undefined },
     ],
     [s, t, i18n.resolvedLanguage],
   );
@@ -334,6 +336,8 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
   );
   return (
     <section className={`${overviewPage} @container/overview`} aria-label={t("achievements")}>
+      {/* The name of the retrospective, where it belongs: above the retrospective. The page's own h1 names the job now. */}
+      <h2 className={overviewSectionHeading}>{t("achievements")}</h2>
       <div className={`${achievementTop} grid grid-cols-1 @row/overview:grid-cols-2`}>
         <article className={achievementScore}>
           <div className={scoreLabel}>
@@ -379,7 +383,7 @@ function Achievements({ data, visibility }: { data: Data; visibility: string }) 
               {states.map((state) => (
                 <li key={state.label}>
                   <span className={legendDot} style={{ backgroundColor: state.color }} />
-                  <span>{state.label}</span>
+                  {state.to ? <Link to={state.to}>{state.label}</Link> : <span>{state.label}</span>}
                   <strong>{number(state.value)}</strong>
                 </li>
               ))}

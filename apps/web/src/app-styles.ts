@@ -28,9 +28,12 @@ export const overviewAside = "border-[var(--border)]";
 // Base is the phone top bar: a sticky two-column grid holding the brand, the action cluster and a full-width nav strip underneath. It is sticky rather than static because the list below runs to thousands of pixels and there is no bottom tab bar, no back-to-top and no second copy of the navigation — scrolling it away costs phone users a capability desktop users keep. From `shell` up it is the 208px column instead, and `w-52` is 13rem, which is 208px exactly. `short` folds the bar back into one row: a landscape phone is 390px tall and a two-row bar plus the page header spent over half of it on chrome.
 export const sidebar = [
   "sticky top-0 z-20 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 self-start overflow-visible border-b bg-[var(--surface)] p-4 [&>*]:shrink-0",
+  // With viewport-fit=cover the top bar reaches under the notch and the sidebar reaches under a landscape cutout, so each edge it actually touches pairs its padding with the matching inset. env() is 0px without a cutout, so max() leaves every other device exactly where it was.
+  "pt-[max(1rem,env(safe-area-inset-top))] pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]",
   // Below `roomy` the two tracks swap roles. An `auto` action track takes its max-content width — 271px for the three labelled controls, which does not change with the viewport — so on a 320px screen the `1fr` brand track absorbs the entire shortfall and the wordmark collapses to a 5px sliver. Giving the brand the `auto` track (a 44px mark, wordmark hidden) and the actions `minmax(0,1fr)` makes the cluster the thing that compresses, which it can do: its labels wrap.
   "max-roomy:grid-cols-[auto_minmax(0,1fr)]",
   "shell:flex shell:h-dvh shell:w-52 shell:shrink-0 shell:flex-col shell:gap-0 shell:overflow-y-auto shell:border-r shell:border-b-0 shell:px-3 shell:py-7 shell:[overscroll-behavior:contain]",
+  "shell:pt-[max(1.75rem,env(safe-area-inset-top))] shell:pb-[max(1.75rem,env(safe-area-inset-bottom))] shell:pl-[max(0.75rem,env(safe-area-inset-left))]",
   "wide:px-[18px]",
   "short:grid-cols-[auto_1fr_auto] short:gap-2 short:p-2",
 ].join(" ");
@@ -61,11 +64,12 @@ export const navButton = (active: boolean) => (active ? `${navButtonBase} bg-[va
 // The three shell actions: a row in the top bar's `auto` track, a stack at the bottom of the sidebar. Below `roomy` they render icon-above-label rather than icon-only — a bare Building2 glyph whose only label is a `title` tooltip is unreadable on a touch device, which never hovers, and the labels are what stopped the cluster from starving the brand column.
 export const sidebarBottom = [
   "col-start-2 row-start-1 m-0 flex items-center gap-2 pt-0 [&>*]:min-w-0",
-  "max-roomy:gap-3 max-roomy:[&>*]:flex-col max-roomy:[&>*]:items-center max-roomy:[&>*]:gap-0.5 max-roomy:[&>*]:px-1.5 max-roomy:[&>*]:text-center max-roomy:[&>*]:text-[length:0.6875rem] max-roomy:[&_span]:wrap-anywhere",
+  "max-roomy:gap-2 max-roomy:[&>*]:flex-col max-roomy:[&>*]:items-center max-roomy:[&>*]:gap-0.5 max-roomy:[&>*]:px-1 max-roomy:[&>*]:text-center max-roomy:[&>*]:text-[length:0.6875rem] max-roomy:[&_span]:wrap-anywhere",
+  // `wrap-anywhere` is the fallback, not the plan: it only breaks mid-word when the longest word cannot fit the track at all. At 320px an equal third of the row leaves about 57px of text after the old gap-3/px-1.5, and English "Organization" needs roughly 66px at 11px, so it broke as "Organizati on". Reclaiming the 8px those two cost buys enough for every label in all five locales to break at a space instead.
   // The children carry their own `pointer-coarse:min-w-11`, but `[&>*]:min-w-0` above is a child selector and outranks a class on the child itself, so the floor has to be restated here at the same specificity to survive. It only shows up in a locale whose label is short enough to leave the button under 44px — Japanese 設定 measures 36px wide where English "Settings" does not.
   "pointer-coarse:[&>*]:min-w-11",
-  // Equal tracks rather than content-proportional ones. Sharing the row by content length lets "Organization access" take what "Settings" needs, and `wrap-anywhere` then breaks the short label mid-word into "Settin gs"; an equal third is wide enough for every label in every locale to break at a space instead.
-  "max-roomy:[&>*]:basis-0 max-roomy:[&>*]:grow",
+  // Equal tracks rather than content-proportional ones, with a floor that is allowed to push an action onto a second line. Sharing the row by content length lets "Organization access" take what "Settings" needs and `wrap-anywhere` then splits the short label into "Settin gs"; equal thirds fix that but at 320px a third is 62px, and Spanish "organización" needs about 70px at 11px, so the long label split instead. A 5rem floor means three actions no longer fit one row at that width (3x80 plus two 8px gaps exceeds the 232px the cluster gets) and the last one wraps, which costs about 20px of height only where it is needed and gives every label in every locale room to break at a space.
+  "max-roomy:flex-wrap max-roomy:[&>*]:basis-20 max-roomy:[&>*]:grow",
   "shell:mt-auto shell:block shell:pt-6",
   "short:col-start-3",
 ].join(" ");
@@ -82,7 +86,7 @@ export const syncButton =
 
 export const spinning = "animate-[spin_0.9s_linear_infinite] motion-reduce:animate-none";
 
-export const skipLink = "fixed top-3 left-3 z-[200] rounded-lg bg-[var(--accent-text)] px-4 py-2.5 text-[var(--surface)] no-underline [transform:translateY(-160%)] focus:[transform:translateY(0)]";
+export const skipLink = "fixed top-[max(0.75rem,env(safe-area-inset-top))] left-[max(0.75rem,env(safe-area-inset-left))] z-[200] rounded-lg bg-[var(--accent-text)] px-4 py-2.5 text-[var(--surface)] no-underline [transform:translateY(-160%)] focus:[transform:translateY(0)]";
 
 export const pageHeader = ["grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center justify-between gap-2", "@max-row/dashboard:@split/dashboard:gap-3", "@row/dashboard:gap-x-5 @row/dashboard:gap-y-3"].join(" ");
 
@@ -152,7 +156,10 @@ export const prTitle = "col-start-1 row-start-1 flex items-start gap-[11px] [&>s
 export const prTitleLink =
   "block text-[length:var(--text-body)] leading-[1.6] font-semibold text-[var(--foreground)] no-underline [overflow-wrap:anywhere] hover:text-[var(--accent-text)] hover:underline focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)]";
 
-export const prRepository = "min-w-0 text-[length:0.75rem] leading-[1.6] text-[var(--muted)] no-underline [overflow-wrap:anywhere] hover:text-[var(--accent-text)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)]";
+// A button now rather than a link, so the browser defaults it would otherwise inherit are spelled out: a bare `text-left` and the transparent background are what keep it reading as the quiet caption it was.
+// It also takes a real tap target, which the anchor it replaced did not need. The matrix exempts an unpadded anchor under WCAG 2.5.8, whose carve-out is for a target "constrained by the line-height of non-target text" — a link inside a sentence. This is a control sitting alone in its own cell, so the exemption does not apply to it and a 19px hit box would be the defect the sweep exists to catch. Below `row` the cell already occupies its own line, so the height costs the layout nothing.
+export const prRepository =
+  "min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left text-[length:0.75rem] leading-[1.6] text-[var(--muted)] no-underline [overflow-wrap:anywhere] hover:text-[var(--accent-text)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)] pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center";
 
 // `col-end-4` and not `col-span-1`: the base state is the `grid-column` shorthand, and only a longhand end is guaranteed to unset the `-1` it wrote.
 export const prStatus = "col-span-full row-start-3 flex flex-wrap items-start gap-1.5 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1";
@@ -194,7 +201,7 @@ export const syncFeedback =
   "mx-0 mt-0 mb-[18px] flex items-start justify-between gap-4 rounded-[9px] border border-[var(--success-border)] bg-[var(--success-soft)] px-4 py-3 text-[length:0.75rem] leading-[1.6] text-[var(--success)] [&_button]:grid [&_button]:cursor-pointer [&_button]:place-items-center [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-[length:1.25rem] [&_button]:leading-none [&_button]:text-inherit pointer-coarse:[&_button]:-m-2 pointer-coarse:[&_button]:min-h-11 pointer-coarse:[&_button]:min-w-11";
 
 // The success notice floats; the failure notice stays in the flow.
-export const syncFeedbackFloating = "fixed right-5 bottom-5 z-[25] m-0 w-[min(420px,calc(100vw-40px))] shadow-[0_8px_28px_var(--shadow)]";
+export const syncFeedbackFloating = "fixed right-[max(1.25rem,env(safe-area-inset-right))] bottom-[max(1.25rem,env(safe-area-inset-bottom))] z-[25] m-0 w-[min(420px,calc(100vw-40px))] shadow-[0_8px_28px_var(--shadow)]";
 
 // Colour only. This used to hide the Updated cell below 900px, which took the list's one recency signal — and the full timestamp in its `title` — away from every phone, every tablet in portrait and every desktop at 200% zoom.
 export const muted = "text-[var(--muted)]";
