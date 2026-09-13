@@ -35,6 +35,7 @@ func TestFollowUpReadHandledSnoozeAndNewFeedback(t *testing.T) {
 	if events := row.advanceFacts(facts, now); len(events) != 1 {
 		t.Fatalf("new comment must notify even snoozed: %v", events)
 	}
+	// Still "action" while snoozed, and that is exactly what the version gate buys: the new comment bumped Version past ReadVersion, so the mute does not cover it and the snooze cannot bury activity the user has not seen.
 	assertState("action")
 	row.NeedsConfirmation = false
 	facts.Conflict = true
@@ -42,7 +43,8 @@ func TestFollowUpReadHandledSnoozeAndNewFeedback(t *testing.T) {
 	assertState("action")
 	row.ReadVersion = row.Version
 	row.HandledVersion = row.Version
-	assertState("action")
+	// Was "action" before the snooze became effective; now the conflict is both snoozed and seen (Version <= ReadVersion), so it is muted into "waiting". That is the behaviour being bought: a conflict cannot be cleared by any verb, since presentation re-derives it from synced facts on every read, so deferring it is the only way to take it off today's list.
+	assertState("waiting")
 	facts.Conflict = false
 	row.advanceFacts(facts, now)
 	assertState("waiting")
@@ -52,6 +54,40 @@ func TestFollowUpReadHandledSnoozeAndNewFeedback(t *testing.T) {
 	facts.Closed = true
 	row.advanceFacts(facts, now)
 	assertState("archived")
+}
+
+// The mute is deliberately narrow: it covers what the user had already seen and nothing else. This is the guarantee that makes muting a blocked PR safe to offer at all, so it is asserted on its own rather than left as a step inside the lifecycle test.
+func TestSnoozeMutesOnlySeenWorkAndNewConflictBreaksThrough(t *testing.T) {
+	now := time.Date(2026, 9, 11, 0, 0, 0, 0, time.UTC)
+	facts := FollowUpFacts{Role: "authored", CreatedAt: now.Add(-2 * 24 * time.Hour)}
+	var row FollowUp
+	row.advanceFacts(facts, now)
+	// Snooze as applyFollowUpAction writes it: the reminder plus the read mark that makes the version gate satisfiable.
+	until := now.Add(3 * 24 * time.Hour)
+	row.ReadVersion = row.Version
+	row.SnoozedUntil = &until
+	if state, reasons := row.presentation(now, 7); state != "waiting" || len(reasons) != 0 {
+		t.Fatalf("seen work should mute: state=%s reasons=%v", state, reasons)
+	}
+	// A conflict discovered after the snooze bumps Version past ReadVersion, so it is new to the user and the mute must not cover it.
+	facts.Conflict = true
+	row.advanceFacts(facts, now.Add(time.Hour))
+	state, reasons := row.presentation(now.Add(time.Hour), 7)
+	if state != "action" {
+		t.Fatalf("a conflict arriving after the snooze was buried: state=%s", state)
+	}
+	if len(reasons) != 1 || reasons[0] != "conflict" {
+		t.Fatalf("reasons=%v want [conflict]", reasons)
+	}
+	// Reading it puts it back under the still-live snooze, so the reminder survives the interruption instead of being spent by it.
+	row.ReadVersion = row.Version
+	if state, _ := row.presentation(now.Add(time.Hour), 7); state != "waiting" {
+		t.Fatalf("marking the new conflict read did not restore the mute: state=%s", state)
+	}
+	// Once the reminder falls due the mute expires and the conflict is back to needing action, which is the point of setting a reminder rather than dismissing the item.
+	if state, reasons := row.presentation(until.Add(time.Minute), 7); state != "action" || reasons[0] != "conflict" {
+		t.Fatalf("an expired snooze must stop muting: state=%s reasons=%v", state, reasons)
+	}
 }
 
 func TestReviewDecisionLifecycle(t *testing.T) {

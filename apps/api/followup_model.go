@@ -201,6 +201,10 @@ func (f FollowUp) presentation(now time.Time, waitDays int) (string, []string) {
 			reasons = append(reasons, "checks_failed")
 		}
 	}
+	// A live snooze outranks the reasons, otherwise deferring the two things worth deferring — a merge conflict and a red build — would write the column and change nothing observable, because both reasons are re-derived from synced facts on every read and no verb clears them. The version gate keeps the mute honest: advanceFacts bumps Version for every genuinely new reason, so anything that arrives after the snooze breaks straight back through to "action" and only what the user had already seen stays muted. The reasons ride along so the muted card can still say why it is muted.
+	if f.SnoozedUntil != nil && now.Before(*f.SnoozedUntil) && f.Version <= f.ReadVersion {
+		return "waiting", reasons
+	}
 	if len(reasons) > 0 {
 		return "action", reasons
 	}

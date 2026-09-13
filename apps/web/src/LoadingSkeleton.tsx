@@ -25,17 +25,50 @@ import {
   tableSurface,
   toolbar,
 } from "./app-styles";
-import { achievementBottom, achievementOutcomes, achievementPanel, achievementScore, achievementTop, authorizedAccounts, outcomesContent, scoreSecondary } from "./overview-styles";
+import { achievementBottom, achievementOutcomes, achievementPanel, achievementScore, achievementTop, authorizedAccounts, outcomesContent, panelHeading, scoreSecondary } from "./overview-styles";
+import { followUpCounts, followUpPriority, followUpSummary } from "./followup-styles";
 import { activityComment, activitySection, activityThread } from "./activity-styles";
 import { repositoryAction, repositoryControls, repositoryIdentity, repositoryListCaption, repositoryListPanel, repositoryNumber, repositoryRow, repositoryRows, repositorySummary, repositorySummaryItem } from "./repository-styles";
 import { accountTrigger, profileBio, profileIdentity, profileMetadata, profileStats } from "./profile-styles";
 import "react-loading-skeleton/dist/skeleton.css";
 import { useTranslation } from "react-i18next";
 
-export function OverviewSkeleton({ controls = false }: { controls?: boolean }) {
+// The triage panel's own shape: four count tiles over five priority rows, on the same grids the loaded panel uses. It exists so the panel reserves its height instead of being inserted above the dashboard once its data lands, which is the shove that made the landing page jump on every cold load. Exported because the panel's own pending branch wants it too — a ~400px panel replaced by one line of text produces the identical shift on every re-entry with a cold query.
+export function FollowUpSummarySkeleton() {
+  return (
+    <LoadingFrame className={followUpSummary}>
+      <div className={followUpCounts}>
+        {[0, 1, 2, 3].map((key) => (
+          <a key={key}>
+            <Skeleton width="70%" height={13} />
+            <Skeleton width={36} height={28} />
+          </a>
+        ))}
+      </div>
+      <div className={panelHeading}>
+        <Skeleton width={150} height={17} />
+        <Skeleton width={110} height={13} />
+      </div>
+      <ul className={followUpPriority}>
+        {[0, 1, 2, 3, 4].map((key) => (
+          <li key={key}>
+            <a>
+              <Skeleton width={key % 2 ? "88%" : "72%"} height={15} />
+              <Skeleton width={130} height={12} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </LoadingFrame>
+  );
+}
+
+export function OverviewSkeleton({ controls = false, followUp = false }: { controls?: boolean; followUp?: boolean }) {
   const { t } = useTranslation();
   return (
     <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)">
+      {/* `followUp` is off for the chart Suspense fallback and on for the whole-page one. The panel now renders outside that boundary, so drawing its placeholder there too would paint a second, fake panel under the real one and jump the page upwards when the chart chunk arrived — the very defect the hoist removes. */}
+      {followUp && <FollowUpSummarySkeleton />}
       <div className="overview-skeleton @container/overview" role="status" aria-label={t("loading")} aria-busy="true">
         <div aria-hidden="true">
           {controls && (
@@ -302,7 +335,8 @@ export function StatsSkeleton() {
 }
 
 export function PageSkeleton({ page }: { page: string }) {
-  if (page === "Overview") return <OverviewSkeleton controls />;
+  // The whole landing route is a placeholder here, panel included, so this is the one caller that has to stand in for it as well.
+  if (page === "Overview") return <OverviewSkeleton controls followUp />;
   if (page === "Repositories")
     return (
       <div className="grid gap-[22px]">

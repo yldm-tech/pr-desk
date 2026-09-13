@@ -12,8 +12,9 @@ test("overview preserves global follow-ups when contribution year changes", asyn
   await page.screenshot({ path: testInfo.outputPath("overview.png"), fullPage: true });
   await page.getByRole("tab", { name: "2025", exact: true }).click();
   await expect(page.getByTestId("priority-list")).toContainText("Review storage migration");
-  await page.getByRole("link", { name: "View all follow-ups" }).click();
-  await expect(page.getByTestId("follow-up-card")).toHaveCount(2);
+  // The link used to read "View all follow-ups" whether there were five or forty, and it now states the total. Its destination is the workspace's default view, which is the badge's set — action plus follow_up — rather than every non-archived row, so four of the six fixtures land there.
+  await page.getByRole("link", { name: "View all 4 follow-ups" }).click();
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(4);
 });
 
 test("follow-up reasons are coloured by what they ask for", async ({ page }, testInfo) => {
@@ -31,7 +32,8 @@ test("follow-up reasons are coloured by what they ask for", async ({ page }, tes
           reasons: entries,
           unread: false,
           excerpt: "",
-          waiting_since: "2026-09-01T00:00:00Z",
+          // The priority list is sorted oldest-first inside the server's rank now, so identical timestamps would leave the nth() indices below at the mercy of sort stability. Ascending by index pins the reading order to the array order the tones are declared in.
+          waiting_since: `2026-08-0${index + 1}T00:00:00Z`,
           archived_at: null,
           pr: { id: index + 1, repo: "fixture/calendar", number: index + 1, title: `Reason sample ${index + 1}`, url: `https://github.com/fixture/calendar/pull/${index + 1}` },
         })),
@@ -55,17 +57,18 @@ test("follow-up reasons are coloured by what they ask for", async ({ page }, tes
   await page.screenshot({ path: testInfo.outputPath("followup-reason-tones.png"), fullPage: true });
 });
 
+// Every action button now carries an aria-label of the form "{label} — {repo} #{number}", which replaces the accessible name, so the old `exact: true` matches on the visible label no longer resolve. The label is the prefix, so a regex anchored at the start is the same assertion without pinning the repository into it. The card is addressed by title rather than by being the only one on the route: this filter holds two authored action items now, and it is the other one that proves Handled is withheld where it would do nothing.
 test("read leaves task pending; explicit handling moves it to waiting", async ({ page }) => {
   await page.goto("/#/attention?role=authored&status=action");
-  const card = page.getByTestId("follow-up-card");
+  const card = page.getByTestId("follow-up-card").filter({ hasText: "Handle timezone boundaries" });
   await expect(card).toHaveCount(1);
-  await page.getByRole("button", { name: "Mark read", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Mark read", exact: true })).toHaveCount(0);
+  await card.getByRole("button", { name: /^Mark read/ }).click();
+  await expect(card.getByRole("button", { name: /^Mark read/ })).toHaveCount(0);
   await expect(card).toHaveCount(1);
-  await page.getByRole("button", { name: "Handled · wait for others", exact: true }).click();
+  await card.getByRole("button", { name: /^Handled · wait for others/ }).click();
   await expect(card).toHaveCount(0);
   await page.getByRole("combobox", { name: "Status", exact: true }).selectOption("waiting");
-  await expect(card).toContainText("Handle timezone boundaries");
+  await expect(page.getByTestId("follow-up-card").filter({ hasText: "Handle timezone boundaries" })).toHaveCount(1);
 });
 
 // The hand-rolled 390x844 viewport and the document-level overflow check that used to live here are gone: this file runs in the `desktop` project only, and layout.spec.ts now walks this route at twenty-four viewports with a per-element sweep that also sees content clipped by an `overflow: hidden` ancestor, which `documentElement.scrollWidth` never could. What is left here is the behaviour, which is width-independent.
@@ -188,9 +191,10 @@ test("the repository attention link keeps its repository filter", async ({ page 
   await expect(page.getByTestId("follow-up-card")).toHaveCount(1);
   await expect(page.getByTestId("follow-up-card")).toContainText("Review storage migration");
   await expect(page.getByTestId("repository-chip")).toContainText("fixture/reviewer");
-  // The chip clears the filter without leaving the view.
-  await page.getByRole("button", { name: /fixture\/reviewer/ }).click();
-  await expect(page.getByTestId("follow-up-card")).toHaveCount(2);
+  // The chip clears the filter without leaving the view. Addressed by its own label rather than by the repository name, which every action button on a card from that repository now carries too.
+  await page.getByRole("button", { name: "Clear the fixture/reviewer filter" }).click();
+  // Clearing the repository leaves the default status filter, which is the badge's set rather than everything non-archived: four of the six fixtures.
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(4);
   await expect(page.getByTestId("repository-chip")).toHaveCount(0);
 });
 
@@ -312,9 +316,9 @@ test("the revoke confirmation takes the focus and hands it back on Escape", asyn
 
 test("a card action is announced and does not strand the focus", async ({ page }) => {
   await page.goto("/#/attention?role=authored&status=action");
-  const card = page.getByTestId("follow-up-card");
+  const card = page.getByTestId("follow-up-card").filter({ hasText: "Handle timezone boundaries" });
   await expect(card).toHaveCount(1);
-  const handled = card.getByRole("button", { name: "Handled · wait for others", exact: true });
+  const handled = card.getByRole("button", { name: /^Handled · wait for others/ });
   await handled.focus();
   await handled.click();
   // The card is removed, so the button that had the focus is gone.
@@ -323,6 +327,130 @@ test("a card action is announced and does not strand the focus", async ({ page }
   // Focus must land somewhere in the workspace rather than on the body.
   const stranded = await page.evaluate(() => document.activeElement === document.body);
   expect(stranded).toBe(false);
+});
+
+// The badge promised a small, finite amount of work and opened a page that showed the entire inventory, so the number it nagged with could not be cleared in one pass and nothing on screen said where the urgent items stopped. These two things are now the same set by construction on both sides — the server counts action and follow_up, the default filter selects action and follow_up — and this is the assertion that keeps them that way.
+test("the default workspace shows exactly what the sidebar badge counts", async ({ page }) => {
+  await page.goto("/#/attention");
+  const badge = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("button", { name: /Needs attention/ })
+    .locator("b");
+  await expect(badge).toHaveText("4");
+  // The group heading and the card title are both level 3, so the headings are picked out by the count only a group heading carries.
+  const headings = page.getByRole("heading", { level: 3 }).filter({ hasText: /\(\d+\)$/ });
+  await expect(headings).toHaveText(["Needs my action (3)", "Time to follow up (1)"]);
+  const counts = (await headings.allTextContents()).map((text) => Number(/\((\d+)\)$/.exec(text)![1]));
+  expect(
+    counts.reduce((sum, count) => sum + count, 0),
+    "the group counts have to sum to the badge",
+  ).toBe(Number(await badge.textContent()));
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(4);
+});
+
+// A sighted user's only confirmation used to be a screen-reader-only live region, which is to say none. Both halves are asserted together on purpose: a visible strip that replaced the live region, or one that was not aria-hidden, would each be a regression — the first silences assistive technology, the second announces every action twice.
+test("an action is confirmed once on screen and once to assistive technology", async ({ page }) => {
+  await page.goto("/#/attention?role=authored&status=action");
+  await expect(page.getByRole("heading", { name: "Needs my action (2)" })).toBeVisible();
+  await page
+    .getByTestId("follow-up-card")
+    .filter({ hasText: "Handle timezone boundaries" })
+    .getByRole("button", { name: /^Handled · wait for others/ })
+    .click();
+
+  const message = "Handled · wait for others: Handle timezone boundaries";
+  const carriers = page.getByText(message, { exact: true });
+  await expect(carriers).toHaveCount(2);
+  const shapes = await carriers.evaluateAll((nodes) => nodes.map((node) => ({ hidden: !!node.closest('[aria-hidden="true"]'), width: node.getBoundingClientRect().width })));
+  // `sr-only` is a 1px box, so the width is what tells the two copies apart without reaching for a class name.
+  expect(
+    shapes.filter((shape) => !shape.hidden && shape.width <= 2),
+    "the sr-only live region still carries the sentence",
+  ).toHaveLength(1);
+  expect(
+    shapes.filter((shape) => shape.hidden && shape.width > 40),
+    "a visible strip carries it too, and is hidden from the accessibility tree so it is not announced twice",
+  ).toHaveLength(1);
+  await expect(page.getByRole("status").filter({ hasText: message })).toBeAttached();
+  // The strip auto-dismisses, so the count in the heading is the confirmation that survives being missed.
+  await expect(page.getByRole("heading", { name: "Needs my action (1)" })).toBeVisible();
+});
+
+// Every fact below has been in the payload since the endpoint existed — followUpView embeds the whole pull-request row — and the card rendered none of it, so the one page where a PR's state can be changed carried almost no state. The second half is the other side of the same coin: `handled` only clears the confirmation, while a conflict and a red build are re-derived from GitHub on every read, so on that card the button posted successfully and changed nothing.
+test("a card states the pull request's own facts and withholds a verb that would do nothing", async ({ page }) => {
+  await page.goto("/#/attention?role=authored&status=action");
+  const open = page.getByTestId("follow-up-card").filter({ hasText: "Handle timezone boundaries" });
+  await expect(open.getByText("Changes requested", { exact: true })).toBeVisible();
+  await expect(open.getByText("CI: Failure", { exact: true })).toBeVisible();
+  await expect(open.getByText("Conflict", { exact: true })).toBeVisible();
+  await expect(open.getByRole("button", { name: /^Handled · wait for others/ })).toHaveCount(1);
+
+  const blocked = page.getByTestId("follow-up-card").filter({ hasText: "Rebase the storage migration" });
+  await expect(blocked).toContainText("Only a new push can clear this.");
+  await expect(blocked.getByRole("button", { name: /^Handled · wait for others/ })).toHaveCount(0);
+  // The deferral is still offered: it is the one verb that can move a card GitHub is holding.
+  await expect(blocked.getByText("Remind me later")).toBeVisible();
+});
+
+test("the ready-to-merge and draft facts are stated in both places that show a pull request", async ({ page }) => {
+  await page.goto("/#/attention");
+  const ready = page.getByTestId("follow-up-card").filter({ hasText: "Ship the release notes" });
+  await expect(ready.getByText("Approved", { exact: true })).toBeVisible();
+  await expect(ready.getByText("Ready to merge", { exact: true })).toBeVisible();
+
+  await page.goto("/#/attention?status=draft");
+  await expect(page.getByTestId("follow-up-card").filter({ hasText: "Prototype the digest" }).getByText("Draft", { exact: true })).toBeVisible();
+
+  await page.goto("/#/pull-requests");
+  const row = page.getByRole("row").filter({ hasText: "Prototype the digest" });
+  await expect(row.getByText("Draft", { exact: true })).toBeVisible();
+  // A draft's "pending" only means nobody has reviewed something nobody was asked to review, and a repository without a pipeline has no check result to report.
+  await expect(row).not.toContainText("Awaiting review");
+  await expect(row).not.toContainText("CI:");
+});
+
+// Snooze was write-only: the field was served, stripped by the client schema, rendered nowhere and cancellable by nothing, so a mis-tapped reminder buried a PR with no way back. `unsnooze` has been accepted by the API all along and the browser had never once sent it.
+test("a muted follow-up shows its reminder and can have it cancelled", async ({ page }) => {
+  await page.goto("/#/attention?status=all");
+  // The server reports a muted row as `waiting`; the group is the browser's finer reading of a state it agrees with, and it is collapsed because a deferred item is not what the reader came for.
+  const group = page.locator("summary").filter({ hasText: "Muted (1)" });
+  await expect(group).toBeVisible();
+  await group.click();
+  const card = page.getByTestId("follow-up-card").filter({ hasText: "Tune the query planner" });
+  await expect(card).toContainText("Muted until");
+  const posted = page.waitForRequest((request) => request.url().endsWith("/follow-ups/4") && request.method() === "POST");
+  await card.getByRole("button", { name: /^Cancel reminder/ }).click();
+  expect((await posted).postDataJSON()).toEqual({ action: "unsnooze", version: 1 });
+  // Cancelling puts the row back among the ordinary waiting items, with no reminder left to see.
+  await expect(page.getByTestId("follow-up-card").filter({ hasText: "Tune the query planner" })).not.toContainText("Muted until");
+  await expect(page.locator("summary").filter({ hasText: /^Muted \(/ })).toHaveCount(0);
+});
+
+// A merge conflict and a red build are the two states only the author can clear, and they were the only ones the table could not be filtered to, while listPRs has honoured `attention=true` since it was written. The tile and the pill are the same SQL predicate, so this asserts the number and its destination are the same question.
+test("the blocked filter asks the list endpoint for the rows the tile counts", async ({ page }) => {
+  const requested = page.waitForRequest((request) => request.url().includes("/api/v1/pull-requests?"));
+  await page.goto("/#/blocked");
+  expect(new URL((await requested).url()).searchParams.get("attention")).toBe("true");
+  await expect(page.getByRole("button", { name: "Blocked", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  // The third stat tile counts the same rows and is now a link to them; it used to be an inert "Conflicts" number with no view behind it.
+  await page.goto("/#/pull-requests");
+  await page.getByRole("link", { name: /^Blocked/ }).click();
+  expect(page.url()).toContain("#/blocked");
+});
+
+// Two lists of the same pull requests with no bridge between them: the table could not say whether a row was already handled or already snoozed, and reading every comment on a PR left the workspace still insisting it was unread.
+test("the table carries the follow-up state, and reading the thread records it", async ({ page }) => {
+  await page.goto("/#/pull-requests");
+  const row = page.getByRole("row").filter({ hasText: "Handle timezone boundaries" });
+  await expect(row.getByTestId("row-follow-up")).toHaveText("Needs my action");
+  await expect(row.getByTestId("unread-dot")).toBeVisible();
+  const posted = page.waitForRequest((request) => request.url().endsWith("/follow-ups/1") && request.method() === "POST");
+  await row.getByRole("button", { name: "Unread activity on #17" }).click();
+  expect((await posted).postDataJSON()).toMatchObject({ action: "read" });
+  // The decision can be recorded here rather than on a second trip to the workspace.
+  await expect(page.getByRole("button", { name: /^Handled · wait for others/ })).toBeVisible();
+  await expect(row.getByTestId("unread-dot")).toHaveCount(0);
 });
 
 test("the sync dismiss button is not named after the activity panel", async ({ page }) => {

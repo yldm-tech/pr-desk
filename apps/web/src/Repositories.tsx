@@ -190,8 +190,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
                       </Link>
                       <div className={repositoryNumber}>
                         <span className={repositoryMobileLabel}>{t("navAttention")}</span>
+                        {/* Blocked, not the follow-up workspace: needs_attention is a query over stored columns and listPRs?attention=true is the same predicate over the same authored open rows, so the number and its destination cannot disagree. The follow-up state that /attention filters on is moved by read, handled and snooze, and includes reviewer rows this count never had. */}
                         {repo.needs_attention > 0 ? (
-                          <Link className={repositoryAttention} to={"/attention?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
+                          <Link className={repositoryAttention} to={"/blocked?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
                             {repo.needs_attention.toLocaleString(i18n.resolvedLanguage)}
                           </Link>
                         ) : (

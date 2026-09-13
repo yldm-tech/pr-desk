@@ -43,8 +43,34 @@ test("unknown dates and absent counts have explicit fallbacks", () => {
 test("pagination and filters are sent to the backend", async () => {
   const { listParameters, parsePRPage } = await import("./pr-model.ts");
   assert.equal(new URLSearchParams(listParameters("All", 1)).get("offset"), "50");
-  assert.equal(new URLSearchParams(listParameters("Needs attention", 0)).get("attention"), "true");
   assert.equal(parsePRPage({ data: [row], total: 55 }).total, 55);
+});
+
+// The Blocked pill is the only route that reaches conflicted, changes-requested and failing PRs, and it reaches them through the attention parameter the API has always honoured. A review_status must not be sent with it, or the query narrows to one of the three.
+test("the Blocked filter asks the server for the attention set", async () => {
+  const { listParameters } = await import("./pr-model.ts");
+  const params = new URLSearchParams(listParameters("Blocked", 0));
+  assert.equal(params.get("attention"), "true");
+  assert.equal(params.has("review_status"), false);
+  assert.equal(new URLSearchParams(listParameters("Approved", 0)).has("attention"), false);
+  assert.equal(new URLSearchParams(listParameters("Approved", 0)).get("review_status"), "approved");
+});
+
+test("a draft is labelled a draft rather than awaiting review", () => {
+  const [draft, merged, closed] = parsePRList({
+    data: [
+      { ...row, draft: true, review_status: "pending" },
+      { ...row, draft: true, merged_at: "2026-01-01T00:00:00Z" },
+      { ...row, draft: true, state: "closed" },
+    ],
+    total: 3,
+  });
+  assert.equal(draft.status, "Draft");
+  assert.equal(draft.draft, true);
+  // An outcome outranks the draft flag: a draft that landed or was abandoned is not still a draft.
+  assert.equal(merged.status, "Merged");
+  assert.equal(closed.status, "Closed");
+  assert.equal(parsePRList({ data: [{ ...row, review_status: "pending" }], total: 1 })[0].status, "Awaiting review");
 });
 
 test("a cancelled authorization is reported once and removed from the URL", () => {
@@ -59,7 +85,7 @@ test("a search without OAuth flags is left exactly as it was", () => {
 
 test("repository filtering composes with attention, search and pagination", async () => {
   const { listParameters } = await import("./pr-model.ts");
-  const params = new URLSearchParams(listParameters("Needs attention", 2, "fix", "org/tool"));
+  const params = new URLSearchParams(listParameters("Blocked", 2, "fix", "org/tool"));
   assert.equal(params.get("repo"), "org/tool");
   assert.equal(params.get("attention"), "true");
   assert.equal(params.get("search"), "fix");

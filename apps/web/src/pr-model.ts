@@ -14,13 +14,16 @@ export const PRSchema = z.object({
   state: z.string().optional(),
   comments_count: z.number().optional(),
   has_conflicts: z.boolean().optional(),
+  // Served all along (PullRequest.Draft, apps/api/main.go) and dropped on the floor, which is why a work-in-progress nobody has been shown claimed to be awaiting review.
+  draft: z.boolean().optional(),
 });
 const listSchema = z.object({ data: z.array(PRSchema).nullable(), total: z.number() });
-const labels: Record<string, string> = { pending: "Awaiting review", review_requested: "Review requested", changes_requested: "Changes requested", approved: "Approved", open: "Open", closed: "Closed", merged: "Merged" };
+const labels: Record<string, string> = { pending: "Awaiting review", review_requested: "Review requested", changes_requested: "Changes requested", approved: "Approved", open: "Open", closed: "Closed", merged: "Merged", draft: "Draft" };
 
 export function parsePRList(body: unknown) {
   return (listSchema.parse(body).data ?? []).map((row) => {
-    const state = row.merged_at ? "merged" : row.state === "closed" ? "closed" : row.review_status || row.state || "open";
+    // Draft outranks the review status, because a draft's "pending" only means no review has been submitted on something nobody was asked to review. It does not outrank merged or closed: those are outcomes, and a draft that was closed is closed.
+    const state = row.merged_at ? "merged" : row.state === "closed" ? "closed" : row.draft ? "draft" : row.review_status || row.state || "open";
     const date = row.updated_at ? new Date(row.updated_at) : null;
     return {
       ...row,
@@ -63,7 +66,8 @@ export function listParameters(filter: string, page: number, search = "", reposi
   const q = new URLSearchParams({ limit: "50", offset: String(page * 50) });
   if (repository) q.set("repo", repository);
   if (search.trim()) q.set("search", search.trim());
-  if (filter === "Needs attention") q.set("attention", "true");
+  // The two states only the author can clear — a merge conflict and a red build — were the only ones the table could not filter to, while listPRs has honoured `attention=true` since it was written (apps/api/main.go) with the same predicate the Blocked stat tile counts.
+  if (filter === "Blocked") q.set("attention", "true");
   else if (filter !== "All") {
     q.set("state", "open");
     const states: Record<string, string> = { "Review requested": "review_requested", "Changes requested": "changes_requested", Approved: "approved" };
