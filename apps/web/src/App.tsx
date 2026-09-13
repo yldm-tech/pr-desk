@@ -7,6 +7,9 @@ import { projectVersion } from "./project";
 import { apiURL } from "./api-url";
 import { isChunkLoadError } from "./chunk-error";
 import { checkToneClass } from "./activity-model";
+import { factsSurvive, groupOf, handledIsUseful, reasonTone, type FollowUp } from "./followup-view";
+import { followUpErrorMessage, useFollowUpAction } from "./followup-actions";
+import { followUpReasonCompact } from "./followup-styles";
 import { emptyState, linkAction, secondaryAction } from "./action-styles";
 import {
   syncFeedback as syncFeedback_,
@@ -76,16 +79,25 @@ import React from "react";
 import { useQuery, useQueryClient, useMutation, keepPreviousData } from "@tanstack/react-query";
 
 import { GitPullRequest, GitMerge, MessageSquare, AlertTriangle, RefreshCw, Building2, Search, LayoutDashboard, Inbox, FolderGit2, Info, X, ExternalLink, Settings2 } from "lucide-react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { parsePRPage, listParameters, oauthBanner, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
-const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved" };
+const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved", Blocked: "/blocked" };
+// Every route the PR table serves, which is also the set the sidebar's Pull requests button returns to. Blocked belongs here or landing on it and clicking that button would send the reader somewhere else.
+const prListPaths = [filterPaths.All, filterPaths["Review requested"], filterPaths["Changes requested"], filterPaths.Approved, filterPaths.Blocked];
 function statusKey(status: string) {
-  return ({ Open: "openStatus", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict" } as Record<string, string>)[status] || status;
+  return (
+    ({ Open: "openStatus", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict", Draft: "draftStatus" } as Record<string, string>)[status] ||
+    status
+  );
 }
+// app-styles' pillTones has no Draft entry and that file is not this package's to edit, so the muted pair "Open" and "Awaiting review" already carry is restated here rather than leaving the draft pill with no skin at all.
+const draftPill = `${statusPill("Draft")} bg-[var(--surface-muted)] text-[var(--muted)]`;
+// A stat tile that names a set the table can show is a link to it. `stat` is a flex row, so the anchor only has to stop inheriting link colour and underline; "Merged this month" stays an inert div because listPRs hard-scopes every query to open, unmerged rows and answers merged=true with a guaranteed-empty predicate, and a tile that lies about its destination is worse than one that does nothing.
+const statLink = `${stat} text-[var(--foreground)] no-underline hover:border-[var(--accent-border)] hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] pointer-coarse:min-h-11`;
 function CrashFallback() {
   const { t } = useTranslation();
   return (
@@ -117,6 +129,45 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     return this.state.failed ? <CrashFallback /> : this.props.children;
   }
 }
+// A decision recorded from the table is the same decision recorded in the workspace: both post through useFollowUpAction, so there is one mutation, one optimistic prediction and one set of rules about which verbs can actually do something. Its own component because the hook cannot be called from a branch that exists only while the dialog is open, and because reading the thread is what marks the item read.
+function DialogFollowUpActions({ item }: { item: FollowUp }) {
+  const { t } = useTranslation();
+  const [feedback, setFeedback] = React.useState("");
+  const action = useFollowUpAction({
+    item,
+    onDone: (input) => {
+      if (input.action === "read") return;
+      const verb = input.action === "handled" ? t("followup.handled") : t("followup.snooze");
+      // Handled clears the confirmation but not a conflict or a red build, which presentation() re-derives from GitHub on every read. Saying so is what stops the reader tapping a button that already worked.
+      setFeedback(t("followup.announceAction", { action: verb, title: item.pr.title }) + (input.action === "handled" && factsSurvive(item) ? " " + t("followup.stillListed") : ""));
+    },
+    onFailed: (error) => setFeedback(followUpErrorMessage(error, t)),
+  });
+  const marked = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    // Reading every comment here is the demonstration that the item has been seen; without this the workspace went on insisting it was unread and the marker stopped meaning anything. Guarded by the id already posted for, because the invalidation this triggers re-renders with a fresh item object.
+    if (!item.unread || marked.current === item.id) return;
+    marked.current = item.id;
+    action.mutate({ action: "read" });
+  }, [action, item.id, item.unread]);
+  return (
+    <>
+      {feedback && (
+        <p className="basis-full text-[length:0.75rem] text-[var(--muted)]" role="status">
+          {feedback}
+        </p>
+      )}
+      {handledIsUseful(item) && (
+        <button className={secondaryAction} disabled={action.isBusy} onClick={() => action.mutate({ action: "handled" })}>
+          {t("followup.handled")}
+        </button>
+      )}
+      <button className={secondaryAction} disabled={action.isBusy} onClick={() => action.mutate({ action: "snooze", until: new Date(Date.now() + 3 * 86400000).toISOString() })}>
+        {t("followup.snooze")} · {t("followup.days", { count: 3 })}
+      </button>
+    </>
+  );
+}
 export default function App() {
   const { t } = useTranslation();
   const [oauthError, setOauthError] = React.useState(() => oauthBanner(location.search).error);
@@ -140,7 +191,7 @@ export default function App() {
   const lastPRRoute = React.useRef(filterPaths.All);
   React.useEffect(() => {
     visitedRoutes.current.set(route.pathname, route.search);
-    if (["/pull-requests", "/review-requested", "/changes-requested", "/approved"].includes(route.pathname)) lastPRRoute.current = route.pathname;
+    if (prListPaths.includes(route.pathname)) lastPRRoute.current = route.pathname;
     setDraftSearch(search);
   }, [route.pathname, route.search, search]);
   const setPage = (value: number) => {
@@ -242,6 +293,10 @@ export default function App() {
     staleTime: 30000,
   });
   const followUps = useFollowUps(!!auth?.connected);
+  // The whole payload used to be spent on one badge number while the table beside it could not say whether a row was already handled, already snoozed, or sitting in "action". The ids match: collectFollowUps attaches the same PullRequest row the table lists, so the join costs no request.
+  const followUpByPR = React.useMemo(() => new Map((followUps.data?.data ?? []).map((item) => [item.pr.id, item])), [followUps.data]);
+  // One reading of "now" per render, so a list cannot straddle a midnight boundary halfway down.
+  const now = Date.now();
   const attentionCount = followUps.data ? (followUps.data.counts.authored || 0) + (followUps.data.counts.reviewer || 0) + (followUps.data.counts.follow_up || 0) : undefined;
   const {
     data: summary,
@@ -498,12 +553,15 @@ export default function App() {
         ) : filter === "Repositories" ? (
           <Repositories repositories={repositoryData} loading={repositoriesLoading} error={repositoriesError} retry={() => void refetchRepositories()} />
         ) : filter === "Overview" ? (
-          <ErrorBoundary>
-            <React.Suspense fallback={<OverviewSkeleton controls />}>
-              <FollowUpSummary />
-              <Overview onAccessGranted={() => syncMutation.mutate(true)} />
-            </React.Suspense>
-          </ErrorBoundary>
+          <>
+            {/* A suspended child replaces every child with the fallback, so the one panel that answers "what do I do now" used to wait on a 146KB chart chunk it shares no data with — its query is already running for the sidebar badge. Outside the boundary it paints from the warm cache on the first frame, and the chart skeleton below it now reserves exactly the space the chart will take. */}
+            <FollowUpSummary />
+            <ErrorBoundary>
+              <React.Suspense fallback={<OverviewSkeleton controls />}>
+                <Overview onAccessGranted={() => syncMutation.mutate(true)} />
+              </React.Suspense>
+            </ErrorBoundary>
+          </>
         ) : (
           <>
             {summaryError && (
@@ -515,22 +573,36 @@ export default function App() {
               </div>
             )}
             <section className={stats} aria-label={t("overview")}>
-              {[
-                [t("open"), summary ? String(summary.open) : "—", GitPullRequest, "purple"],
-                [t("needsReview"), summary ? String(summary.needs_review) : "—", MessageSquare, "blue"],
-                [t("conflicts"), summary ? String(summary.conflicts) : "—", AlertTriangle, "red"],
-                [t("mergedMonth"), summary ? String(summary.merged) : "—", GitMerge, "green"],
-              ].map(([l, v, I]: any) => (
-                <div key={l} className={stat}>
-                  <div className={statIcon}>
-                    <I size={18} />
+              {/* The Blocked tile replaces the Conflicts one because its number and its destination are the same set character for character: /api/v1/stats counts `has_conflicts OR review_status = 'changes_requested' OR checks_status IN ('failure','error')` and listPRs filters `attention=true` with that identical predicate. A conflicts-only tile would have needed its own route to stay honest. */}
+              {(
+                [
+                  [t("open"), summary ? String(summary.open) : "—", GitPullRequest, filterPaths.All],
+                  [t("needsReview"), summary ? String(summary.needs_review) : "—", MessageSquare, filterPaths["Review requested"]],
+                  [t("blocked"), summary ? String(summary.attention) : "—", AlertTriangle, filterPaths.Blocked],
+                  [t("mergedMonth"), summary ? String(summary.merged) : "—", GitMerge, null],
+                ] as [string, string, typeof GitPullRequest, string | null][]
+              ).map(([l, v, I, to]) => {
+                const body = (
+                  <>
+                    <div className={statIcon}>
+                      <I size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <span>{l}</span>
+                      <strong>{summaryLoading ? <Skeleton width={48} height={26} /> : v}</strong>
+                    </div>
+                  </>
+                );
+                return to ? (
+                  <Link key={l} to={to} className={statLink}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={l} className={stat}>
+                    {body}
                   </div>
-                  <div className="min-w-0">
-                    <span>{l}</span>
-                    <strong>{summaryLoading ? <Skeleton width={48} height={26} /> : v}</strong>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
             {filter !== "Repositories" && (
               <>
@@ -578,6 +650,8 @@ export default function App() {
                         ["Review requested", t("filterReview")],
                         ["Changes requested", t("filterChanges")],
                         ["Approved", t("filterApproved")],
+                        // The two states only the author can clear were the only ones with no pill, so finding them meant scanning fifty rows for a small red chip.
+                        ["Blocked", t("blocked")],
                       ].map(([value, label]) => (
                         <button key={value} ref={filter === value ? activeFilterButton : null} onClick={() => setFilter(value, true)} className={filter === value ? "selected" : ""} aria-pressed={filter === value}>
                           {label}
@@ -647,49 +721,63 @@ export default function App() {
                         <span role="columnheader">{t("activity")}</span>
                       </div>
                       {/* DOM order is the card's reading order — title, activity, repository, status, updated — and the table order is restored by explicit column placement at `row`. Source order used to be the table's, which painted the comment button at the top right of a card while leaving it last in the tab order, two rows below the status pills a reader reaches first. */}
-                      {shown.map((p) => (
-                        <div key={`${p.repo}-${p.number}`} className={tableRow} role="row">
-                          <div className={prTitle} role="cell">
-                            <GitPullRequest size={17} className={accentText} />
-                            <div>
-                              <a className={prTitleLink} href={p.url || `https://github.com/${p.repo}/pull/${p.number}`} target="_blank" rel="noopener noreferrer">
-                                {p.title}
-                              </a>
-                              <small>
-                                <em>#{p.number}</em>
-                              </small>
+                      {shown.map((p) => {
+                        const followUp = followUpByPR.get(p.id);
+                        // The chip takes the tone of the row's most urgent reason rather than of the state word, so a conflict reads red here exactly as it does in the workspace; blocked wins outright because the reasons array is not ordered by severity.
+                        const tones = followUp ? followUp.reasons.map(reasonTone) : [];
+                        const tone = tones.includes("blocked") ? "blocked" : (tones.find((item) => item !== "neutral") ?? "neutral");
+                        return (
+                          <div key={`${p.repo}-${p.number}`} className={tableRow} role="row">
+                            <div className={prTitle} role="cell">
+                              <GitPullRequest size={17} className={accentText} />
+                              <div>
+                                <a className={prTitleLink} href={p.url || `https://github.com/${p.repo}/pull/${p.number}`} target="_blank" rel="noopener noreferrer">
+                                  {p.title}
+                                </a>
+                                <small>
+                                  <em>#{p.number}</em>
+                                </small>
+                              </div>
                             </div>
+                            <div role="cell" className={rowActivity}>
+                              <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={followUp?.unread ? t("unreadActivity", { number: p.number }) : t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
+                                <MessageSquare size={15} />
+                                {p.comments}
+                                {/* The count is a lifetime total and reads the same whether the last comment arrived in March or four minutes ago. A dot is a shape rather than a colour, and the accessible name changes with it, so the signal survives both greyscale and a screen reader. */}
+                                {followUp?.unread && <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
+                              </button>
+                            </div>
+                            <div role="cell" className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
+                              <a className={prRepository} title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
+                                {p.repo}
+                              </a>
+                            </div>
+                            <div className={prStatus} role="cell">
+                              <span className={p.status === "Draft" ? draftPill : statusPill(p.status)}>{t(statusKey(p.status), { defaultValue: p.status })}</span>
+                              {followUp && (
+                                <span data-testid="row-follow-up" className={followUpReasonCompact} data-tone={tone}>
+                                  {t(`followup.${groupOf(followUp, now)}`)}
+                                </span>
+                              )}
+                              {p.conflict && (
+                                <span className={conflict}>
+                                  <AlertTriangle size={13} />
+                                  {t("conflict")}
+                                </span>
+                              )}
+                              {/* Absence of CI is not a check result. A repository without a pipeline used to print a full-width grey "CI: Unknown" on every row, in the one cell that is supposed to carry the row's urgency. */}
+                              {p.checks_status && p.checks_status !== "unknown" && (
+                                <span className={`${tableChecks} ${checkToneClass(p.checks_status)}`}>
+                                  {t("ci")}: {t(p.checks_status, { defaultValue: p.checks_status })}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`${muted} ${prUpdated}`} role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
+                              {p.updated_at && !Number.isNaN(Date.parse(p.updated_at)) ? new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(p.updated_at)) : t("unknown")}
+                            </span>
                           </div>
-                          <div role="cell" className={rowActivity}>
-                            <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
-                              <MessageSquare size={15} />
-                              {p.comments}
-                            </button>
-                          </div>
-                          <div role="cell" className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
-                            <a className={prRepository} title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
-                              {p.repo}
-                            </a>
-                          </div>
-                          <div className={prStatus} role="cell">
-                            <span className={statusPill(p.status)}>{t(statusKey(p.status), { defaultValue: p.status })}</span>
-                            {p.conflict && (
-                              <span className={conflict}>
-                                <AlertTriangle size={13} />
-                                {t("conflict")}
-                              </span>
-                            )}
-                            {p.checks_status && (
-                              <span className={`${tableChecks} ${checkToneClass(p.checks_status ?? "")}`}>
-                                {t("ci")}: {t(p.checks_status, { defaultValue: p.checks_status })}
-                              </span>
-                            )}
-                          </div>
-                          <span className={`${muted} ${prUpdated}`} role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
-                            {p.updated_at && !Number.isNaN(Date.parse(p.updated_at)) ? new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(p.updated_at)) : t("unknown")}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className={pagination}>
                       {/* Disabled only while a page is actually on its way: a paused fetch, offline or otherwise, would otherwise leave both controls dead with no way back. */}
@@ -729,6 +817,8 @@ export default function App() {
               <RefreshCw size={15} className={commentsQuery.isFetching ? spinning : ""} />
               {commentsQuery.isFetching ? t("refreshing") : t("refresh")}
             </button>
+            {/* Only when the row has a follow-up to act on. A PR whose detail sync has not run has no FollowUp row at all, and a disabled button with nothing to explain it is worse than no button. */}
+            {followUpByPR.get(selected.id) && <DialogFollowUpActions item={followUpByPR.get(selected.id)!} />}
           </div>
         </ActivityDialog>
       )}
