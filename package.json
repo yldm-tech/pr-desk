@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@types/node": "24",
+    "@types/node": "26",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",
     "vite-plus": "0.3.1"
   }
