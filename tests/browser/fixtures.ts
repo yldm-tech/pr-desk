@@ -1,9 +1,17 @@
 import type { Page } from "@playwright/test";
 
+// Every route worth a look, shared by the layout matrix and the comparison harness so the two cannot drift apart. The filtered listing is included because it is the only state that shows the repository chip above the follow-ups.
+export const ROUTES = ["/#/", "/#/attention", "/#/attention?repo=fixture/reviewer", "/#/pull-requests", "/#/repositories", "/#/about", "/#/settings", "/#/settings?tab=notifications", "/#/settings?tab=access"];
+
+// The three routes whose layout actually changes band: the overview grid, the pull-request table and the repository list. Used where walking all nine would only repeat the shell.
+export const STRUCTURAL_ROUTES = ["/#/", "/#/pull-requests", "/#/repositories"];
+
 // The stub API both the suite and the comparison harness run against, so a
 // screenshot and a computed-style capture see the same application.
-export async function installFixtures(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+// The locale is a parameter rather than a constant because width is not the only axis the layout has to survive: Spanish is the worst case for every label in the shell and Japanese is the worst case for line breaking, and neither was rendered anywhere in the suite before. English stays the default so no existing test changes.
+export async function installFixtures(page: Page, options: { locale?: string } = {}) {
+  const locale = options.locale ?? "en";
+  await page.addInitScript((language) => localStorage.setItem("i18nextLng", language), locale);
   const tasks = [
     {
       id: 1,

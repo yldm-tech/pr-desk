@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- viewport-fit is deliberately left at its `auto` default. iOS then keeps the layout viewport inside the display insets, so nothing can sit under the notch or the home indicator and the current layout is fail-safe. `env(safe-area-inset-*)` appears nowhere in apps/web/src (verified: zero grep hits), so adopting `cover` would need five coordinated edits in the same commit to stay correct: the fixed skip link (app-styles.ts:55), the aside's top padding, <main>'s horizontal padding (App.tsx:421), the floating toast (app-styles.ts:152) and the dialog footer (App.tsx:716). Never add `maximum-scale` or `user-scalable=no`: pinch-zoom is the only text-scaling lever this app offers on mobile Safari, and suppressing it hides the symptom of an undersized control instead of fixing it. -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PR Desk</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

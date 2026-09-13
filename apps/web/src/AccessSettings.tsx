@@ -6,7 +6,7 @@ import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
 import { compactAction, copyAction, dangerAction, secondaryAction } from "./action-styles";
-import { row, rowConfirm, rowList, rowTag, settingsCard, settingsEmptyNote, settingsField, settingsFieldError, settingsGroup, settingsHeading, settingsNote, settingsWarning } from "./settings-styles";
+import { rowConfirm, rowList, rowNarrow, rowTag, settingsCard, settingsEmptyNote, settingsField, settingsFieldError, settingsGroup, settingsHeading, settingsNote, settingsWarning } from "./settings-styles";
 
 // The endpoint an agent connects to is this deployment's own origin. apiURL is
 // empty in production because the Go server serves the app, so the browser's
@@ -16,22 +16,53 @@ const serverOrigin = () => (apiURL || window.location.origin).replace(/\/$/, "")
 const tokenSchema = z.object({ data: z.array(z.object({ id: z.number(), name: z.string(), client_id: z.string(), scopes: z.array(z.string()), created_at: z.string(), expires_at: z.string(), last_used_at: z.string().nullable() })) });
 type IssuedToken = z.infer<typeof tokenSchema>["data"][number];
 
+// The deprecated path exists because the deployment this page is about — a
+// self-hosted instance over plain http — is not a secure context, so
+// navigator.clipboard is not merely likely to fail there, it is absent. Without
+// it every Copy button on the page is dead and the only offered recovery is
+// selecting a horizontally scrolling <pre> by hand, which on a touch screen is
+// not something a person can actually do. execCommand still works in insecure
+// contexts. The textarea is positioned rather than hidden because a display:none
+// or visibility:hidden element cannot hold a selection; it is readonly so a
+// touch keyboard does not appear for the instant it is focused, and the focus is
+// handed back to whatever had it so the Copy button keeps its ring.
+function legacyCopy(value: string): boolean {
+  if (typeof document === "undefined" || typeof document.execCommand !== "function") return false;
+  const area = document.createElement("textarea");
+  area.value = value;
+  area.readOnly = true;
+  area.setAttribute("aria-hidden", "true");
+  area.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0;pointer-events:none";
+  const previous = document.activeElement;
+  document.body.append(area);
+  try {
+    area.select();
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    area.remove();
+    if (previous instanceof HTMLElement) previous.focus();
+  }
+}
+
 // navigator.clipboard is undefined outside a secure context, which a self-hosted
 // instance served over plain http is, and a denied permission rejects. Both used
 // to leave the button doing nothing at all, so the attempt reports its outcome.
 export async function writeClipboard(value: string, clipboard: Clipboard | undefined = navigator.clipboard): Promise<boolean> {
-  if (!clipboard) return false;
+  if (!clipboard) return legacyCopy(value);
   try {
     await clipboard.writeText(value);
     return true;
   } catch {
-    return false;
+    return legacyCopy(value);
   }
 }
 
-function CopyButton({ value, label }: { value: string; label: string }) {
+// The failure note is reported upwards rather than rendered here: this button sits in a shrink-0 box beside the snippet, so a one-line sentence next to it fixes that box at its own unwrapped width and squeezes the code block the sentence has just asked the reader to select by hand.
+function CopyButton({ value, label, onResult }: { value: string; label: string; onResult: (written: boolean) => void }) {
   const { t } = useTranslation();
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const [copied, setCopied] = useState(false);
   return (
     <div className="grid shrink-0 justify-items-start gap-1.5">
       <button
@@ -40,40 +71,44 @@ function CopyButton({ value, label }: { value: string; label: string }) {
         aria-label={label}
         onClick={() => {
           void writeClipboard(value).then((written) => {
-            setState(written ? "copied" : "failed");
-            if (written) setTimeout(() => setState("idle"), 2000);
+            setCopied(written);
+            onResult(written);
+            if (written) setTimeout(() => setCopied(false), 2000);
           });
         }}
       >
-        {state === "copied" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-        {t(state === "copied" ? "access.copied" : "access.copy")}
+        {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+        {t(copied ? "access.copied" : "access.copy")}
       </button>
-      {state === "failed" && (
-        <p className={settingsNote} role="status">
-          {t("access.copyManual")}
-        </p>
-      )}
     </div>
   );
 }
 
 function Snippet({ title, value, hint, copyLabel }: { title: string; value: string; hint: string; copyLabel: string }) {
+  const { t } = useTranslation();
   const id = useId();
+  const [failed, setFailed] = useState(false);
   return (
     <div className={settingsField}>
-      <span className="text-[12px] font-medium" id={id}>
+      <span className="text-[length:0.75rem] font-medium" id={id}>
         {title}
       </span>
+      {/* The <pre> is a scroll container holding the one string on this page that has to be reproduced exactly, so it is focusable: without a pointer there is otherwise no way to reach the part of the command that is off the right edge. */}
       <div
-        className="flex min-w-0 items-start gap-2 [@media(max-width:640px)]:flex-col [@media(max-width:640px)]:[&_pre]:w-full [&_code]:font-[family-name:ui-monospace,SFMono-Regular,Menlo,monospace] [&_code]:text-[12px] [&_code]:leading-[1.7] [&_code]:whitespace-pre [&_pre]:m-0 [&_pre]:min-w-0 [&_pre]:flex-1 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-[var(--border)] [&_pre]:bg-[var(--surface-muted)] [&_pre]:px-3 [&_pre]:py-2.5"
+        className="flex min-w-0 flex-col items-start gap-2 [&_pre]:w-full @row/dashboard:flex-row @row/dashboard:[&_pre]:w-auto [&_code]:font-[family-name:ui-monospace,SFMono-Regular,Menlo,monospace] [&_code]:text-[length:0.75rem] [&_code]:leading-[1.7] [&_code]:whitespace-pre [&_pre]:m-0 [&_pre]:min-w-0 [&_pre]:flex-1 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-[var(--border)] [&_pre]:bg-[var(--surface-muted)] [&_pre]:px-3 [&_pre]:py-2.5"
         role="group"
         aria-labelledby={id}
       >
-        <pre>
+        <pre tabIndex={0}>
           <code>{value}</code>
         </pre>
-        <CopyButton value={value} label={copyLabel} />
+        <CopyButton value={value} label={copyLabel} onResult={(written) => setFailed(!written)} />
       </div>
+      {failed && (
+        <p className={settingsNote} role="status">
+          {t("access.copyManual")}
+        </p>
+      )}
       <small>{hint}</small>
     </div>
   );
@@ -155,7 +190,7 @@ function IssuedTokens() {
           {rows.map((token: IssuedToken) => (
             <li
               key={token.id}
-              className={row}
+              className={rowNarrow}
               data-testid="issued-token"
               onKeyDown={(event) => {
                 if (event.key === "Escape" && confirming === token.id) stopConfirming(token.id);
@@ -163,7 +198,7 @@ function IssuedTokens() {
             >
               <strong>{token.name}</strong>
               <span className={rowTag}>{token.scopes.includes("followups:write") ? t("access.scopeWrite") : t("access.scopeRead")}</span>
-              <span className="text-[12px] whitespace-nowrap text-[var(--muted)] [@media(max-width:640px)]:basis-full">{t("access.lastUsed", { date: when(token.last_used_at) })}</span>
+              <span className="basis-full text-[length:0.75rem] whitespace-nowrap text-[var(--muted)] @row/dashboard:basis-auto">{t("access.lastUsed", { date: when(token.last_used_at) })}</span>
               {confirming === token.id ? (
                 <Fragment key="confirm">
                   <span className={rowConfirm} id={`token-prompt-${token.id}`}>

@@ -29,8 +29,9 @@ export function UserMenu({ connected, username, onDisconnect, disconnecting, dis
   const href = login ? `https://github.com/${encodeURIComponent(login)}` : "";
   if (!connected)
     return (
+      // This is the single primary call to action of the whole application and the first control a new user has to hit, so it takes the 44px floor even though 11px text with 7px of padding leaves it around 30px on a fine pointer.
       <a
-        className="inline-flex items-center rounded-[7px] bg-[var(--accent)] px-2.5 py-[7px] font-[inherit] text-[11px] font-semibold text-[var(--surface)] no-underline shadow-[0_1px_2px_var(--shadow)] hover:bg-[var(--accent-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        className="inline-flex items-center rounded-[7px] bg-[var(--accent)] px-2.5 py-[7px] font-[inherit] text-[length:0.6875rem] font-semibold text-[var(--surface)] no-underline shadow-[0_1px_2px_var(--shadow)] hover:bg-[var(--accent-text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] pointer-coarse:min-h-11 pointer-coarse:px-3.5"
         href={apiURL + "/api/v1/auth/github"}
       >
         {t("connectGitHub")}
@@ -38,7 +39,8 @@ export function UserMenu({ connected, username, onDisconnect, disconnecting, dis
     );
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger className={`${accountTrigger} min-h-[38px] [@media(max-width:480px)]:min-h-9`} aria-label={t("personalProfile")}>
+      {/* The old narrow override *reduced* this target from 38px to 36px exactly where it was hardest to hit. The floor belongs to the pointer instead, and accountTrigger already carries the matching pointer-coarse:min-w-11 for the width. */}
+      <Popover.Trigger className={`${accountTrigger} min-h-[38px] pointer-coarse:min-h-11`} aria-label={t("personalProfile")}>
         <Avatar login={login} size="h-8 w-8" />
         <span>{user?.name || login}</span>
         <ChevronDown size={14} />
@@ -47,7 +49,8 @@ export function UserMenu({ connected, username, onDisconnect, disconnecting, dis
         <Popover.Content className={profilePopover} align="end" sideOffset={10} collisionPadding={16} aria-label={t("personalProfile")}>
           <div className="mb-5 flex items-center justify-between text-[length:var(--text-heading)] font-semibold">
             <strong>{t("personalProfile")}</strong>
-            <Popover.Close className="grid min-h-8 min-w-8 place-items-center rounded-md border-0 bg-transparent p-[3px] text-[var(--muted)] hover:bg-[var(--surface-muted)]" aria-label={t("close")}>
+            {/* The popover aligns to the end of a trigger that sits at the right edge of the header, so on a phone this close button lands within about 20px of the screen edge; the icon stays 17px and only the hit box grows. */}
+            <Popover.Close className="grid min-h-8 min-w-8 place-items-center rounded-md border-0 bg-transparent p-[3px] text-[var(--muted)] hover:bg-[var(--surface-muted)] pointer-coarse:min-h-11 pointer-coarse:min-w-11" aria-label={t("close")}>
               <X size={17} />
             </Popover.Close>
           </div>

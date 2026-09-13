@@ -1,6 +1,28 @@
 @layer theme, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+
+/* Two families, one question to pick between them: is this element's width set by the browser window, or by <main>? VIEWPORT (--breakpoint-*) covers the shell -- <aside>, <main>'s own padding, position:fixed chrome, <dialog>, and Radix portal content; portalled and top-layer content has no ancestor container, so a container query there matches nothing and silently falls back to the base classes. CONTAINER (--container-*) covers everything inside <main>'s content box, measured against @container/dashboard or a nested container it declares. Values are px, not rem: the type scale moves with the user's font size, the layout bands deliberately do not. */
+@theme {
+  /* Tailwind's sm/md/lg/xl/2xl are min-width tokens named after nothing. Clearing the namespace makes an off-scale name compile to nothing, which the lint:responsive grep turns into a hard failure rather than a silent one. This does NOT touch --container-3xs..7xl, so max-w-sm / max-w-5xl still work. */
+  --breakpoint-*: initial;
+  --breakpoint-roomy: 480px; /* >= 480: the top bar has room for text labels */
+  --breakpoint-shell: 900px; /* >= 900: the 208px sidebar replaces the top bar */
+  --breakpoint-wide: 1200px; /* >= 1200: the sidebar gets its full padding */
+
+  /* Measured against <main>'s content box unless a nearer container is named. No structural threshold may fall in (647, 867]: <main>'s content width is not monotonic in the viewport (867px at V=899, 647px at V=900, where the fixed sidebar appears), so a threshold inside that window makes widening the window downgrade the layout. */
+  --container-split: 480px; /* >= 480: content may sit two-up */
+  --container-pair: 560px; /* >= 560: a heading and its control fit side by side */
+  --container-row: 640px; /* >= 640: card layouts become table rows */
+  --container-table: 880px; /* >= 880: full multi-column tables */
+}
+
+/* Height has no namespace in v4 and a landscape phone (844x390) is wide but short. The @media must be written out: `@custom-variant short (height < 480px)` parses the condition as a SELECTOR and emits garbage. */
+@custom-variant short (@media (height < 480px));
+
+/* `hover:` is already wrapped in (hover: hover) by the compiler, so it needs no help. This variant is for guarding the *hidden* half of a hover-reveal, which `hover:` cannot express -- an affordance that only appears on hover is permanently invisible on touch. */
+@custom-variant hoverable (@media (hover: hover));
+
 @layer components {
   :root {
     color-scheme: light;
@@ -47,6 +69,11 @@
   * {
     box-sizing: border-box;
   }
+  /* Pinned at 100% because WebKit's `auto` default inflates text inside wide block containers after an orientation change -- the one place the browser silently overrides the app's own type scale, and inconsistently between blocks. */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     margin: 0;
     font-family: var(--font-ui);
@@ -66,19 +93,28 @@
   }
 
   /* Contribution overview */
+  /* Global rather than per-utility: the scattered `motion-reduce:` opt-ins covered three animated surfaces and missed three more, and the two @keyframes below had no guard at all. An !important declaration in an earlier layer beats one in a later layer, so this wins over anything in @layer utilities. The remaining `motion-reduce:` utilities are now redundant rather than load-bearing. */
   @media (prefers-reduced-motion: reduce) {
     .react-loading-skeleton::after {
       animation: none !important;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
 
   /* Shared type scale across navigation, controls, charts and profile portal. */
   :root {
     --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --text-body: 13px;
-    --text-caption: 12px;
-    --text-heading: 14px;
-    --ts-chart-tooltip-font: 400 12px/1.5 var(--font-ui);
+    /* rem, not px, so the scale tracks the user's browser font-size preference -- the only text-scaling lever mobile Safari offers short of pinch-zoom. No font-size is set on :root or html, so 1rem is the user's setting and these are the current pixel values at the 16px default. */
+    --text-body: 0.8125rem;
+    --text-caption: 0.75rem;
+    --text-heading: 0.875rem;
+    --ts-chart-tooltip-font: 400 0.75rem/1.5 var(--font-ui);
   }
   body {
     font-size: var(--text-body);
@@ -91,6 +127,14 @@
     font-family: var(--font-ui);
     font-size: var(--text-body);
     line-height: 1.5;
+  }
+  /* iOS Safari zooms the page whenever a focused text control computes under 16px, and index.html deliberately ships no maximum-scale, so it never zooms back out. `button` is excluded on purpose: buttons do not trigger the zoom and inflating every label would be a visible redesign. This rule lives in @layer components, which loses to @layer utilities, so a control whose size comes from a Tailwind utility must carry its own pointer-coarse:text-[length:1rem] as well. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
   /* The settings view is reached from here rather than from the nav above, so
      without this the sidebar shows nothing selected while it is open. */

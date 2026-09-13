@@ -10,8 +10,9 @@ export function RepositorySelect({ repositories, value, onChange, loading }: { r
   const groups = [...new Set(eligible.map((repo) => repo.repo.split("/")[0]))].map((owner) => [owner, eligible.filter((repo) => repo.repo.split("/")[0] === owner)] as const);
   return (
     <Select.Root value={value || "all"} onValueChange={(next) => onChange(next === "all" ? "" : next)}>
+      {/* A Radix Select gives a phone no system picker to compensate for a short trigger, so the whole interaction is this button plus the popover; the height follows the pointer rather than the width. */}
       <Select.Trigger
-        className="inline-flex h-10 w-[280px] max-w-full items-center gap-[9px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[13px] text-[var(--foreground)] [&>span:first-of-type]:flex-1 [&>span:first-of-type]:overflow-hidden [&>span:first-of-type]:text-left [&>span:first-of-type]:text-ellipsis [&>span:first-of-type]:whitespace-nowrap"
+        className="inline-flex h-10 w-[280px] max-w-full items-center gap-[9px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[length:0.8125rem] text-[var(--foreground)] pointer-coarse:h-11 [&>span:first-of-type]:flex-1 [&>span:first-of-type]:overflow-hidden [&>span:first-of-type]:text-left [&>span:first-of-type]:text-ellipsis [&>span:first-of-type]:whitespace-nowrap"
         aria-label={t("filterRepository")}
         disabled={loading}
       >

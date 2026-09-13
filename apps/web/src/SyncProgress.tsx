@@ -94,7 +94,7 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
   const countKey = activePhase === "details" ? "syncDetailCount" : activePhase === "saving" ? "syncSaveCount" : activePhase === "open" ? "syncOpenCount" : "syncFetchCount";
   return (
     <section
-      className="mx-0 mt-0 mb-5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[13px] data-[paused=true]:border-[var(--warning-border)] [&>p[role=alert]]:rounded-md [&>p[role=alert]]:bg-[var(--warning-soft)] [&>p[role=alert]]:px-3 [&>p[role=alert]]:py-2.5 [&>p[role=alert]]:leading-[1.7] [&>p[role=alert]]:text-[var(--warning)]"
+      className="mx-0 mt-0 mb-5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-[length:0.8125rem] data-[paused=true]:border-[var(--warning-border)] [&>p[role=alert]]:rounded-md [&>p[role=alert]]:bg-[var(--warning-soft)] [&>p[role=alert]]:px-3 [&>p[role=alert]]:py-2.5 [&>p[role=alert]]:leading-[1.7] [&>p[role=alert]]:text-[var(--warning)]"
       data-paused={failed || phase === "waiting" ? "true" : "false"}
       aria-label={t("syncProgress")}
     >
@@ -103,7 +103,8 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
         <strong>{t(data?.mode === "incremental" ? "incrementalSync" : "syncProgress")}</strong>
         <span>{phaseLabel}</span>
       </div>
-      <ol className="mx-0 my-3 grid list-none grid-cols-3 gap-3 p-0 text-[12px] text-[var(--muted)] [&>li[data-state=active]]:text-[var(--accent-text)] [&>li[data-state=complete]]:text-[var(--accent-text)]" aria-label={t("syncProgress")}>
+      {/* Three columns need about 96px each before a step label fits on one line, and this section gets 256px of content on a 320px phone, so the steps stack until <main> is wide enough. The bands measure @container/dashboard because the section renders inside <main>, not against the window. */}
+      <ol className="mx-0 my-3 grid list-none grid-cols-1 gap-3 p-0 text-[length:0.75rem] text-[var(--muted)] @split/dashboard:grid-cols-3 @max-split/dashboard:gap-2 [&>li[data-state=active]]:text-[var(--accent-text)] [&>li[data-state=complete]]:text-[var(--accent-text)]" aria-label={t("syncProgress")}>
         {steps.map((key, index) => (
           <li className="group/step" key={key} data-state={index < stage ? "complete" : index === stage ? "active" : "pending"} aria-current={index === stage ? "step" : undefined}>
             <span>
@@ -118,7 +119,7 @@ export function SyncProgress({ connected, pending, onRunningChange, hidden = fal
         ))}
       </ol>
       {data?.history_count !== undefined && (
-        <p className="mx-0 my-2 text-[12px] text-[var(--muted)]">
+        <p className="mx-0 my-2 text-[length:0.75rem] text-[var(--muted)]">
           {t("syncCollected", { count: data.history_count })}
           {data.open_count !== undefined ? " · " + t("syncOpenSummary", { count: data.open_count }) : ""}
         </p>

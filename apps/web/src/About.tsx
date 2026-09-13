@@ -3,11 +3,12 @@ import { ExternalLink, FolderGit2, GitPullRequest, Inbox, RefreshCw } from "luci
 import { useTranslation } from "react-i18next";
 import { projectRepository, projectVersion } from "./project";
 
+// This page lives inside <main>, so its width branches are measured against @container/dashboard. They used to be written with Tailwind's default sm and md prefixes, which this project clears from the breakpoint namespace — an unknown variant compiles to no rule at all rather than to an error, so neither the padding nor the three-up card grid actually changed at any width.
 export function About() {
   const { t } = useTranslation();
   return (
-    <article className="about-project mx-auto grid max-w-5xl gap-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-8">
+    <article className="mx-auto grid max-w-5xl gap-5">
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 @row/dashboard:p-8">
         <div className="flex flex-wrap items-center gap-3">
           <img src="/favicon.svg" alt="" className="h-12 w-12 rounded-xl" />
           <h2 className="text-2xl font-semibold tracking-tight">PR Desk</h2>
@@ -24,7 +25,7 @@ export function About() {
           {projectRepository}
         </a>
       </section>
-      <section aria-label={t("aboutFeatures")} className="grid gap-4 md:grid-cols-3">
+      <section aria-label={t("aboutFeatures")} className="grid gap-4 @row/dashboard:grid-cols-3">
         {[
           { icon: GitPullRequest, title: "aboutOverviewTitle", description: "aboutOverviewDescription" },
           { icon: Inbox, title: "aboutAttentionTitle", description: "aboutAttentionDescription" },

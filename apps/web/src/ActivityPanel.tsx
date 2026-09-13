@@ -10,7 +10,7 @@ export function ActivityPanel({ data }: { data: Activity }) {
   return (
     <>
       {data.warnings.length > 0 && (
-        <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[13px] text-[var(--warning)] [&_ul]:pl-5" role="status">
+        <div className="rounded-lg border border-[var(--warning-border)] bg-[var(--warning-soft)] p-3 text-[length:0.8125rem] text-[var(--warning)] [&_ul]:pl-5" role="status">
           <strong>{tr("activityLoadFailed")}</strong>
           <ul>
             {data.warnings.map((w, i) => {
@@ -29,9 +29,9 @@ export function ActivityPanel({ data }: { data: Activity }) {
       <section className={activitySection}>
         <h3>
           {tr("comments")}
-          <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--muted)]">{comments.length}</span>
+          <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[length:0.6875rem] font-medium text-[var(--muted)]">{comments.length}</span>
         </h3>
-        {comments.length === 0 && <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[12px] text-[var(--muted)]">{data.warnings.length ? tr("noCommentsAvailable") : tr("noComments")}</p>}
+        {comments.length === 0 && <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[length:0.75rem] text-[var(--muted)]">{data.warnings.length ? tr("noCommentsAvailable") : tr("noComments")}</p>}
         {comments.map((c) => (
           <article key={`${c.kind}-${c.id}`} className={activityComment}>
             <strong>
@@ -64,12 +64,12 @@ export function ActivityPanel({ data }: { data: Activity }) {
       <section className={activitySection}>
         <h3>
           {tr("reviewDiscussions")}
-          {data.threads && <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--muted)]">{data.threads.length}</span>}
+          {data.threads && <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[length:0.6875rem] font-medium text-[var(--muted)]">{data.threads.length}</span>}
         </h3>
         {data.threads === null ? (
-          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[12px] text-[var(--muted)]">{tr("discussionUnavailable")}</p>
+          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[length:0.75rem] text-[var(--muted)]">{tr("discussionUnavailable")}</p>
         ) : data.threads.length === 0 ? (
-          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[12px] text-[var(--muted)]">{tr("noDiscussions")}</p>
+          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[length:0.75rem] text-[var(--muted)]">{tr("noDiscussions")}</p>
         ) : (
           data.threads.map((t) => (
             <div className={activityThread} key={t.id}>
@@ -86,12 +86,12 @@ export function ActivityPanel({ data }: { data: Activity }) {
       <section className={activitySection}>
         <h3>
           {tr("ciChecks")}
-          {data.checks && <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[11px] font-medium text-[var(--muted)]">{data.checks.length}</span>}
+          {data.checks && <span className="rounded-[5px] bg-[var(--surface-muted)] px-1.5 py-px text-[length:0.6875rem] font-medium text-[var(--muted)]">{data.checks.length}</span>}
         </h3>
         {data.checks === null ? (
-          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[12px] text-[var(--muted)]">{tr("checksUnavailable")}</p>
+          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[length:0.75rem] text-[var(--muted)]">{tr("checksUnavailable")}</p>
         ) : data.checks.length === 0 ? (
-          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[12px] text-[var(--muted)]">{tr("noChecks")}</p>
+          <p className="rounded-lg bg-[var(--surface-muted)] p-4 text-[length:0.75rem] text-[var(--muted)]">{tr("noChecks")}</p>
         ) : (
           data.checks.map((c) => (
             <div className={activityThread} key={c.id}>
@@ -104,7 +104,7 @@ export function ActivityPanel({ data }: { data: Activity }) {
                   c.name
                 )}
               </span>
-              <span className={`ml-2 inline-flex items-center text-[11px] capitalize ${checkToneClass(checkTone(c.status, c.conclusion))}`}>
+              <span className={`ml-2 inline-flex items-center text-[length:0.6875rem] capitalize ${checkToneClass(checkTone(c.status, c.conclusion))}`}>
                 {c.status === "completed" ? tr((c.conclusion || "unknown").toLowerCase(), { defaultValue: c.conclusion ? c.conclusion.replaceAll("_", " ") : tr("unknown") }) : tr(c.status.replaceAll("_", ""), { defaultValue: c.status.replaceAll("_", " ") })}
               </span>
             </div>
