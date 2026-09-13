@@ -1,0 +1,12 @@
+<!-- The same mark as favicon.svg, redrawn for the two places that apply their own mask to the icon: an Android adaptive icon (manifest `purpose: maskable`) and the iOS home screen (apple-touch-icon). Both crop whatever they are given, so the rounded corners and the inset hairline are gone and the background bleeds to the edge: a transparent corner reads as black on an iOS home screen and as a clipped notch under an Android circle mask. The glyph is scaled to 0.78 about its own bounding-box centre (26.5..99 x 20.5..107.5 in the source, so centre 62.75,64) rather than the canvas centre, which puts its diagonal at 88 units against the 102.4-unit safe circle a maskable icon is guaranteed to keep. This file is the source for icon-maskable-512.png and apple-touch-icon.png; regenerate both with rsvg-convert -w N -h N after any edit. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs><linearGradient id="surface" x1="16" y1="8" x2="112" y2="128" gradientUnits="userSpaceOnUse"><stop stop-color="#7768EF"/><stop offset="1" stop-color="#5142BD"/></linearGradient></defs>
+  <rect width="128" height="128" fill="url(#surface)"/>
+  <g transform="translate(64 64) scale(.78) translate(-62.75 -64)">
+    <path d="M40 44v40m47-4V59c0-14-9-23-24-23" stroke="#F8F7FF" stroke-width="8" stroke-linecap="round"/>
+    <path d="m70 26-11 10 11 10" stroke="#F8F7FF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="40" cy="34" r="10" fill="#6C5DDE" stroke="#F8F7FF" stroke-width="7"/>
+    <circle cx="40" cy="94" r="10" fill="#594AC7" stroke="#F8F7FF" stroke-width="7"/>
+    <circle cx="87" cy="94" r="12" fill="#B6F3CD"/>
+  </g>
+</svg>
