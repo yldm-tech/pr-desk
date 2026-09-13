@@ -113,7 +113,7 @@
   "monthRange_other": "{{count}}개월",
   "navOverview": "기여 개요",
   "navAttention": "처리 필요",
-  "navAll": "내 Pull Request",
+  "navAll": "내 PR",
   "navRepositories": "저장소",
   "filterAll": "내 열린 PR",
   "filterMerged": "병합됨",

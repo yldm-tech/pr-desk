@@ -113,7 +113,7 @@
   "monthRange_other": "{{count}} か月",
   "navOverview": "貢献の概要",
   "navAttention": "要対応",
-  "navAll": "自分のPull Request",
+  "navAll": "自分の PR",
   "navRepositories": "リポジトリ",
   "filterAll": "自分のオープンPR",
   "filterMerged": "マージ済み",

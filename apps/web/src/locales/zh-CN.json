@@ -113,7 +113,7 @@
   "monthRange_other": "{{count}} 个月",
   "navOverview": "贡献概览",
   "navAttention": "待我处理",
-  "navAll": "我的 Pull Request",
+  "navAll": "我的 PR",
   "navRepositories": "贡献仓库",
   "filterAll": "我的进行中 PR",
   "filterMerged": "已合并",
