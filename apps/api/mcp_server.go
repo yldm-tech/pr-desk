@@ -696,6 +696,8 @@ func (s *Server) newMCPServer() *mcp.Server {
 	mcp.AddTool(server, &mcp.Tool{Name: "mark_follow_up_handled", Description: "Mark a follow-up as handled and restart its waiting clock. Nothing is posted to GitHub.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("handled"))
 	mcp.AddTool(server, &mcp.Tool{Name: "snooze_follow_up", Description: "Stop reminding about a follow-up for a number of days. Technical failures and new human feedback can still surface it.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("snooze"))
 	mcp.AddTool(server, &mcp.Tool{Name: "unsnooze_follow_up", Description: "Cancel a snooze and let the follow-up surface again. Read and handled state are left alone.", Annotations: &mcp.ToolAnnotations{IdempotentHint: true, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("unsnooze"))
+	// Parity with the browser: an agent that can mark work handled should be able to take that back, and leaving undo out would make the two surfaces disagree about what is reversible. Not idempotent — the snapshot is consumed, so a second call has nothing to restore.
+	mcp.AddTool(server, &mcp.Tool{Name: "undo_follow_up", Description: "Take back the last action on a follow-up, restoring the read, handled, confirmation and waiting state it had before. One step only: the snapshot is consumed, so calling it twice does nothing the second time.", Annotations: &mcp.ToolAnnotations{IdempotentHint: false, DestructiveHint: &falseHint, OpenWorldHint: &falseHint}}, s.followUpAction("undo"))
 	return server
 }
 

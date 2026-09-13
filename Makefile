@@ -22,5 +22,8 @@ backup:
 	./scripts/backup-postgres.sh $${BACKUP_FILE:-pr-dashboard-$$(date -u +%Y%m%dT%H%M%SZ).dump}
 test:
 	cd apps/api && go test ./...
-	cd apps/web && bun run test && bun run build
+	cd apps/web && bun run test
+# Both checks are listed separately rather than chained onto `build`, and for the same reason: apps/api/Dockerfile runs the root `build` with only apps/web and the root configs in its context, so a script that reaches for ripgrep or for scripts/ fails there. Producing the artefact and asserting things about it are different jobs.
+	bun run lint:responsive
+	bun run verify:build
 	./scripts/backup-postgres-test.sh

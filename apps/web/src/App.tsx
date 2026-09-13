@@ -85,9 +85,21 @@ import { z } from "zod";
 import { parsePRPage, listParameters, oauthBanner, parseRepositoryList, type PR, type RepositorySummary } from "./pr-model";
 const Overview = React.lazy(() => import("./Overview"));
 const api = ky.create({ credentials: "include", retry: 0, timeout: 30000 });
-const filterPaths: Record<string, string> = { Overview: "/", About: "/about", Settings: "/settings", All: "/pull-requests", Repositories: "/repositories", "Needs attention": "/attention", "Review requested": "/review-requested", "Changes requested": "/changes-requested", Approved: "/approved", Blocked: "/blocked" };
+const filterPaths: Record<string, string> = {
+  Overview: "/",
+  About: "/about",
+  Settings: "/settings",
+  All: "/pull-requests",
+  Repositories: "/repositories",
+  "Needs attention": "/attention",
+  "Review requested": "/review-requested",
+  "Changes requested": "/changes-requested",
+  Approved: "/approved",
+  Blocked: "/blocked",
+  Merged: "/merged",
+};
 // Every route the PR table serves, which is also the set the sidebar's Pull requests button returns to. Blocked belongs here or landing on it and clicking that button would send the reader somewhere else.
-const prListPaths = [filterPaths.All, filterPaths["Review requested"], filterPaths["Changes requested"], filterPaths.Approved, filterPaths.Blocked];
+const prListPaths = [filterPaths.All, filterPaths["Review requested"], filterPaths["Changes requested"], filterPaths.Approved, filterPaths.Blocked, filterPaths.Merged];
 function statusKey(status: string) {
   return (
     ({ Open: "openStatus", "Awaiting review": "awaitingReview", "Needs attention": "attention", "Review requested": "reviewRequested", "Changes requested": "changesRequested", Approved: "approved", Merged: "merged", Closed: "closed", Conflict: "conflict", Draft: "draftStatus" } as Record<string, string>)[status] ||
@@ -96,7 +108,7 @@ function statusKey(status: string) {
 }
 // app-styles' pillTones has no Draft entry and that file is not this package's to edit, so the muted pair "Open" and "Awaiting review" already carry is restated here rather than leaving the draft pill with no skin at all.
 const draftPill = `${statusPill("Draft")} bg-[var(--surface-muted)] text-[var(--muted)]`;
-// A stat tile that names a set the table can show is a link to it. `stat` is a flex row, so the anchor only has to stop inheriting link colour and underline; "Merged this month" stays an inert div because listPRs hard-scopes every query to open, unmerged rows and answers merged=true with a guaranteed-empty predicate, and a tile that lies about its destination is worse than one that does nothing.
+// A stat tile that names a set the table can show is a link to it. `stat` is a flex row, so the anchor only has to stop inheriting link colour and underline. Every tile is a link now: listPRs used to hard-scope every query to open, unmerged rows and answer merged=true with a guaranteed-empty predicate, so "Merged this month" had nowhere honest to point — an explicit state= or merged= now replaces that default rather than being intersected with it.
 const statLink = `${stat} text-[var(--foreground)] no-underline hover:border-[var(--accent-border)] hover:bg-[var(--surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] pointer-coarse:min-h-11`;
 function CrashFallback() {
   const { t } = useTranslation();
@@ -179,7 +191,12 @@ export default function App() {
   const queryClient = useQueryClient();
   const route = useLocation();
   const navigate = useNavigate();
-  const filter = Object.keys(filterPaths).find((key) => filterPaths[key] === route.pathname) || "Overview";
+  const matchedFilter = Object.keys(filterPaths).find((key) => filterPaths[key] === route.pathname);
+  const filter = matchedFilter || "Overview";
+  // A stale bookmark or a typo — /pull_requests, /follow-ups, a trailing slash — used to render the contribution overview under whatever address was typed, so the page and the URL disagreed and nothing said the route was wrong. Rewriting the address means a reload lands in the same place and the back button behaves, and `replace` keeps the bad entry out of history.
+  React.useEffect(() => {
+    if (!matchedFilter && route.pathname !== "/") void navigate("/", { replace: true });
+  }, [matchedFilter, route.pathname, navigate]);
   const prListActive = !["Overview", "Needs attention", "Repositories", "About", "Settings"].includes(filter);
   const [params, setParams] = useSearchParams();
   const parsedPage = Number(params.get("page") || 1);
@@ -478,7 +495,11 @@ export default function App() {
           )}
         </div>
       </aside>
-      <main id="main-content" tabIndex={-1} className={`min-w-0 focus:outline-none @container/dashboard flex-1 mx-auto max-w-[1600px] px-4 py-5 shell:px-[clamp(16px,2.5vw,40px)] shell:py-6 short:py-3`}>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className={`min-w-0 focus:outline-none @container/dashboard flex-1 mx-auto max-w-[1600px] py-5 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] shell:py-6 shell:pl-[max(clamp(16px,2.5vw,40px),env(safe-area-inset-left))] shell:pr-[max(clamp(16px,2.5vw,40px),env(safe-area-inset-right))] short:py-3`}
+      >
         <header className={`${pageHeader} ${filter === "Overview" ? overviewHeaderGap : pageHeaderGap}`}>
           <div className={headerTitleSlot}>
             <h1 className={filter === "Overview" ? `${pageTitle} ${overviewHeading}` : pageTitle}>
@@ -491,7 +512,8 @@ export default function App() {
               ) : filter === "Settings" ? (
                 t("followup.settings")
               ) : filter === "Overview" ? (
-                t("achievements")
+                // The first words on the landing route named the report at the bottom of it rather than the job. "Contribution overview" is still the heading of the dashboard section further down, where it describes what it sits above.
+                t("navOverview")
               ) : filter === "Repositories" ? (
                 t("navRepositories")
               ) : filter === "Needs attention" ? (
@@ -652,6 +674,8 @@ export default function App() {
                         ["Approved", t("filterApproved")],
                         // The two states only the author can clear were the only ones with no pill, so finding them meant scanning fifty rows for a small red chip.
                         ["Blocked", t("blocked")],
+                        // "All pull requests" was open-and-unmerged, so nothing the reader had merged could be reached from the route named after all of them — while the same page advertised a merged count. The first pill is now honestly called Open and this is the other half of the pair.
+                        ["Merged", t("filterMerged")],
                       ].map(([value, label]) => (
                         <button key={value} ref={filter === value ? activeFilterButton : null} onClick={() => setFilter(value, true)} className={filter === value ? "selected" : ""} aria-pressed={filter === value}>
                           {label}
@@ -728,7 +752,7 @@ export default function App() {
                         const tone = tones.includes("blocked") ? "blocked" : (tones.find((item) => item !== "neutral") ?? "neutral");
                         return (
                           <div key={`${p.repo}-${p.number}`} className={tableRow} role="row">
-                            <div className={prTitle} role="cell">
+                            <div className={prTitle} role="cell" data-cell="title">
                               <GitPullRequest size={17} className={accentText} />
                               <div>
                                 <a className={prTitleLink} href={p.url || `https://github.com/${p.repo}/pull/${p.number}`} target="_blank" rel="noopener noreferrer">
@@ -739,7 +763,7 @@ export default function App() {
                                 </small>
                               </div>
                             </div>
-                            <div role="cell" className={rowActivity}>
+                            <div role="cell" data-cell="activity" className={rowActivity}>
                               <button data-testid="pr-activity" className={commentButton} title={t("viewActivity")} aria-label={followUp?.unread ? t("unreadActivity", { number: p.number }) : t("viewPRActivity", { number: p.number })} onClick={() => setSelected(p)}>
                                 <MessageSquare size={15} />
                                 {p.comments}
@@ -747,12 +771,26 @@ export default function App() {
                                 {followUp?.unread && <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-[var(--accent)]" />}
                               </button>
                             </div>
-                            <div role="cell" className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
-                              <a className={prRepository} title={p.repo} href={`https://github.com/${p.repo}`} target="_blank" rel="noopener noreferrer">
+                            <div role="cell" data-cell="repository" className="col-start-1 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:row-start-1">
+                              {/* Filters this list to the repository rather than leaving for github.com. "Show me just this repo" used to be a two-screen detour through Repositories even though the name was right there under the cursor, and the title link one cell over already covers going to GitHub. The existing chip in the list heading is the way back out. */}
+                              <button
+                                type="button"
+                                className={prRepository}
+                                title={p.repo}
+                                aria-label={t("filterToRepository", { repo: p.repo })}
+                                onClick={() =>
+                                  setParams((current) => {
+                                    const next = new URLSearchParams(current);
+                                    next.set("repo", p.repo);
+                                    next.delete("page");
+                                    return next;
+                                  })
+                                }
+                              >
                                 {p.repo}
-                              </a>
+                              </button>
                             </div>
-                            <div className={prStatus} role="cell">
+                            <div className={prStatus} role="cell" data-cell="status">
                               <span className={p.status === "Draft" ? draftPill : statusPill(p.status)}>{t(statusKey(p.status), { defaultValue: p.status })}</span>
                               {followUp && (
                                 <span data-testid="row-follow-up" className={followUpReasonCompact} data-tone={tone}>
@@ -772,7 +810,7 @@ export default function App() {
                                 </span>
                               )}
                             </div>
-                            <span className={`${muted} ${prUpdated}`} role="cell" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
+                            <span className={`${muted} ${prUpdated}`} role="cell" data-cell="updated" title={p.updated_at ? new Date(p.updated_at).toLocaleString(i18n.resolvedLanguage) : undefined}>
                               {p.updated_at && !Number.isNaN(Date.parse(p.updated_at)) ? new Intl.DateTimeFormat(i18n.resolvedLanguage, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(p.updated_at)) : t("unknown")}
                             </span>
                           </div>
@@ -808,7 +846,8 @@ export default function App() {
           )}
           {commentsQuery.data && <ActivityPanel data={commentsQuery.data} />}
           {/* Viewport tokens, not container ones: <dialog> is a sibling of <main> and lives in the top layer, so it has no ancestor container and a container query here would match nothing and fall through to base. */}
-          <div className="sticky bottom-0 z-[2] mt-auto flex flex-wrap justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] py-4 max-roomy:flex-col max-roomy:items-stretch">
+          {/* The sheet is 100dvh on a phone, so with viewport-fit=cover this row lands on the home indicator unless it carries the inset itself. */}
+          <div className="sticky bottom-0 z-[2] mt-auto flex flex-wrap justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface)] pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] max-roomy:flex-col max-roomy:items-stretch">
             <a className={secondaryAction} href={selected.url || `https://github.com/${selected.repo}/pull/${selected.number}`} target="_blank" rel="noopener noreferrer">
               {t("viewGitHub")}
               <ExternalLink size={14} />

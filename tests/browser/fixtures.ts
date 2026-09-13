@@ -27,6 +27,7 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "Please cover the timezone boundary.",
       waiting_since: "2026-09-01T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: null as string | null,
       pr: { id: 1, repo: "fixture/calendar", number: 17, title: "Handle timezone boundaries", url: "https://github.com/fixture/calendar/pull/17", review_status: "changes_requested", checks_status: "failure", has_conflicts: true, draft: false },
     },
@@ -40,6 +41,7 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "",
       waiting_since: "2026-09-02T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: null as string | null,
       pr: { id: 2, repo: "fixture/reviewer", number: 24, title: "Review storage migration", url: "https://github.com/fixture/reviewer/pull/24", review_status: "pending", checks_status: "success", has_conflicts: false, draft: false },
     },
@@ -54,6 +56,7 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "",
       waiting_since: "2026-08-20T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: null as string | null,
       pr: { id: 3, repo: "fixture/calendar", number: 31, title: "Ship the release notes", url: "https://github.com/fixture/calendar/pull/31", review_status: "approved", checks_status: "success", has_conflicts: false, draft: false },
     },
@@ -68,6 +71,7 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "",
       waiting_since: "2026-09-03T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: reminder as string | null,
       pr: { id: 4, repo: "fixture/calendar", number: 33, title: "Tune the query planner", url: "https://github.com/fixture/calendar/pull/33", review_status: "pending", checks_status: "success", has_conflicts: false, draft: false },
     },
@@ -82,6 +86,7 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "",
       waiting_since: "2026-09-04T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: null as string | null,
       pr: { id: 5, repo: "fixture/calendar", number: 35, title: "Rebase the storage migration", url: "https://github.com/fixture/calendar/pull/35", review_status: "changes_requested", checks_status: "failure", has_conflicts: true, draft: false },
     },
@@ -96,14 +101,26 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       excerpt: "",
       waiting_since: "2026-09-05T00:00:00Z",
       archived_at: null,
+      undoable: false,
       snoozed_until: null as string | null,
       pr: { id: 6, repo: "fixture/calendar", number: 40, title: "Prototype the digest", url: "https://github.com/fixture/calendar/pull/40", review_status: "pending", checks_status: "unknown", has_conflicts: false, draft: true },
     },
   ];
   // POST /follow-ups/:id, for every id rather than only the first: five of the six tasks are now acted on by some test, and a mutation that silently no-ops would let an assertion about the aftermath pass for the wrong reason. The writes mirror applyFollowUpAction — snooze also marks the row read, which is what makes the server's version gate satisfiable at the moment of snoozing.
+  // One step of history per row, mirroring the snapshot columns: the fixture has to be able to give a row back, or an assertion about undo would pass against a mutation that never happened.
+  const previous = new Map<number, string>();
   const mutate = (id: number, body: { action: string; until?: string }) => {
     const task = tasks.find((entry) => entry.id === id);
     if (!task) return;
+    if (body.action === "undo") {
+      const snapshot = previous.get(id);
+      if (!snapshot) return;
+      Object.assign(task, JSON.parse(snapshot));
+      previous.delete(id);
+      return;
+    }
+    previous.set(id, JSON.stringify(task));
+    task.undoable = true;
     if (body.action === "unsnooze") {
       task.snoozed_until = null;
       return;

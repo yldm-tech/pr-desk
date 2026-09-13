@@ -111,6 +111,9 @@ type followUpView struct {
 	Reasons []string    `json:"reasons"`
 	Unread  bool        `json:"unread"`
 	Excerpt string      `json:"excerpt"`
+	// Who wrote the excerpt and when. Without them it renders as an unattributed paragraph that reads like the pull request's own description, and the difference between a reviewer an hour ago and a drive-by two weeks back is what decides whether it is worth acting on now.
+	ExcerptBy string     `json:"excerpt_by,omitempty"`
+	ExcerptAt *time.Time `json:"excerpt_at,omitempty"`
 }
 
 func (s *Server) followUpRows(c *gin.Context) ([]followUpView, error) {
@@ -155,7 +158,19 @@ func (s *Server) collectFollowUps(sid string, scope func() *gorm.DB) ([]followUp
 		}
 		state, reasons := row.presentation(now, settings.waitDays(pr.Repo))
 		facts := row.facts()
-		rows = append(rows, followUpView{FollowUp: row, PR: pr, Role: facts.Role, State: state, Reasons: reasons, Unread: row.Version > row.ReadVersion, Excerpt: facts.HumanExcerpt})
+		// Undoable is derived rather than stored: the snapshot columns are the state, and a row that has one is a row whose last action can be taken back.
+		row.Undoable = row.PrevWaitingSince != nil
+		excerpt := facts.HumanExcerpt
+		// Appended where the cut happens rather than guessed at by the browser, which cannot tell a comment that ended at 240 characters from one that was sliced there.
+		if facts.HumanTruncated {
+			excerpt += "…"
+		}
+		var excerptAt *time.Time
+		if !facts.HumanAt.IsZero() {
+			at := facts.HumanAt
+			excerptAt = &at
+		}
+		rows = append(rows, followUpView{FollowUp: row, PR: pr, Role: facts.Role, State: state, Reasons: reasons, Unread: row.Version > row.ReadVersion, Excerpt: excerpt, ExcerptBy: facts.HumanBy, ExcerptAt: excerptAt})
 	}
 	rank := map[string]int{"action": 0, "follow_up": 1, "waiting": 2, "draft": 3, "archived": 4}
 	sort.SliceStable(rows, func(i, j int) bool {
@@ -203,7 +218,7 @@ func (s *Server) updateFollowUp(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "Invalid action"})
 		return
 	}
-	if input.Action != "read" && input.Action != "handled" && input.Action != "followed_up" && input.Action != "snooze" && input.Action != "unsnooze" {
+	if input.Action != "read" && input.Action != "handled" && input.Action != "followed_up" && input.Action != "snooze" && input.Action != "unsnooze" && input.Action != "undo" {
 		c.JSON(400, gin.H{"error": "Unknown action"})
 		return
 	}
@@ -241,6 +256,12 @@ func (s *Server) applyFollowUpAction(id, action string, version uint64, until *t
 			status = 409
 			return fmt.Errorf("new activity arrived; refresh before marking handled")
 		}
+		// The step undo goes back to, taken before anything is changed. `undo` is the one action that must not overwrite it, or undoing would make itself unrepeatable in the wrong direction.
+		if input.Action != "undo" {
+			read, handled, confirm, waiting, snoozed := row.ReadVersion, row.HandledVersion, row.NeedsConfirmation, row.WaitingSince, row.SnoozedUntil
+			row.PrevReadVersion, row.PrevHandledVersion, row.PrevNeedsConfirmation, row.PrevWaitingSince = &read, &handled, &confirm, &waiting
+			row.PrevSnoozedUntil = snoozed
+		}
 		switch input.Action {
 		case "read":
 			row.ReadVersion = row.Version
@@ -258,6 +279,14 @@ func (s *Server) applyFollowUpAction(id, action string, version uint64, until *t
 			// Only the reminder is cancelled. Read and handled state stay as
 			// they were, so this is not a back door to marking work away.
 			row.SnoozedUntil = nil
+		case "undo":
+			// Restores the step before the last action and consumes it. Nothing to go back to is not an error: the button is gone by then anyway, and answering 400 would turn a double-tap into a message about a failure that did not happen.
+			if row.PrevWaitingSince == nil {
+				return nil
+			}
+			row.ReadVersion, row.HandledVersion = *row.PrevReadVersion, *row.PrevHandledVersion
+			row.NeedsConfirmation, row.WaitingSince, row.SnoozedUntil = *row.PrevNeedsConfirmation, *row.PrevWaitingSince, row.PrevSnoozedUntil
+			row.PrevReadVersion, row.PrevHandledVersion, row.PrevNeedsConfirmation, row.PrevWaitingSince, row.PrevSnoozedUntil = nil, nil, nil, nil, nil
 		}
 		return tx.Save(&row).Error
 	})

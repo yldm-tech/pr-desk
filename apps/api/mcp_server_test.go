@@ -185,7 +185,8 @@ func TestMCPWriteToolsHonourOptimisticConcurrency(t *testing.T) {
 // The spec defaults destructiveHint and openWorldHint to true when they are absent, so omitting them published every tool here as destructive and as reaching GitHub, and a host that auto-approves harmless tools prompted on every mark_follow_up_read. This pins the wire contract so a new AddTool cannot quietly reintroduce the defaults.
 func assertToolAnnotations(t *testing.T, tools []*mcp.Tool) {
 	t.Helper()
-	writes := map[string]bool{"mark_follow_up_read": true, "mark_follow_up_handled": true, "snooze_follow_up": true, "unsnooze_follow_up": true}
+	// undo_follow_up writes: it restores the read, handled, confirmation and waiting state the row had before its last action, so an agent calling it changes stored state exactly as the four above do.
+	writes := map[string]bool{"mark_follow_up_read": true, "mark_follow_up_handled": true, "snooze_follow_up": true, "unsnooze_follow_up": true, "undo_follow_up": true}
 	seen := 0
 	for _, tool := range tools {
 		if tool.Annotations == nil {

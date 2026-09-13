@@ -77,6 +77,28 @@ async function smallControls(page: Page) {
   });
 }
 
+// (d) Words split across lines. `wrap-anywhere` on the shell's labels is a fallback for a word that cannot fit its track at all, not a layout: when it fires, "Organization access" renders as "Organizati on access", which reads as a rendering bug rather than as a narrow screen. Counting client rects against word count is what distinguishes a break at a space — which is fine and expected at 320px — from a break inside a word. Only leaf elements are measured, because a range over a container spans its children's boxes and would count those as lines.
+async function midWordBreaks(page: Page) {
+  return page.evaluate(() => {
+    const report: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>("aside span, aside button, nav a")) {
+      if (el.children.length > 0) continue;
+      const text = (el.textContent ?? "").trim();
+      if (!text) continue;
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = range.getClientRects().length;
+      // A CJK locale legitimately breaks between characters, so a script with no spaces is exempt: there is no "inside a word" to be wrong about.
+      if (/[぀-ヿ㐀-鿿가-힯]/.test(text)) continue;
+      const words = text.split(/\s+/).length;
+      if (lines > words) report.push(`"${text}" wrapped onto ${lines} lines for ${words} word(s)`);
+    }
+    return report;
+  });
+}
+
 for (const route of ROUTES) {
   test(`nothing is clipped, undersized or zoom-triggering on ${route}`, async ({ page }, info) => {
     test.skip(!routesFor(info).includes(route), "this project only walks the routes that change band");
@@ -86,6 +108,7 @@ for (const route of ROUTES) {
     // Soft throughout: with four sweeps over nine routes at twenty-four viewports, a run that stops at the first offender costs a full matrix to find the second one. Soft failures still fail the test.
     expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
     expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
+    expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
     if (isCoarse(info)) {
       expect.soft(await smallTargets(page), "tap targets under 44px on a coarse pointer").toEqual([]);
       expect.soft(await smallControls(page), "controls under 16px zoom iOS Safari in on focus and never back out").toEqual([]);
@@ -181,6 +204,7 @@ for (const locale of ["es", "ja"]) {
       await open(page, route);
       expect.soft(await clippedElements(page), `content clipped by an overflow:hidden ancestor in ${locale}`).toEqual([]);
       expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), `the document scrolls sideways in ${locale}`).toBe(false);
+      expect.soft(await midWordBreaks(page), `a shell label was split inside a word in ${locale}`).toEqual([]);
       if (isCoarse(info)) expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
     });
   }

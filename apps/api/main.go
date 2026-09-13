@@ -849,9 +849,16 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 
 func (s *Server) listPRs(c *gin.Context) {
 	var prs []PullRequest
-	q := sessionPRQuery(c, s.db).Where("role = ?", "authored").Where("state = ? AND merged_at IS NULL", "open")
-	if st := c.Query("state"); st != "" {
-		q = q.Where("state = ?", st)
+	q := sessionPRQuery(c, s.db).Where("role = ?", "authored")
+	// Open-and-unmerged is the default, not a law. It used to be welded on, so "All pull requests" could never reach anything the user had merged or closed while the same page advertised a merged count — and an explicit merged=true was answered with a guaranteed-empty query. An explicit state= or merged= now replaces the default instead of being intersected with it.
+	state, merged := c.Query("state"), c.Query("merged")
+	switch {
+	case merged == "true":
+		q = q.Where("merged_at IS NOT NULL")
+	case state != "":
+		q = q.Where("state = ?", state)
+	default:
+		q = q.Where("state = ? AND merged_at IS NULL", "open")
 	}
 	if c.Query("conflicts") == "true" {
 		q = q.Where("has_conflicts = ?", true)
@@ -870,10 +877,12 @@ func (s *Server) listPRs(c *gin.Context) {
 		// Treat user input as text; SQL wildcard characters are not search syntax.
 		search = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(search)
 		pattern := "%" + search + "%"
-		q = q.Where("title ILIKE ? ESCAPE '\\' OR repo ILIKE ? ESCAPE '\\'", pattern, pattern)
-	}
-	if c.Query("merged") == "true" {
-		q = q.Where("1 = 0")
+		// People refer to their pull requests by number, because that is what CI, chat and their own commit messages hand them. Matching it here rather than in the browser is what makes it work across pages instead of over the fifty rows on screen.
+		if number, err := strconv.Atoi(strings.TrimPrefix(strings.TrimSpace(c.Query("search")), "#")); err == nil && number > 0 {
+			q = q.Where("title ILIKE ? ESCAPE '\\' OR repo ILIKE ? ESCAPE '\\' OR number = ?", pattern, pattern, number)
+		} else {
+			q = q.Where("title ILIKE ? ESCAPE '\\' OR repo ILIKE ? ESCAPE '\\'", pattern, pattern)
+		}
 	}
 	if c.Query("attention") == "true" {
 		q = q.Where("state = ? AND merged_at IS NULL", "open").Where("has_conflicts = ? OR review_status = ? OR checks_status IN ?", true, "changes_requested", []string{"failure", "error"})
@@ -883,7 +892,12 @@ func (s *Server) listPRs(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "unable to count pull requests"})
 		return
 	}
-	q = q.Order("updated_at desc, id desc")
+	// Whitelisted, because this string reaches the ORDER BY clause. Oldest-first is the question the default cannot answer: which of these has been sitting untouched the longest.
+	order := "updated_at desc, id desc"
+	if c.Query("sort") == "oldest" {
+		order = "updated_at asc, id asc"
+	}
+	q = q.Order(order)
 	limit := 50
 	if v, err := strconv.Atoi(c.DefaultQuery("limit", "50")); err == nil && v > 0 && v <= 200 {
 		limit = v

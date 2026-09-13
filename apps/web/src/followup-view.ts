@@ -14,6 +14,11 @@ export const followUpSchema = z.object({
   excerpt: z.string(),
   waiting_since: z.string(),
   archived_at: z.string().nullable(),
+  // Whether the row has a step to go back to. Derived server-side from the snapshot columns, so the browser never has to guess whether Undo would do anything.
+  undoable: z.boolean().optional(),
+  // Who wrote the excerpt and when. Without them it renders as an unattributed paragraph that reads like the pull request description.
+  excerpt_by: z.string().optional(),
+  excerpt_at: z.string().optional(),
   snoozed_until: z.string().nullable().optional(),
   pr: PRSchema.extend({ draft: z.boolean().optional() }),
 });
@@ -25,7 +30,8 @@ export type FollowUpPR = FollowUp["pr"];
 // Reasons are grouped by what the reader has to do about them: a blocked PR
 // needs a fix, an action is waiting on the reader, and the timing reasons only
 // say that the clock ran out.
-export const reasonTones: Record<string, string> = { conflict: "blocked", checks_failed: "blocked", review_requested: "action", human_feedback: "action", approval_revoked: "action", overdue: "waiting", snooze_due: "waiting" };
+// `changes_requested` and `author_updated` are now reachable: presentation() records the reason that actually raised the confirmation instead of guessing one from the role, so a reviewer whose approval was dismissed no longer reads "Review requested" when nobody requested anything. Both ask the reader to do something, so both take the action tone.
+export const reasonTones: Record<string, string> = { conflict: "blocked", checks_failed: "blocked", review_requested: "action", human_feedback: "action", changes_requested: "action", author_updated: "action", approval_revoked: "action", overdue: "waiting", snooze_due: "waiting" };
 export const reasonTone = (reason: string) => reasonTones[reason] || "neutral";
 
 export type FollowUpGroup = "action" | "follow_up" | "muted" | "waiting" | "draft" | "archived";
@@ -118,4 +124,15 @@ export function snoozeBounds(now: number): { min: string; max: string } {
   const max = new Date(now);
   max.setFullYear(max.getFullYear() + 1);
   return { min: format(new Date(now + 60000)), max: format(max) };
+}
+
+// Holds the list still while someone is working through it. The server recomputes `presentation` against a fresh clock on every read and re-sorts by state rank, so a background poll — or the refetch the reader's own action triggers — rearranges the page under the pointer. Freezing the order means a card only moves when the reader does something that moves it.
+//
+// Items already known keep the position they had. Items the reader has never seen go to the end rather than being spliced into the middle, and are reported separately so the page can offer to take them rather than taking them silently. Array.prototype.sort is stable, so several new items keep the order the server sent them in.
+export function stableOrder(items: FollowUp[], order: number[]): { items: FollowUp[]; added: number[] } {
+  if (order.length === 0) return { items, added: [] };
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const added = items.filter((item) => !rank.has(item.id)).map((item) => item.id);
+  const sorted = [...items].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  return { items: sorted, added };
 }

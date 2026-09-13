@@ -241,3 +241,24 @@ func TestReviewBaselineAndResponseBetweenPolls(t *testing.T) {
 		t.Fatal("review and later author reply in same poll lost reply")
 	}
 }
+
+// presentation() used to synthesize one reason from the role alone, so the chip could state something that did not happen: a reviewer whose approval had been dismissed was told "Review requested" when nobody had requested anything, and changes requested on your own pull request were reported as "New comment to answer". The cause is recorded where it occurs now, and the role guess survives only as the fallback for rows written before that.
+func TestConfirmationReportsWhatActuallyHappened(t *testing.T) {
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	previous := FollowUpFacts{Role: "reviewer", MyReview: "APPROVED", MyReviewAt: now.Add(-time.Hour)}
+	// advanceFacts reads the previous snapshot off the row, so seeding FactsJSON is what makes this a transition rather than a first sight.
+	row := FollowUp{FactsJSON: mustJSON(previous), Version: 1}
+	next := previous
+	next.MyReview = "DISMISSED"
+	row.advanceFacts(next, now)
+	_, reasons := row.presentation(now, 7)
+	if len(reasons) != 1 || reasons[0] != "approval_revoked" {
+		t.Fatalf("reasons = %v, want the cause that was recorded rather than a guess from the role", reasons)
+	}
+	// The fallback is what keeps rows written before this readable: no recorded cause, so the role guess stands.
+	legacy := FollowUp{NeedsConfirmation: true, FactsJSON: mustJSON(FollowUpFacts{Role: "reviewer"})}
+	_, legacyReasons := legacy.presentation(now, 7)
+	if len(legacyReasons) != 1 || legacyReasons[0] != "review_requested" {
+		t.Fatalf("legacy reasons = %v, want the role fallback", legacyReasons)
+	}
+}
