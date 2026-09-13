@@ -251,6 +251,8 @@ func (s *Server) applyFollowUpAction(id, action string, version uint64, until *t
 			row.WaitingSince = now
 			row.SnoozedUntil = nil
 		case "snooze":
+			// Snoozing means "I have seen it, remind me later", so the read mark moves with it. That is also what makes presentation's version gate satisfiable at the moment of snoozing: without it a row carrying unread activity would be muted in the database and still presented as action.
+			row.ReadVersion = row.Version
 			row.SnoozedUntil = input.Until
 		case "unsnooze":
 			// Only the reminder is cancelled. Read and handled state stay as
