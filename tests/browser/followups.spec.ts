@@ -45,15 +45,16 @@ test("follow-up reasons are coloured by what they ask for", async ({ page }, tes
   await expect(priority.first().locator('[data-tone="blocked"]')).toHaveCount(2);
   await expect(priority.nth(1).locator('[data-tone="action"]')).toHaveCount(1);
   await expect(priority.nth(2).locator('[data-tone="waiting"]')).toHaveCount(1);
-  await expect(priority.nth(3).locator('[data-tone="neutral"]')).toHaveCount(1);
+  // `author_updated` used to fall through to neutral because presentation() could never emit it: the confirmation reason was synthesized from the role. It is recorded now, and "the author answered you" asks the reader to look again, so it carries the action tone. The neutral fallback for a genuinely unknown reason is covered in followup-view.test.mjs.
+  await expect(priority.nth(3).locator('[data-tone="action"]')).toHaveCount(1);
   const colour = (tone: string) =>
     page
       .getByTestId("priority-reasons")
       .locator(`[data-tone="${tone}"]`)
       .first()
       .evaluate((node) => getComputedStyle(node).color);
-  const tones = await Promise.all(["blocked", "action", "waiting", "neutral"].map(colour));
-  expect(new Set(tones).size).toBe(4);
+  const tones = await Promise.all(["blocked", "action", "waiting"].map(colour));
+  expect(new Set(tones).size).toBe(3);
   await page.screenshot({ path: testInfo.outputPath("followup-reason-tones.png"), fullPage: true });
 });
 
@@ -324,9 +325,19 @@ test("a card action is announced and does not strand the focus", async ({ page }
   // The card is removed, so the button that had the focus is gone.
   await expect(card).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Handle timezone boundaries" })).toBeAttached();
-  // Focus must land somewhere in the workspace rather than on the body.
-  const stranded = await page.evaluate(() => document.activeElement === document.body);
-  expect(stranded).toBe(false);
+  // Not merely "somewhere other than the body": focus has to land on the card that took the acted-on one's place, because that is what makes clearing a queue linear. Asserting the weaker property is how this passed while focus was being handed to a disabled button and silently dropped — every card's controls are disabled for as long as the invalidated refetch is in flight.
+  const landed = await page.evaluate(() => {
+    const active = document.activeElement as HTMLElement | null;
+    const card = active?.closest("[data-testid='follow-up-card']") as HTMLElement | null;
+    return { onBody: active === document.body, cardId: card?.id ?? null };
+  });
+  expect(landed.onBody).toBe(false);
+  expect(landed.cardId).toBe(
+    await page
+      .getByTestId("follow-up-card")
+      .first()
+      .evaluate((el) => el.id),
+  );
 });
 
 // The badge promised a small, finite amount of work and opened a page that showed the entire inventory, so the number it nagged with could not be cleared in one pass and nothing on screen said where the urgent items stopped. These two things are now the same set by construction on both sides — the server counts action and follow_up, the default filter selects action and follow_up — and this is the assertion that keeps them that way.
@@ -457,4 +468,116 @@ test("the sync dismiss button is not named after the activity panel", async ({ p
   await page.goto("/#/attention");
   // Both buttons used to be announced as "Close activity".
   await expect(page.getByRole("button", { name: "Close activity" })).toHaveCount(0);
+});
+
+// A stale bookmark used to render the contribution overview under whatever address was typed, so the page and the URL disagreed and a reload landed somewhere else again. `replace` keeps the bad entry out of history, so Back still leaves the app rather than bouncing between the typo and the redirect.
+test("an unknown route rewrites the address instead of quietly rendering the overview", async ({ page }) => {
+  await page.goto("/#/follow-ups");
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.getByRole("heading", { name: "Contribution overview" })).toBeVisible();
+});
+
+// "Show me just this repository" was a two-screen detour through Repositories even though the name was right there in the row. The title link one cell over still goes to GitHub.
+test("the repository cell filters the list instead of leaving for github.com", async ({ page }) => {
+  await page.goto("/#/pull-requests");
+  const row = page.getByRole("row").filter({ hasText: "Handle timezone boundaries" });
+  await row.getByRole("button", { name: "Show only fixture/calendar" }).click();
+  await expect(page).toHaveURL(/repo=fixture%2Fcalendar/);
+  await expect(page.getByRole("button", { name: "Clear the fixture/calendar filter" })).toBeVisible();
+});
+
+// The whole control surface used to be three role buttons and one state select, so "what has been sitting longest" — the question the server's state rank cannot answer — had no way to be asked, and neither did "only the ones I have not read". Both live in the URL so a narrowed view stays shareable.
+test("the workspace can be ordered by age and narrowed to unread", async ({ page }) => {
+  await page.goto("/#/attention?status=all");
+  const titles = () => page.getByTestId("follow-up-card").locator("h3").allInnerTexts();
+  await page.getByRole("combobox", { name: "Order", exact: true }).selectOption("waiting");
+  await expect(page).toHaveURL(/sort=waiting/);
+  const byAge = await titles();
+  // The fixtures carry distinct waiting_since values, so oldest-first is a different order from the server's rank.
+  expect(byAge.length).toBeGreaterThan(1);
+  const unread = page.getByRole("button", { name: "Unread only", exact: true });
+  await unread.click();
+  await expect(page).toHaveURL(/unread=1/);
+  await expect(page.getByTestId("follow-up-card")).toHaveCount(await page.getByTestId("follow-up-card").filter({ hasText: "Unread" }).count());
+  // Turning it back off drops the parameter rather than leaving `unread=` behind.
+  await unread.click();
+  await expect(page).not.toHaveURL(/unread=/);
+});
+
+// Nothing on the landing page could be acted on: every one of the five most urgent items cost a route change before a decision could be recorded, and the fourth tile counted finished work at the same weight as a conflict nobody has fixed.
+test("the landing page counts blocked work and can resolve a row in place", async ({ page }) => {
+  await page.goto("/#/");
+  const blocked = page.getByRole("link").filter({ hasText: "Blocked" }).first();
+  await expect(blocked).toBeVisible();
+  // The tile's number and the view it opens are the same predicate.
+  await expect(blocked).toHaveAttribute("href", /tone=blocked/);
+  await expect(page.getByRole("link", { name: /Recently merged/ })).toBeVisible();
+  const row = page.getByTestId("priority-list").locator("li").filter({ hasText: "Handle timezone boundaries" });
+  await row.getByRole("button", { name: /^Handled/ }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Handle timezone boundaries" })).toBeVisible();
+  await expect(row).toHaveCount(0);
+});
+
+// Clearing twenty items used to cost twenty round trips through a mouse. Selection plus one verb is the whole point; the announcement is one aggregated sentence rather than N, because N is what the live region cannot deliver.
+test("rows can be selected and resolved together", async ({ page }) => {
+  await page.goto("/#/attention?status=all");
+  const cards = page.getByTestId("follow-up-card");
+  await expect(cards.first()).toBeVisible();
+  expect(await cards.count()).toBeGreaterThan(1);
+  await cards.nth(0).getByRole("checkbox").click();
+  await cards.nth(1).getByRole("checkbox").click();
+  await expect(page.getByText("2 items selected")).toBeVisible();
+  await page.getByRole("group", { name: "Selected follow-ups" }).getByRole("button", { name: "Handled · wait for others" }).click();
+  // One sentence with a count, not one per row.
+  await expect(page.getByRole("status").filter({ hasText: /2 items updated/ })).toBeAttached();
+});
+
+// The application's only shortcut was "/" and it was inert on the page where state can be changed. j/k walk the list, x selects, ? explains.
+test("the workspace can be walked and selected from the keyboard", async ({ page }) => {
+  await page.goto("/#/attention?status=all");
+  await expect(page.getByTestId("follow-up-card").first()).toBeVisible();
+  await page.keyboard.press("j");
+  const first = await page.evaluate(() => document.querySelector("[data-active]")?.id ?? null);
+  expect(first).not.toBeNull();
+  await page.keyboard.press("j");
+  const second = await page.evaluate(() => document.querySelector("[data-active]")?.id ?? null);
+  expect(second).not.toBe(first);
+  await page.keyboard.press("x");
+  await expect(page.getByRole("group", { name: "Selected follow-ups" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("group", { name: "Selected follow-ups" })).toHaveCount(0);
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+});
+
+// `handled` overwrites the waiting clock and clears the confirmation, and until the server learned to snapshot that step a mis-tap destroyed the one number the whole product is built on. The inverse is offered where the confirmation already is.
+test("an action can be taken back from the confirmation that reports it", async ({ page }) => {
+  await page.goto("/#/attention?role=authored&status=action");
+  const card = page.getByTestId("follow-up-card").filter({ hasText: "Handle timezone boundaries" });
+  await card.getByRole("button", { name: /^Handled · wait for others/ }).click();
+  await expect(card).toHaveCount(0);
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  await expect(undo).toBeVisible();
+  await undo.click();
+  await expect(page.getByRole("status").filter({ hasText: "Action undone" })).toBeAttached();
+});
+
+// "All pull requests" was open-and-unmerged, so nothing the reader had finished could be reached from the route named after all of them, while the same page advertised a merged count. The endpoint answered merged=true with a guaranteed-empty predicate; it now replaces the default rather than intersecting with it.
+test("merged work is reachable from the list that claims to hold it", async ({ page }) => {
+  await page.goto("/#/pull-requests");
+  const merged = page.waitForRequest((request) => request.url().includes("/pull-requests?") && request.url().includes("merged=true"));
+  await page.getByRole("button", { name: "Merged", exact: true }).click();
+  await merged;
+  await expect(page).toHaveURL(/#\/merged/);
+});
+
+// The first words on the landing route named the report at the bottom of it rather than the job, the priority list showed five of forty exactly as it showed five of five, and the outcome legend counted sets the interface had no way to open.
+test("the landing page names the job, states the remainder and opens what it counts", async ({ page }) => {
+  await page.goto("/#/");
+  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Contribution overview" })).toBeVisible();
+  // The fixture holds four, which the list shows in full, so the remainder must not be claimed. The link states the part that is not on screen; five of five has no such part.
+  await expect(page.getByRole("link", { name: /more item/ })).toHaveCount(0);
+  await page.getByRole("link", { name: "Merged", exact: true }).click();
+  await expect(page).toHaveURL(/#\/merged/);
 });
