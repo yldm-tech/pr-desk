@@ -8,7 +8,16 @@ const panel = "mb-6 min-w-0 rounded-2xl border border-[var(--border)] bg-[var(--
 export const followUpSummary = panel;
 export const followUpWorkspace = `${panel} focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent)]`;
 
-export const followUpCounts = ["mb-6 grid grid-cols-2 gap-3 @row/dashboard:grid-cols-4", "[&_a]:flex [&_a]:flex-col [&_a]:gap-2 [&_a]:rounded-xl [&_a]:bg-[var(--accent-soft)] [&_a]:p-4 [&_a]:text-[var(--accent-text)] [&_a]:no-underline", "[&_strong]:text-[length:1.75rem] [&_span]:text-[length:0.8125rem]"].join(" ");
+export const followUpCounts = [
+  "mb-6 grid grid-cols-2 gap-3 @row/dashboard:grid-cols-4",
+  "[&_a]:flex [&_a]:flex-col [&_a]:gap-2 [&_a]:rounded-xl [&_a]:bg-[var(--accent-soft)] [&_a]:p-4 [&_a]:text-[var(--accent-text)] [&_a]:no-underline",
+  // The blocked tile borrows the tone the reason chips already use, so the count that matters most is legible before its label is read. Written as a data attribute rather than a second class so the tile list stays data and the styling stays here.
+  "[&_a[data-tone=blocked]]:bg-[var(--danger-soft)] [&_a[data-tone=blocked]]:text-[var(--danger)]",
+  "[&_strong]:text-[length:1.75rem] [&_span]:text-[length:0.8125rem]",
+].join(" ");
+
+// Finished work, kept reachable and kept quiet: a caption-weight row under the list rather than a quarter of the tile grid.
+export const followUpMergedLink = "mx-0 mt-4 mb-0 flex items-center gap-2 text-[length:0.75rem] text-[var(--muted)] [&_a]:text-[var(--muted)] [&_a]:underline [&_a]:underline-offset-[3px] [&_span]:[font-variant-numeric:tabular-nums] hoverable:[&_a:hover]:text-[var(--accent-text)]";
 
 export const followUpPriority = ["mx-0 mt-3 mb-0 list-none p-0", "[&_a]:flex [&_a]:flex-col [&_a]:gap-1.5 [&_a]:border-t [&_a]:border-[var(--border)] [&_a]:py-3 [&_a]:text-[var(--foreground)] [&_a]:no-underline [&_a]:[overflow-wrap:anywhere]", "[&_small]:text-[length:0.75rem] [&_small]:text-[var(--muted)]"].join(" ");
 
@@ -67,7 +76,8 @@ export const followUpExcerpt =
   "mx-0 my-3 max-h-24 overflow-y-auto whitespace-pre-wrap text-[var(--muted)] [overflow-wrap:anywhere] @max-row/dashboard:max-h-none @max-row/dashboard:overflow-hidden @max-row/dashboard:[display:-webkit-box] @max-row/dashboard:[-webkit-line-clamp:4] @max-row/dashboard:[-webkit-box-orient:vertical]";
 
 // The excerpt is somebody else's sentence sitting between the reader's own reason chips and the buttons that act on them, and as a bare paragraph it reads as the application talking. A left rule and the quotation element say whose words they are without adding a word of copy. The clamp behaviour above is kept exactly: the scroll trap it avoids on a narrow card is unrelated to whose voice this is.
-export const followUpQuote = `${followUpExcerpt} border-l-2 border-[var(--border)] pl-3`;
+// The attribution sits above the words as a caption rather than beside them: at 320px a name and a date on the same line as the quote push it into a two-character column.
+export const followUpQuote = `${followUpExcerpt} border-l-2 border-[var(--border)] pl-3 [&_cite]:mb-1 [&_cite]:block [&_cite]:text-[length:0.75rem] [&_cite]:not-italic [&_cite]:text-[var(--muted)]`;
 
 // The snooze <summary> is the sole entry point to the snooze controls and sits
 // in a wrapping row beside buttons that post irreversible mutations, so on a
@@ -111,4 +121,21 @@ export const followUpFilters = [
   "[&_select]:min-w-0 [&_select]:rounded-lg [&_select]:border [&_select]:border-[var(--border)] [&_select]:bg-[var(--surface)] [&_select]:px-3 [&_select]:py-[9px] [&_select]:text-[var(--foreground)]",
   "pointer-coarse:[&_select]:min-h-11",
   "[&_[aria-pressed=true]]:border-[var(--accent)] [&_[aria-pressed=true]]:bg-[var(--accent-soft)] [&_[aria-pressed=true]]:text-[var(--accent-text)]",
+].join(" ");
+
+// The two verbs beside a priority row. The row itself is the link; these sit after it, so they wrap under it on a phone rather than squeezing the title.
+export const followUpPriorityActions = "mt-1 mb-3 flex flex-wrap gap-2";
+
+// The row checkbox. A native input so the accessibility and the shift-range behaviour come for free; the coarse-pointer floor is on the box itself because it is the one control on the card small enough to miss.
+export const followUpSelect = "m-0 h-4 w-4 shrink-0 cursor-pointer accent-[var(--accent)] pointer-coarse:h-11 pointer-coarse:w-11";
+
+// Sticky because a selection is built by scrolling: the bar has to still be reachable when the reader arrives at the bottom of the list.
+export const followUpBulkBar = "sticky top-2 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--accent-border)] bg-[var(--accent-soft)] px-4 py-3 [&_strong]:text-[length:0.8125rem] [&_strong]:text-[var(--accent-text)]";
+
+// The keys, on request. Not a modal: it steals no focus and closes on the same key that opened it, because its whole job is to be glanced at.
+export const followUpShortcuts = [
+  "mb-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4",
+  "[&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[auto_minmax(0,1fr)] [&_dl]:items-baseline [&_dl]:gap-x-4 [&_dl]:gap-y-2",
+  "[&_dt]:m-0 [&_dt]:rounded-md [&_dt]:bg-[var(--surface-muted)] [&_dt]:px-2 [&_dt]:py-0.5 [&_dt]:text-center [&_dt]:font-mono [&_dt]:text-[length:0.75rem]",
+  "[&_dd]:m-0 [&_dd]:text-[length:0.8125rem] [&_dd]:text-[var(--muted)]",
 ].join(" ");

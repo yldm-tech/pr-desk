@@ -7,7 +7,7 @@ import { apiURL } from "./api-url";
 import type { FollowUp, FollowUpResponse } from "./followup-view";
 
 // The one mutation both surfaces post through. The workspace and the PR table now offer the same verbs on the same rows, and two copies of this would drift on the first change to either — the optimistic prediction in particular has to be identical or the two screens disagree about work the user has already done.
-export type FollowUpActionInput = { action: "read" | "handled" | "followed_up" | "snooze" | "unsnooze"; until?: string };
+export type FollowUpActionInput = { action: "read" | "handled" | "followed_up" | "snooze" | "unsnooze" | "undo"; until?: string };
 
 const queryKey = ["follow-ups"] as const;
 
@@ -61,4 +61,48 @@ export function useFollowUpAction({ item, onDone, onFailed }: { item: FollowUp; 
     },
   });
   return { mutate: mutation.mutate, isBusy: mutation.isPending || settling, isPending: mutation.isPending, isError: mutation.isError, error: mutation.error, variables: mutation.variables, reset: mutation.reset };
+}
+
+// Bulk, as a fan-out over the endpoint that already exists rather than a new one. A batch route would cut N round trips to one, but the optimistic-concurrency rule rejects rows individually with a 409, so it would have to invent a partial-result shape and the interface would still have to report per-row failures — the round trips are the only thing it buys, and this list is tens of rows rather than thousands.
+//
+// Concurrency is capped because each call takes a row lock and the Postgres pool is finite: twenty at once would queue on the pool rather than go faster. One invalidation after the last settles, not one per call, because N invalidations means N refetches of the same list and the reader watches it rearrange N times.
+const BULK_CONCURRENCY = 6;
+
+export type BulkOutcome = { done: number; failed: number[] };
+
+export function useBulkFollowUpAction({ onDone }: { onDone?: (outcome: BulkOutcome) => void }) {
+  const client = useQueryClient();
+  const [running, setRunning] = useState(false);
+  const mutation = useMutation({
+    mutationFn: async ({ items, action }: { items: { id: number; version: number }[]; action: FollowUpActionInput }): Promise<BulkOutcome> => {
+      const queue = [...items];
+      const failed: number[] = [];
+      let done = 0;
+      const worker = async () => {
+        for (;;) {
+          const next = queue.shift();
+          if (!next) return;
+          try {
+            await ky.post(apiURL + `/api/v1/follow-ups/${next.id}`, { credentials: "include", retry: 0, json: { ...action, version: next.version } });
+            done += 1;
+          } catch {
+            // The id rather than the error: a 409 here means someone else moved that one row on, and the reader needs to know which row, not which status code.
+            failed.push(next.id);
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(BULK_CONCURRENCY, queue.length) }, worker));
+      return { done, failed };
+    },
+    onSettled: () => {
+      setRunning(true);
+      return client.invalidateQueries({ queryKey });
+    },
+    onSuccess: (outcome) => onDone?.(outcome),
+  });
+  const fetching = useIsFetching({ queryKey }) > 0;
+  useEffect(() => {
+    if (running && !fetching) setRunning(false);
+  }, [running, fetching]);
+  return { run: mutation.mutate, isBusy: mutation.isPending || running };
 }

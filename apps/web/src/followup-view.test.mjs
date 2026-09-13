@@ -1,6 +1,6 @@
 import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { factChips, factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, isMuted, matchesStatus, reasonTone, snoozeBounds, waitingLabel } from "./followup-view.ts";
+import { factChips, factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, isMuted, matchesStatus, reasonTone, snoozeBounds, stableOrder, waitingLabel } from "./followup-view.ts";
 
 const now = Date.parse("2026-09-13T12:00:00Z");
 const day = 86400000;
@@ -129,7 +129,10 @@ test("reason tones keep the three-way grouping and fall back to neutral", () => 
   assert.equal(reasonTone("checks_failed"), "blocked");
   assert.equal(reasonTone("human_feedback"), "action");
   assert.equal(reasonTone("overdue"), "waiting");
-  assert.equal(reasonTone("author_updated"), "neutral");
+  // Both of these used to be unreachable on a card, because presentation() synthesized one reason from the role instead of recording what happened. They are emitted now, and both ask the reader to look again, so both take the action tone rather than falling through to neutral.
+  assert.equal(reasonTone("author_updated"), "action");
+  assert.equal(reasonTone("changes_requested"), "action");
+  assert.equal(reasonTone("something_new"), "neutral");
 });
 
 test("the wait is a duration, and an unparseable one is no sentence at all", () => {
@@ -148,4 +151,26 @@ test("the reminder picker cannot offer a date the server will refuse", () => {
   // Both bounds are local wall-clock, so they are compared against the raw datetime-local value rather than an ISO instant.
   assert.equal(bounds.max.slice(0, 4), String(new Date(now).getFullYear() + 1));
   assert.ok(bounds.min > `${new Date(now).getFullYear()}-01-01T00:00`);
+});
+
+test("stableOrder holds known items in place and appends unseen ones", () => {
+  const item = (id) => ({ id, version: 1, role: "authored", state: "action", reasons: [], unread: false, excerpt: "", waiting_since: "2026-09-01T00:00:00Z", archived_at: null, pr: { id, repo: "a/b", number: id, title: `t${id}` } });
+  // The server has re-sorted 3 to the front and added 9; the reader's order was 1, 2, 3.
+  const result = stableOrder([item(3), item(9), item(1), item(2)], [1, 2, 3]);
+  assert.deepEqual(
+    result.items.map((i) => i.id),
+    [1, 2, 3, 9],
+  );
+  assert.deepEqual(result.added, [9]);
+});
+
+test("stableOrder with no remembered order leaves the server's order alone", () => {
+  const item = (id) => ({ id, version: 1, role: "authored", state: "action", reasons: [], unread: false, excerpt: "", waiting_since: "2026-09-01T00:00:00Z", archived_at: null, pr: { id, repo: "a/b", number: id, title: `t${id}` } });
+  // The first load has nothing to preserve, and inventing an order there would fight the server's ranking rather than protect the reader from it.
+  const result = stableOrder([item(3), item(1)], []);
+  assert.deepEqual(
+    result.items.map((i) => i.id),
+    [3, 1],
+  );
+  assert.deepEqual(result.added, []);
 });
