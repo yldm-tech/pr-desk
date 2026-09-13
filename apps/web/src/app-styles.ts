@@ -208,6 +208,10 @@ export const muted = "text-[var(--muted)]";
 
 export const iconButton = "rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5";
 
+// The reload button an installed window has no chrome to offer. Its geometry is the language trigger's beside it — same 38px floor, same radius, same border and hover — so the header cluster stays one row of controls rather than one control and two neighbours; icon-only, because it is the third thing in a cluster that is already tight at 320px, and a 44px square on a coarse pointer, because the sweep is right that a 32px glyph is not a target.
+export const headerRefresh =
+  "flex min-h-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-2.5 text-[var(--muted)] hover:border-[var(--accent-border)] hover:bg-[var(--surface-muted)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-65 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)] pointer-coarse:min-h-11 pointer-coarse:min-w-11";
+
 // The skeletons that stand in for the table and the overview.
 export const skeletonControls = "mb-[22px] grid gap-4";
 export const skeletonYears = "flex gap-[22px] overflow-hidden border-b border-[var(--border)] py-3.5";
