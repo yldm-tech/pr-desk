@@ -1,6 +1,7 @@
 version: 2
 updates:
-  - package-ecosystem: npm
+  # `bun`, not `npm`: this workspace has no package-lock.json for the npm ecosystem to maintain, so every JavaScript update it opened edited package.json alone and left bun.lock behind — and CI installs with --frozen-lockfile, which fails on exactly that. Five such pull requests were open and red at once before the ecosystem was named correctly. Dependabot's bun support wants bun >= 1.1.39 and the text-format lockfile; this repository pins bun 1.3.4 and has committed bun.lock since its first commit.
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
