@@ -6,7 +6,9 @@ import { linkButton, searchChip, searchForm } from "./app-styles";
 import {
   followUpActions,
   followUpCard,
+  followUpCardBody,
   followUpCardHeading,
+  followUpCardRail,
   followUpCounts,
   followUpFilters,
   followUpGroupHeading,
@@ -133,129 +135,134 @@ function FollowUpCard({ item, group, now, highlight, active, onChanged }: { item
       data-highlight={highlight || undefined}
       data-active={active || undefined}
     >
-      <div className={followUpCardHeading}>
-        <span>
-          {item.pr.repo} #{item.pr.number}
-        </span>
-        {/* The state word moved to the group heading above. Keeping it here as well produced a card that contradicted itself in Chinese — "awaiting my review · waiting on others" — and said nothing new in any language. */}
-        <span>
-          {t(item.role === "reviewer" ? "followup.roleReviewerItem" : "followup.roleAuthoredItem")}
-          {item.unread && <> · {t("followup.unread")}</>}
-        </span>
+      <div className={followUpCardBody}>
+        <div className={followUpCardHeading}>
+          <span>
+            {item.pr.repo} #{item.pr.number}
+          </span>
+          {/* The state word moved to the group heading above. Keeping it here as well produced a card that contradicted itself in Chinese — "awaiting my review · waiting on others" — and said nothing new in any language. */}
+          <span>
+            {t(item.role === "reviewer" ? "followup.roleReviewerItem" : "followup.roleAuthoredItem")}
+            {item.unread && <> · {t("followup.unread")}</>}
+          </span>
+        </div>
+        <h3 id={`followup-title-${item.id}`}>
+          <a href={githubURL || undefined} target="_blank" rel="noopener noreferrer" onClick={() => item.unread && action.mutate({ action: "read" })}>
+            {item.pr.title}
+          </a>
+        </h3>
+        {/* One chip row, because the second one could not see `item.reasons` and so said the same thing twice by construction: every awaiting-review card printed "Review requested" in both, and a green PR of your own printed "Approved", "CI: Success" and "Ready to merge" — a conclusion standing next to its own premises. Only the conclusion survives, and it joins the reasons rather than starting a row of its own. */}
+        {(item.reasons.length > 0 || ready || mutedDate) && (
+          <div className={followUpReasons}>
+            {item.reasons.map((reason) => (
+              <span key={reason} className={`${followUpReason} inline-flex items-center gap-1`} data-tone={reasonTone(reason)}>
+                <ReasonIcon tone={reasonTone(reason)} />
+                {t(`followup.${reason}`)}
+              </span>
+            ))}
+            {ready && (
+              <span className={`${followUpReason} inline-flex items-center gap-1`} data-tone="ready">
+                <ReasonIcon tone="ready" />
+                {t("followup.readyToMerge")}
+              </span>
+            )}
+            {mutedDate && (
+              <span className={followUpReason} data-tone="waiting">
+                {t("followup.mutedUntil", { date: mutedDate })}
+              </span>
+            )}
+          </div>
+        )}
+        {/* The server cuts the comment at 240 runes with nothing to mark the cut, so the quote usually ends mid-word and reads as if that is what was said. The ellipsis is the client's half of that; the author and the timestamp need a field the response does not carry yet. Array.from counts code points, which is what Go's []rune slice at followup_sync.go:38 counts — a grapheme segmenter would disagree with the server on exactly the emoji and combining marks it is supposed to help with. */}
+        {/* The ellipsis is appended by the server now, where the cut actually happens: counting 240 code points here could not tell a comment that ended at exactly 240 from one that was sliced there, and the attribution is what stops the quote reading as the pull request's own description. */}
+        {item.excerpt && (
+          <blockquote className={followUpQuote}>
+            {(item.excerpt_by || excerptDate) && (
+              <cite>
+                {item.excerpt_by ?? t("unknown")}
+                {excerptDate && <> · {excerptDate}</>}
+              </cite>
+            )}
+            {item.excerpt}
+          </blockquote>
+        )}
+        {/* The failure and its retry stay with the reading content rather than moving into the rail: the rail is 272px wide and this is a sentence with a control at the end of it. */}
+        {action.isError && (
+          <div className={syncStatusError} role="alert">
+            <span>{followUpErrorMessage(action.error, t)}</span>
+            <button className={linkAction} type="button" onClick={() => action.variables && action.mutate(action.variables)}>
+              {t("retry")}
+            </button>
+          </div>
+        )}
       </div>
-      <h3 id={`followup-title-${item.id}`}>
-        <a href={githubURL || undefined} target="_blank" rel="noopener noreferrer" onClick={() => item.unread && action.mutate({ action: "read" })}>
-          {item.pr.title}
-        </a>
-      </h3>
-      {/* One chip row, because the second one could not see `item.reasons` and so said the same thing twice by construction: every awaiting-review card printed "Review requested" in both, and a green PR of your own printed "Approved", "CI: Success" and "Ready to merge" — a conclusion standing next to its own premises. Only the conclusion survives, and it joins the reasons rather than starting a row of its own. */}
-      {(item.reasons.length > 0 || ready || mutedDate) && (
-        <div className={followUpReasons}>
-          {item.reasons.map((reason) => (
-            <span key={reason} className={`${followUpReason} inline-flex items-center gap-1`} data-tone={reasonTone(reason)}>
-              <ReasonIcon tone={reasonTone(reason)} />
-              {t(`followup.${reason}`)}
-            </span>
-          ))}
-          {ready && (
-            <span className={`${followUpReason} inline-flex items-center gap-1`} data-tone="ready">
-              <ReasonIcon tone="ready" />
-              {t("followup.readyToMerge")}
-            </span>
-          )}
-          {mutedDate && (
-            <span className={followUpReason} data-tone="waiting">
-              {t("followup.mutedUntil", { date: mutedDate })}
-            </span>
-          )}
-        </div>
-      )}
-      {/* The server cuts the comment at 240 runes with nothing to mark the cut, so the quote usually ends mid-word and reads as if that is what was said. The ellipsis is the client's half of that; the author and the timestamp need a field the response does not carry yet. Array.from counts code points, which is what Go's []rune slice at followup_sync.go:38 counts — a grapheme segmenter would disagree with the server on exactly the emoji and combining marks it is supposed to help with. */}
-      {/* The ellipsis is appended by the server now, where the cut actually happens: counting 240 code points here could not tell a comment that ended at exactly 240 from one that was sliced there, and the attribution is what stops the quote reading as the pull request's own description. */}
-      {item.excerpt && (
-        <blockquote className={followUpQuote}>
-          {(item.excerpt_by || excerptDate) && (
-            <cite>
-              {item.excerpt_by ?? t("unknown")}
-              {excerptDate && <> · {excerptDate}</>}
-            </cite>
-          )}
-          {item.excerpt}
-        </blockquote>
-      )}
-      {group === "archived" ? (
-        <p className={followUpWait}>{t("followup.outcomeAt", { outcome: t(item.pr.merged_at ? "merged" : "closed"), date: outcomeDate ?? t("unknown") })}</p>
-      ) : (
-        // A draft is not waiting on anybody, so the line said nothing there; elsewhere it is the duration rather than the instant, with the instant kept on hover.
-        group !== "draft" &&
-        waiting && (
-          <p className={followUpWait}>
-            <time dateTime={item.waiting_since} title={waitingExact}>
-              {t(waiting.key, { count: waiting.count })}
-            </time>
-          </p>
-        )
-      )}
-      {action.isError && (
-        <div className={syncStatusError} role="alert">
-          <span>{followUpErrorMessage(action.error, t)}</span>
-          <button className={linkAction} type="button" onClick={() => action.variables && action.mutate(action.variables)}>
-            {t("retry")}
-          </button>
-        </div>
-      )}
-      {/* Fixed order, so the irreversible button never changes position between adjacent cards: the primary, then the deferral, then the incidental one. */}
-      <div className={followUpActions}>
-        {group !== "archived" && (
-          <>
-            {handledIsUseful(item) ? (
-              <button className={followUpPrimaryAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.handled"))} onClick={() => action.mutate({ action: "handled" })}>
-                {t("followup.handled")}
-              </button>
-            ) : (
-              <p className={`${followUpWait} m-0`}>{t("followup.blockedByGitHub")}</p>
-            )}
-            {muted ? (
-              <button className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.cancelReminder"))} onClick={() => action.mutate({ action: "unsnooze" })}>
-                {t("followup.cancelReminder")}
-              </button>
-            ) : (
-              <details open={snoozeOpen} onToggle={(event) => setSnoozeOpen(event.currentTarget.open)}>
-                {/* The pill skin the summary now carries costs it the UA disclosure triangle, so the caret is a character here; it is hidden from assistive technology, which already gets the open state from the element. */}
-                <summary>
-                  <span aria-hidden="true">{snoozeOpen ? "▾" : "▸"}</span>
-                  {t("followup.snooze")}
-                </summary>
-                <div className={followUpSnooze}>
-                  {[3, 7].map((days) => (
-                    <button key={days} className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.days", { count: days }))} onClick={() => snooze(new Date(now + days * 86400000).toISOString())}>
-                      {t("followup.days", { count: days })}
+      <div className={followUpCardRail}>
+        {group === "archived" ? (
+          <p className={followUpWait}>{t("followup.outcomeAt", { outcome: t(item.pr.merged_at ? "merged" : "closed"), date: outcomeDate ?? t("unknown") })}</p>
+        ) : (
+          // A draft is not waiting on anybody, so the line said nothing there; elsewhere it is the duration rather than the instant, with the instant kept on hover.
+          group !== "draft" &&
+          waiting && (
+            <p className={followUpWait}>
+              <time dateTime={item.waiting_since} title={waitingExact}>
+                {t(waiting.key, { count: waiting.count })}
+              </time>
+            </p>
+          )
+        )}
+        {/* Fixed order, so the irreversible button never changes position between adjacent cards: the primary, then the deferral, then the incidental one. */}
+        <div className={followUpActions}>
+          {group !== "archived" && (
+            <>
+              {handledIsUseful(item) ? (
+                <button className={followUpPrimaryAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.handled"))} onClick={() => action.mutate({ action: "handled" })}>
+                  {t("followup.handled")}
+                </button>
+              ) : (
+                <p className={`${followUpWait} m-0`}>{t("followup.blockedByGitHub")}</p>
+              )}
+              {muted ? (
+                <button className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.cancelReminder"))} onClick={() => action.mutate({ action: "unsnooze" })}>
+                  {t("followup.cancelReminder")}
+                </button>
+              ) : (
+                <details open={snoozeOpen} onToggle={(event) => setSnoozeOpen(event.currentTarget.open)}>
+                  {/* The pill skin the summary now carries costs it the UA disclosure triangle, so the caret is a character here; it is hidden from assistive technology, which already gets the open state from the element. */}
+                  <summary>
+                    <span aria-hidden="true">{snoozeOpen ? "▾" : "▸"}</span>
+                    {t("followup.snooze")}
+                  </summary>
+                  <div className={followUpSnooze}>
+                    {[3, 7].map((days) => (
+                      <button key={days} className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.days", { count: days }))} onClick={() => snooze(new Date(now + days * 86400000).toISOString())}>
+                        {t("followup.days", { count: days })}
+                      </button>
+                    ))}
+                    <label>
+                      {t("followup.custom")}
+                      {/* The bounds are the server's own — it refuses anything past a year — so the OS picker can no longer offer a value that comes back as a save error. */}
+                      <input type="datetime-local" min={bounds.min} max={bounds.max} value={date} onChange={(event) => setDate(event.target.value)} />
+                    </label>
+                    {/* Enabled whatever the field holds: a disabled confirm drops out of the tab order and gives a keyboard user no way to find out why it is refusing. */}
+                    <button className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.confirmSnooze"))} onClick={() => (outOfRange ? setRangeHint(true) : snooze(new Date(date).toISOString()))}>
+                      {t("followup.confirmSnooze")}
                     </button>
-                  ))}
-                  <label>
-                    {t("followup.custom")}
-                    {/* The bounds are the server's own — it refuses anything past a year — so the OS picker can no longer offer a value that comes back as a save error. */}
-                    <input type="datetime-local" min={bounds.min} max={bounds.max} value={date} onChange={(event) => setDate(event.target.value)} />
-                  </label>
-                  {/* Enabled whatever the field holds: a disabled confirm drops out of the tab order and gives a keyboard user no way to find out why it is refusing. */}
-                  <button className={inlineAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.confirmSnooze"))} onClick={() => (outOfRange ? setRangeHint(true) : snooze(new Date(date).toISOString()))}>
-                    {t("followup.confirmSnooze")}
-                  </button>
-                  {outOfRange && (rangeHint || !!date) && (
-                    <p className={`${followUpWait} m-0 basis-full`} role="alert">
-                      {t("followup.reminderRange")}
-                    </p>
-                  )}
-                </div>
-              </details>
-            )}
-          </>
-        )}
-        {item.unread && (
-          <button className={linkAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.read"))} onClick={() => action.mutate({ action: "read" })}>
-            {t("followup.read")}
-          </button>
-        )}
+                    {outOfRange && (rangeHint || !!date) && (
+                      <p className={`${followUpWait} m-0 basis-full`} role="alert">
+                        {t("followup.reminderRange")}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+          {item.unread && (
+            <button className={linkAction} type="button" disabled={action.isBusy} aria-label={actionFor(t("followup.read"))} onClick={() => action.mutate({ action: "read" })}>
+              {t("followup.read")}
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );
