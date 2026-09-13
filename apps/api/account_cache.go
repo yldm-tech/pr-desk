@@ -35,6 +35,7 @@ func findCacheDonor(ctx context.Context, db *gorm.DB, current OAuthToken, accoun
 		if available == 0 {
 			continue
 		}
+		// Deliberately not renewed. This asks whether a legacy row's own credential still proves the same GitHub identity, so a token that has lapsed is a correct "no" rather than something to repair — and renewing here would rotate a refresh token belonging to a session that is only a cache donor and may never be logged into again.
 		token, err := decrypt(previous.Token)
 		if err != nil {
 			continue

@@ -97,7 +97,7 @@ func (s *Server) listReviewTeams(c *gin.Context) {
 	if !ok {
 		return
 	}
-	token, err := decrypt(account.Token)
+	token, err := s.accessTokenFor(c.Request.Context(), account)
 	if err != nil {
 		c.JSON(401, gin.H{"error": "Reconnect GitHub"})
 		return

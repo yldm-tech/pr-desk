@@ -33,7 +33,7 @@ func (s *Server) ensureRepositoryVisibility(c *gin.Context) error {
 	if err := s.db.Where("session_id = ?", requestSessionID(c)).First(&connection).Error; err != nil {
 		return err
 	}
-	token, err := decrypt(connection.Token)
+	token, err := s.accessTokenFor(c.Request.Context(), connection)
 	if err != nil {
 		return err
 	}

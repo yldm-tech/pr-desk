@@ -10,7 +10,7 @@ func (s *Server) profile(c *gin.Context) {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
-	token, err := decrypt(connection.Token)
+	token, err := s.accessTokenFor(c.Request.Context(), connection)
 	if err != nil {
 		c.JSON(401, gin.H{"error": "Reconnect GitHub"})
 		return
