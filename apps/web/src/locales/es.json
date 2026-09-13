@@ -8,6 +8,7 @@
   "repositories": "Repositorios",
   "sync": "Sincronizar ahora",
   "syncing": "Sincronizando…",
+  "hardRefresh": "Recargar la aplicación",
   "search": "Buscar Pull Request",
   "searchPlaceholder": "Título, repositorio o número",
   "clear": "Limpiar",

@@ -8,6 +8,7 @@
   "repositories": "Repositories",
   "sync": "Sync now",
   "syncing": "Syncing…",
+  "hardRefresh": "Reload the app",
   "search": "Search pull requests",
   "searchPlaceholder": "Title, repository or number",
   "clear": "Clear",
