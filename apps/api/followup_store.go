@@ -158,7 +158,7 @@ func (s *Server) collectFollowUps(sid string, scope func() *gorm.DB) ([]followUp
 		}
 		state, reasons := row.presentation(now, settings.waitDays(pr.Repo))
 		facts := row.facts()
-		// Undoable is derived rather than stored: the snapshot columns are the state, and a row that has one is a row whose last action can be taken back.
+		// Undoable is derived rather than stored, and it says less than its name suggests: the row holds one unconsumed snapshot, of unknown age, from an action of unknown name. Nothing clears the snapshot columns except `undo` itself, so a row handled in March still reports true in September. It is an honest statement of what the API can still do for this row, which is what an MCP caller needs before offering undo_follow_up; it is not a signal a browser can hang a durable per-card Undo on, because "take back what you just did" needs to know what that was and when. Storing the action name and its timestamp alongside the snapshot is the precondition for that control, and it is deliberately not in this pass.
 		row.Undoable = row.PrevWaitingSince != nil
 		excerpt := facts.HumanExcerpt
 		// Appended where the cut happens rather than guessed at by the browser, which cannot tell a comment that ended at 240 characters from one that was sliced there.
@@ -256,8 +256,8 @@ func (s *Server) applyFollowUpAction(id, action string, version uint64, until *t
 			status = 409
 			return fmt.Errorf("new activity arrived; refresh before marking handled")
 		}
-		// The step undo goes back to, taken before anything is changed. `undo` is the one action that must not overwrite it, or undoing would make itself unrepeatable in the wrong direction.
-		if input.Action != "undo" {
+		// The step undo goes back to, taken before anything is changed. Two actions are excluded. `undo` must not overwrite it, or undoing would make itself unrepeatable in the wrong direction. `read` must not either: the snapshot is one step deep, and the step worth keeping is the one that changed something. `read` only moves ReadVersion, which the next comment on the pull request re-derives anyway (Unread is Version > ReadVersion), so snapshotting it traded a recoverable `handled` — a WaitingSince that may be three weeks old — for the right to take back a mark the environment restores by itself. Clicking a title to go read the thread is the most ordinary interaction in the product and it must not be the one that spends the undo slot.
+		if input.Action != "undo" && input.Action != "read" {
 			read, handled, confirm, waiting, snoozed := row.ReadVersion, row.HandledVersion, row.NeedsConfirmation, row.WaitingSince, row.SnoozedUntil
 			row.PrevReadVersion, row.PrevHandledVersion, row.PrevNeedsConfirmation, row.PrevWaitingSince = &read, &handled, &confirm, &waiting
 			row.PrevSnoozedUntil = snoozed
