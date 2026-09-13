@@ -140,3 +140,37 @@ func TestWebRoutes(t *testing.T) {
 		})
 	}
 }
+
+// The two files the PWA is made of are the ones the SPA fallback is most likely to break: both sit at the root next to the document routes, and neither is under assets/, so nothing else in this file covers them. A worker served from a stale cache pins every reader to the build that installed it, and a manifest served as text/plain is a manifest some browsers decline to parse at all.
+func TestWebPWAAssets(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	registerWeb(r, fstest.MapFS{
+		"index.html":            {Data: []byte("<!doctype html><title>PR Desk</title>")},
+		"sw.js":                 {Data: []byte("self.addEventListener('fetch', () => {})")},
+		"manifest.webmanifest":  {Data: []byte(`{"name":"PR Desk"}`)},
+		"icon-maskable-512.png": {Data: []byte("\x89PNG")},
+	})
+	for _, tc := range []struct{ url, contentType string }{
+		{"/sw.js", "javascript"},
+		{"/manifest.webmanifest", "application/manifest+json"},
+		{"/icon-maskable-512.png", "image/png"},
+	} {
+		t.Run(tc.url, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest("GET", tc.url, nil))
+			if w.Code != 200 {
+				t.Fatalf("answered %d", w.Code)
+			}
+			if strings.Contains(w.Body.String(), "<!doctype") {
+				t.Fatal("the SPA fallback swallowed the file")
+			}
+			if !strings.Contains(w.Header().Get("Content-Type"), tc.contentType) {
+				t.Fatalf("Content-Type is %q, want %s", w.Header().Get("Content-Type"), tc.contentType)
+			}
+			if w.Header().Get("Cache-Control") != "no-cache" {
+				t.Fatalf("Cache-Control is %q; a root file has a stable name and must revalidate", w.Header().Get("Cache-Control"))
+			}
+		})
+	}
+}

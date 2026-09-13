@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>PR Desk</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- The install half of the PWA; the offline half is public/sw.js, registered from src/service-worker.ts. Both are in public/ because a manifest and a worker are fetched by the browser at URLs it decides, not imported by the module graph, and a worker only controls the directory it is served from. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Matches --surface, not --canvas: this colour tints the window chrome that sits directly above the sticky top bar, so anything else draws a seam across the top of every page. There is one value because the stylesheet has one theme -- when a dark scheme lands, this needs a second <meta> with `media="(prefers-color-scheme: dark)"`, or the status bar will keep the light value. -->
+    <meta name="theme-color" content="#ffffff" />
+    <!-- iOS ignores the manifest's icons and reads only this link, and it composites a transparent icon onto black, which is why it points at the full-bleed maskable artwork rather than at the rounded favicon. `apple-mobile-web-app-title` is likewise the only place iOS takes the home-screen label from; it falls back to <title>, which is the same string today but would drift the moment the title gains a count or a route name. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="PR Desk" />
   </head>
   <body>
     <div id="root"></div>

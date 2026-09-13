@@ -19,6 +19,12 @@ If those ports are occupied, set `PORT=8081`, `WEB_ORIGIN=http://localhost:5174`
 
 `make build` produces `dist/pr-desk`. It includes the web assets and requires no frontend directory at runtime. Export the database, encryption key and OAuth environment before running it. The build uses `-tags webembed`; building with that tag without generated assets fails. Plain `go run .` and `go test ./...` remain available for API development without a frontend build. Vite remains the development server for hot reload.
 
+## Installable application
+
+The built frontend is a PWA: `apps/web/public/manifest.webmanifest` makes it installable and `apps/web/public/sw.js` is a service worker that caches the document and the hashed assets so a previously visited instance opens offline. Both are served from the root of the bundle because a service worker only controls the directory it is served from; `registerWeb` also registers the `.webmanifest` media type, which Go's built-in table lacks and the container image carries no `/etc/mime.types` to supply.
+
+The worker never answers `/api`, `/swagger`, cross-origin or non-GET requests, so authentication and every mutation reach the server unchanged and an offline dashboard shows its normal network errors rather than stale data. Hashed assets are cached permanently and trimmed to the most recent 200 entries; the document is fetched from the network on every load and falls back to the cached copy only when the network fails, so a deployed build is picked up by the next page load without an update prompt. Registration is skipped outside production builds, so `bun run dev` is unaffected and no worker is ever installed on a development origin.
+
 ## Token storage
 
 Tokens use AES-256-GCM with random nonces. Startup rejects missing, incorrectly sized, and example keys. Encryption, decryption, and database write failures do not produce successful connection responses. Existing AES-GCM records retain the same encoding. Legacy plaintext records and records encrypted with a different key require reconnecting GitHub; they are never sent to GitHub as bearer tokens.
