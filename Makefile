@@ -23,7 +23,7 @@ backup:
 test:
 	cd apps/api && go test ./...
 	cd apps/web && bun run test
-# The root build, not apps/web's: only the root script chains assert:css. Running the inner one here is what used to let a variant that compiled to nothing pass `make test` and fail in CI. lint:responsive is a source check and is listed separately for the same reason it is not part of `build` — that script also runs inside apps/api/Dockerfile, where the image has no ripgrep.
+# Both checks are listed separately rather than chained onto `build`, and for the same reason: apps/api/Dockerfile runs the root `build` with only apps/web and the root configs in its context, so a script that reaches for ripgrep or for scripts/ fails there. Producing the artefact and asserting things about it are different jobs.
 	bun run lint:responsive
-	bun run build
+	bun run verify:build
 	./scripts/backup-postgres-test.sh

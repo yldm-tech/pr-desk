@@ -4,7 +4,7 @@
   "packageManager": "bun@1.3.4",
   "scripts": {
     "dev": "bun run --cwd apps/web dev",
-    "build": "bun run --cwd apps/web build && bun run assert:css",
+    "build": "bun run --cwd apps/web build",
     "lint:responsive": "command -v rg >/dev/null || { echo 'lint:responsive needs ripgrep on PATH; a missing rg exits 127, which `&& fail=1` skips, so the gate would report success while checking nothing'; exit 1; }; fail=0; echo 'checking for banned responsive idioms'; rg -n --glob 'apps/web/src/**/*.{ts,tsx}' -e '\\[@media' -e '\\bmax-\\[[0-9][^]]*\\]:' -e '\\bmin-\\[[0-9][^]]*\\]:' -e '@max-\\[' -e '@min-\\[' -e '@\\[[0-9]' -e '\\b(sm|md|lg|xl|2xl):' && fail=1; rg -n --glob 'apps/web/src/**/*.{ts,tsx}' '\\[&[^]]*:hover' | rg -v 'hoverable:\\[&' | rg . && fail=1; exit $fail",
     "assert:css": "./scripts/assert-css.sh",
     "test": "make test",
@@ -13,7 +13,8 @@
     "typecheck": "bun run --cwd apps/web typecheck",
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
-    "check": "vp check"
+    "check": "vp check",
+    "verify:build": "bun run build && bun run assert:css"
   },
   "workspaces": [
     "apps/web"

@@ -36,7 +36,8 @@ jobs:
       - run: bun run test:web
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:browser
-      - run: bun run build
+      # Not `build`: that script also runs inside apps/api/Dockerfile, whose context holds only apps/web and the root configs, so assert:css — which lives under scripts/ — cannot be chained onto it.
+      - run: bun run verify:build
   api:
     name: API race and PostgreSQL tests
     runs-on: ubuntu-latest
