@@ -24,8 +24,20 @@ export const followUpPriority = ["mx-0 mt-3 mb-0 list-none p-0", "[&_a]:flex [&_
 export const followUpPriorityReasons = "flex flex-wrap gap-1.5";
 
 // `unread` is row.Version > row.ReadVersion — genuinely new activity, and the one signal on the card that saves the reader time. It used to be the third item in a 12px muted run-on line, indistinguishable from the role beside it, so twenty cards meant reading twenty headings. The accent rule turns the unread rows into a column down the left edge that is legible without reading anything; the word stays in the heading for assistive technology.
-export const followUpCard =
-  "border-t border-[var(--border)] py-5 [scroll-margin-top:20px] data-[unread]:border-l-2 data-[unread]:border-l-[var(--accent)] data-[unread]:pl-3 [&>h3]:mx-0 [&>h3]:my-2.5 [&>h3]:text-[length:1rem] [&>h3]:[overflow-wrap:anywhere] [&>h3>a]:text-[var(--foreground)] [&>h3>a]:no-underline data-[unread]:[&>h3]:font-semibold";
+//
+// A stack until <main> can hold a rail, two columns above it. At `table` the card is over 950px wide and was spending five stacked rows on four short lines, with the right two thirds of every one of them empty — twenty-three rows of work that could not be seen without scrolling past the whitespace between them. The facts and the controls move into a fixed column beside the reading content, which is both where the empty width was and where a fixed-position primary button makes clearing a queue a single vertical run.
+// The h3 rules are descendant rather than child selectors now that the title sits inside the body wrapper.
+export const followUpCard = [
+  "border-t border-[var(--border)] py-5 [scroll-margin-top:20px] data-[unread]:border-l-2 data-[unread]:border-l-[var(--accent)] data-[unread]:pl-3",
+  "[&_h3]:mx-0 [&_h3]:my-2.5 [&_h3]:text-[length:1rem] [&_h3]:[overflow-wrap:anywhere] [&_h3>a]:text-[var(--foreground)] [&_h3>a]:no-underline data-[unread]:[&_h3]:font-semibold",
+  "@table/dashboard:grid @table/dashboard:grid-cols-[minmax(0,1fr)_17rem] @table/dashboard:items-start @table/dashboard:gap-x-7",
+].join(" ");
+
+// Everything the card says, in the order it is read. `min-w-0` because a grid item's automatic minimum is its content, and the title, the repository slug and the excerpt all carry strings with no break opportunity.
+export const followUpCardBody = "min-w-0";
+
+// The waiting clock the whole list is ranked by, and the controls that clear it. Below `table` this is simply the bottom of the stack, which is where both already were; above it the clock becomes a column of ages the eye can run down and the primary button lands at the same x on every card. 17rem is the width the snooze picker needs: a datetime-local field plus its two presets, which is the widest thing the rail ever has to open.
+export const followUpCardRail = "min-w-0 [&_time]:[font-variant-numeric:tabular-nums] @table/dashboard:flex @table/dashboard:flex-col @table/dashboard:items-start";
 
 // A heading for each non-empty group, carrying its own count. The count is what survives a missed status strip: acting on a card drops it out of the group and the number beside the heading goes down, so the result of an action is visible even when the confirmation is not.
 export const followUpGroupHeading = "mt-6 mb-0 flex min-w-0 flex-wrap items-baseline gap-2 text-[length:0.75rem] font-semibold text-[var(--muted)] first:mt-0";
@@ -50,7 +62,8 @@ export const followUpStatusStripFloating = `${followUpStatusStrip} ${syncFeedbac
 // without these a slug longer than the line box cannot shrink, overflows the
 // card, and — the panel being in normal flow with no clipping — hands the whole
 // document a horizontal scrollbar.
-export const followUpCardHeading = "flex min-w-0 flex-wrap justify-between gap-3 text-[length:0.75rem] text-[var(--muted)] [&>span]:min-w-0 [&>span]:[overflow-wrap:anywhere]";
+// `justify-between` was written for a card the width of a phone. On a 950px one it threw the role and the unread mark to the far right edge, a clear 700px from the repository slug they qualify, so the heading read as two unrelated captions at opposite ends of a void. They are one caption: left-aligned, joined by a separator the markup does not have to carry.
+export const followUpCardHeading = "flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-[length:0.75rem] text-[var(--muted)] [&>span]:min-w-0 [&>span]:[overflow-wrap:anywhere] [&>span+span]:before:mr-2 [&>span+span]:before:content-['·']";
 
 export const followUpWait = "text-[length:0.75rem] text-[var(--muted)]";
 
