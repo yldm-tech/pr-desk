@@ -22,5 +22,8 @@ backup:
 	./scripts/backup-postgres.sh $${BACKUP_FILE:-pr-dashboard-$$(date -u +%Y%m%dT%H%M%SZ).dump}
 test:
 	cd apps/api && go test ./...
-	cd apps/web && bun run test && bun run build
+	cd apps/web && bun run test
+# The root build, not apps/web's: only the root script chains assert:css. Running the inner one here is what used to let a variant that compiled to nothing pass `make test` and fail in CI. lint:responsive is a source check and is listed separately for the same reason it is not part of `build` — that script also runs inside apps/api/Dockerfile, where the image has no ripgrep.
+	bun run lint:responsive
+	bun run build
 	./scripts/backup-postgres-test.sh

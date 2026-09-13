@@ -56,7 +56,8 @@ export const panelDescription = "mx-0 mt-[9px] mb-0 text-[length:var(--text-capt
 // Stacking below the split width is what gives the ring its 166px box back: side by side, the ring's 130px floor and the legend's 100px floor add up to more than a phone's panel holds, so the flex algorithm froze the legend at its minimum and squeezed the ring out of square.
 export const outcomesContent = "outcomes-content mt-4 flex items-center justify-center gap-3 @max-split/dashboard:flex-col @row/overview:gap-4";
 
-export const outcomesRing = "outcomes-ring relative h-[166px] w-[166px] min-w-[130px] flex-[0_1_166px]";
+// The `outcomes-ring` marker class is gone: it existed only so `distributionSummary` could shrink the ring to 130px below a 640px viewport, and nothing selects it any more. The shrink is not needed, because the rows that used to hold the ring beside the legend now stack below the `split` container threshold — so the narrow case gives the ring the whole container rather than a contested third of it, and the widest side-by-side case is 166 + 12 + a 250px legend, which fits the 480px that threshold guarantees.
+export const outcomesRing = "relative h-[166px] w-[166px] min-w-[130px] flex-[0_1_166px]";
 
 export const ringLabel = "pointer-events-none absolute inset-0 flex flex-col items-center justify-center [&_strong]:text-[length:1.625rem] [&_strong]:font-semibold [&_strong]:tracking-[-1px] [&_span]:mt-1 [&_span]:text-[length:var(--text-caption)] [&_span]:leading-[1.5] [&_span]:text-[var(--muted)]";
 
@@ -66,6 +67,8 @@ export const outcomesLegend = [
   // The label is the only part of the row that may lose characters; the count next to it is the number the row exists to show, and a translated status ("Fusionado") is long enough to push that count through the card border without this.
   "[&_li>span:nth-child(2)]:min-w-0 [&_li>span:nth-child(2)]:overflow-hidden [&_li>span:nth-child(2)]:text-ellipsis [&_li>span:nth-child(2)]:whitespace-nowrap",
   "[&_li:last-child]:border-0 [&_strong]:ml-auto [&_strong]:text-[length:0.9375rem] [&_strong]:font-semibold [&_strong]:text-[var(--foreground)]",
+  // Two of the three rows open the list they count. They keep the caption weight of the row they replaced — the number beside them is still the thing to read — and take a tap target only where the pointer is coarse, since the row is 40px tall without one.
+  "[&_li>a]:min-w-0 [&_li>a]:overflow-hidden [&_li>a]:text-ellipsis [&_li>a]:whitespace-nowrap [&_li>a]:text-inherit [&_li>a]:no-underline hoverable:[&_li>a:hover]:text-[var(--accent-text)] hoverable:[&_li>a:hover]:underline pointer-coarse:[&_li>a]:inline-flex pointer-coarse:[&_li>a]:min-h-11 pointer-coarse:[&_li>a]:min-w-11 pointer-coarse:[&_li>a]:items-center",
 ].join(" ");
 
 export const legendDot = "h-[7px] w-[7px] shrink-0 rounded-[2px]";
@@ -160,3 +163,6 @@ export const distributionDetails = [
 export const repositoryTooltip = "max-w-[260px] min-w-[170px] leading-[1.6] [&_a]:mb-1.5 [&_a]:block [&_a]:text-[var(--accent-text)] [&_a]:[overflow-wrap:anywhere] hoverable:[&_a:hover]:text-[var(--accent-text)] hoverable:[&_a:hover]:underline [&_div]:flex [&_div]:justify-between [&_div]:gap-4";
 
 export const distributionPanel = `${panelSurface} block [&_svg]:cursor-pointer`;
+
+// The retrospective's own heading, added when the page's h1 stopped being named after it. Sized as a section heading rather than a page title, because that is what it is.
+export const overviewSectionHeading = "mx-0 mt-0 mb-4 text-[length:0.9375rem] font-semibold text-[var(--foreground)]";

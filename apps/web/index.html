@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- viewport-fit is deliberately left at its `auto` default. iOS then keeps the layout viewport inside the display insets, so nothing can sit under the notch or the home indicator and the current layout is fail-safe. `env(safe-area-inset-*)` appears nowhere in apps/web/src (verified: zero grep hits), so adopting `cover` would need five coordinated edits in the same commit to stay correct: the fixed skip link (app-styles.ts:55), the aside's top padding, <main>'s horizontal padding (App.tsx:421), the floating toast (app-styles.ts:152) and the dialog footer (App.tsx:716). Never add `maximum-scale` or `user-scalable=no`: pinch-zoom is the only text-scaling lever this app offers on mobile Safari, and suppressing it hides the symptom of an undersized control instead of fixing it. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `viewport-fit=cover` lets the layout reach the physical edges, which on a notched phone in landscape is roughly 88px that was previously letterboxed away. It is only safe because every edge-anchored surface pairs its own padding with the matching inset: the fixed skip link and floating toast in app-styles.ts, the sticky top bar and sidebar in `sidebar`, <main>'s horizontal padding, and the activity dialog's sticky footer. `env()` resolves to 0px where there is no inset, so each of those is written `max(<the old value>,env(...))` and is byte-identical on every device without a cutout. Adding `cover` without all five is what puts content under the notch — they belong together. Never add `maximum-scale` or `user-scalable=no`: pinch-zoom is the only text-scaling lever this app offers on mobile Safari, and suppressing it hides the symptom of an undersized control instead of fixing it. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>PR Desk</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
