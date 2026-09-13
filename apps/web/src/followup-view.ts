@@ -1,7 +1,6 @@
 // Everything the follow-up surfaces decide before they render anything: the shape of the payload, which group a row belongs to, which verbs can actually do something to it, and how long it has been waiting. It lives outside the components because two screens now show the same rows — the workspace and the PR table's follow-up chips — and a rule that exists twice is a rule that will disagree with itself. Nothing here imports React, so every one of these decisions is covered by followup-view.test.mjs rather than by a browser.
 import { z } from "zod";
 import { PRSchema } from "./pr-model";
-import { checkToneClass } from "./activity-model";
 
 // PRSchema is owned elsewhere and `draft` is only needed here, so the field is added at the point of use rather than by widening the shared schema. `snoozed_until` has been served since the snooze endpoint existed (FollowUp.SnoozedUntil, apps/api/followup_model.go) and was silently dropped by the old inline schema, which is why the browser could set a reminder it could then neither see nor cancel.
 export const followUpSchema = z.object({
@@ -89,25 +88,8 @@ export function factsSurvive(item: Pick<FollowUp, "reasons">): boolean {
   return item.reasons.some(factDerived);
 }
 
-// A fact chip states what is true of the pull request, as opposed to a reason chip, which states why the row exists. `i18nKey` is always a complete key path. When `valueKey` is set the label is `${t(i18nKey)}: ${t(valueKey)}`, which is how the PR table already writes "CI: Success". `className` carries a colour the tone cannot express and is appended after the chip class; only the CI chip uses it, and its tone is deliberately one no `data-[tone=…]` rule matches so the two never fight over the same property.
-export type FactChip = { key: string; tone: string; i18nKey: string; valueKey?: string; className?: string; interpolation?: Record<string, string | number> };
-
-const reviewFactKeys: Record<string, string> = { pending: "awaitingReview", review_requested: "reviewRequested", changes_requested: "changesRequested", approved: "approved" };
-const reviewFactTones: Record<string, string> = { pending: "waiting", review_requested: "action", changes_requested: "blocked", approved: "ready" };
-
-export function factChips(pr: FollowUpPR, role: string): FactChip[] {
-  const chips: FactChip[] = [];
-  const review = pr.review_status || "";
-  const checks = pr.checks_status || "";
-  if (reviewFactKeys[review]) chips.push({ key: "review", tone: reviewFactTones[review] || "neutral", i18nKey: reviewFactKeys[review] });
-  // Absence of CI is not a check result, and neither is "unknown": a grey "CI: Unknown" on every row without a pipeline is noise that trains the reader to stop looking at the chip that matters.
-  if (checks && checks !== "unknown") chips.push({ key: "checks", tone: "check", i18nKey: "ci", valueKey: checks, className: checkToneClass(checks) });
-  if (pr.has_conflicts) chips.push({ key: "conflict", tone: "blocked", i18nKey: "conflict" });
-  if (pr.draft) chips.push({ key: "draft", tone: "neutral", i18nKey: "draftStatus" });
-  // The one state the product had no word for. Only on your own PR: a reviewer looking at an approved, green PR is done with it and is not the person who merges.
-  if (role === "authored" && review === "approved" && checks === "success" && !pr.has_conflicts) chips.push({ key: "ready", tone: "ready", i18nKey: "followup.readyToMerge" });
-  return chips;
-}
+// The one state the product had no word for, and the only place that decides it. Only on your own PR: a reviewer looking at an approved, green PR is done with it and is not the person who merges. It is the conjunction of "Approved", "CI: Success" and "no conflicts", so the card renders this instead of those three and never beside them — a chip displayed next to its own premises tells the reader nothing the premises did not.
+export const isReadyToMerge = (pr: FollowUpPR, role: string) => role === "authored" && pr.review_status === "approved" && pr.checks_status === "success" && !pr.has_conflicts;
 
 // The duration, not the instant. Mirrors waitingDays in mcp_server.go so the sentence a human reads and the number an agent reads come from the same rule, and returns null on an unparseable value rather than printing the literal "Invalid Date" the old card produced.
 export function waitingLabel(iso: string, now: number): { key: string; count: number } | null {
@@ -128,7 +110,7 @@ export function snoozeBounds(now: number): { min: string; max: string } {
 
 // Holds the list still while someone is working through it. The server recomputes `presentation` against a fresh clock on every read and re-sorts by state rank, so a background poll — or the refetch the reader's own action triggers — rearranges the page under the pointer. Freezing the order means a card only moves when the reader does something that moves it.
 //
-// Items already known keep the position they had. Items the reader has never seen go to the end rather than being spliced into the middle, and are reported separately so the page can offer to take them rather than taking them silently. Array.prototype.sort is stable, so several new items keep the order the server sent them in.
+// Items already known keep the position they had. Items the reader has never seen go to the end rather than being spliced into the middle, and are reported separately so the caller can append their ids to the held order — which is what makes adopting them idempotent under a double render, since the second pass finds them already ranked. The strip that used to offer to "show" them is gone: they render inside their own group either way, so it was offering something already on screen behind a button that reseeded the whole order from the server's rank. Array.prototype.sort is stable, so several new items keep the order the server sent them in.
 export function stableOrder(items: FollowUp[], order: number[]): { items: FollowUp[]; added: number[] } {
   if (order.length === 0) return { items, added: [] };
   const rank = new Map(order.map((id, index) => [id, index]));
