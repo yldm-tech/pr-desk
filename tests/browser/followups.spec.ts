@@ -609,3 +609,54 @@ test("the landing page names the job, states the remainder and opens what it cou
   await page.getByRole("link", { name: "Merged", exact: true }).click();
   await expect(page).toHaveURL(/#\/merged/);
 });
+
+// An installed window has no browser chrome, so it has no reload; a tab has one and does not need a second. The control is therefore conditional on the display mode, which is a fact no page-load sweep can observe: a headless Chromium is always a tab, and `Emulation.setEmulatedMedia` does not carry `display-mode` as a feature — it silently accepts the entry and the query still answers false, which is how this test first passed against a button that was not there. Standing in for the platform's answer is the only way to render the button at all, and rendering it is the only way to find out that what it does works.
+test("the reload button belongs to the installed window and sweeps the caches it was given", async ({ page }) => {
+  await page.goto("/#/");
+  const button = page.getByRole("button", { name: "Reload the app" });
+  await expect(button, "a tab already has a reload").toHaveCount(0);
+
+  // Only the display-mode queries are answered here; everything else — the pointer, hover and reduced-motion queries the shell and the charts ask — is left to the browser, so the page under test is the real one in every other respect. An init script survives the reload the button performs, which is what keeps the button on screen afterwards.
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => (query.includes("display-mode") ? ({ matches: true, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false } as MediaQueryList) : real(query));
+  });
+  await page.reload();
+  await expect(button).toBeVisible();
+
+  // Named the way public/sw.js names its caches: the sweep is by prefix, so a cache from an older deploy goes with the current ones and nothing else on the origin is touched.
+  // The marker is what makes this a reload rather than a re-render: the route and the heading are the same on both sides of one, so neither can tell them apart.
+  await page.evaluate(async () => {
+    (window as Window & { survived?: boolean }).survived = true;
+    await caches.open("prdesk-shell-v0").then((cache) => cache.put("/stale", new Response("old")));
+    await caches.open("unrelated").then((cache) => cache.put("/keep", new Response("mine")));
+  });
+  // The sweep is awaited before the reload is asked for, so the click resolves well ahead of the navigation it ends in; waiting for the load event is what stops the assertions below from reading the document that is about to be replaced.
+  const reloaded = page.waitForEvent("load");
+  await button.click();
+  await reloaded;
+  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+  expect(await page.evaluate(() => (window as Window & { survived?: boolean }).survived), "the document was replaced").toBeUndefined();
+  expect(await page.evaluate(() => caches.keys()), "the worker's caches are gone and nothing else is").toEqual(["unrelated"]);
+});
+
+// The branch that keeps a hard reload from being the worst thing a reader can do to an installed app. Offline, the shell cache is the only copy of PR Desk on the device and there is no network to refill it from, so the sweep is skipped and the reload is left to find it.
+test("a reload with no network keeps the offline copy it would otherwise discard", async ({ page, context }) => {
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => (query.includes("display-mode") ? ({ matches: true, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false } as MediaQueryList) : real(query));
+  });
+  await page.goto("/#/");
+  await page.evaluate(() => caches.open("prdesk-shell-v0").then((cache) => cache.put("/stale", new Response("old"))));
+
+  await context.setOffline(true);
+  // The reload itself cannot succeed against a dev server that is now unreachable, and that is beside the point: what is asserted below is what the click did before it asked for the document. `dispatchEvent` rather than `click` because click waits out the navigation it triggers, and this one ends on the browser's own error page.
+  const navigated = page.waitForEvent("framenavigated");
+  await page.getByRole("button", { name: "Reload the app" }).dispatchEvent("click");
+  await navigated;
+  await context.setOffline(false);
+
+  await page.goto("/#/");
+  expect(await page.evaluate(() => caches.keys()), "the only copy of the application on the device").toContain("prdesk-shell-v0");
+  await page.evaluate(() => caches.delete("prdesk-shell-v0"));
+});
