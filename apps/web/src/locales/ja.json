@@ -223,7 +223,7 @@
   "noActionNeeded": "現在、対応が必要な Pull Request はありません。",
   "noOpenResults": "この表示にはオープンな Pull Request がありません。",
   "firstPage": "最初のページへ",
-  "navAbout": "プロジェクトについて",
+  "navAbout": "プロジェクト情報",
   "aboutTagline": "すべての貢献を、ひとつの場所に。",
   "aboutDescription": "PR Desk は、複数の GitHub リポジトリに貢献する人のための個人用ダッシュボードです。リポジトリを切り替えずに、プルリクエスト、レビュー、貢献履歴を確認できます。",
   "aboutRepository": "GitHub リポジトリ",
