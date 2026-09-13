@@ -5,6 +5,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Not vite. The entry in package.json is `npm:@voidzero-dev/vite-plus-core@0.3.1`, an alias that moves in lockstep with vite-plus and has nothing to do with vite's own release line. The updater reads the alias as "vite 0.3.1", resolves vite's latest — 8.3.0 — finds nothing it can write into the alias string and fails the entire run with `Dependabot::Bun::FileUpdater::NoChangeError`, which is what the first run after the ecosystem switch did. Succeeding would be worse than failing: it would replace the alias with the real vite and take the toolchain with it.
+      - dependency-name: vite
   - package-ecosystem: gomod
     directory: /apps/api
     schedule:
