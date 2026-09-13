@@ -1,6 +1,6 @@
 import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { factChips, factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, isMuted, matchesStatus, reasonTone, snoozeBounds, stableOrder, waitingLabel } from "./followup-view.ts";
+import { factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, isMuted, isReadyToMerge, matchesStatus, reasonTone, snoozeBounds, stableOrder, waitingLabel } from "./followup-view.ts";
 
 const now = Date.parse("2026-09-13T12:00:00Z");
 const day = 86400000;
@@ -93,35 +93,17 @@ test("the confirmation says so when GitHub's own facts outlive the action", () =
 
 test("Ready to merge needs the whole quadruple and belongs to the author", () => {
   const green = { ...pr, review_status: "approved", checks_status: "success", has_conflicts: false };
-  const keys = (row, role) => factChips(row, role).map((chip) => chip.key);
-  assert.ok(keys(green, "authored").includes("ready"));
-  assert.equal(keys(green, "reviewer").includes("ready"), false);
-  assert.equal(keys({ ...green, checks_status: "failure" }, "authored").includes("ready"), false);
-  assert.equal(keys({ ...green, review_status: "changes_requested" }, "authored").includes("ready"), false);
-  assert.equal(keys({ ...green, has_conflicts: true }, "authored").includes("ready"), false);
-  assert.equal(keys({ ...green, checks_status: undefined }, "authored").includes("ready"), false);
-});
-
-test("a missing or unknown CI result is not reported as a check result", () => {
-  const chip = (row) => factChips(row, "authored").find((entry) => entry.key === "checks");
-  assert.equal(chip({ ...pr, checks_status: "unknown" }), undefined);
-  assert.equal(chip({ ...pr }), undefined);
-  assert.equal(chip({ ...pr, checks_status: "" }), undefined);
-  const failing = chip({ ...pr, checks_status: "failure" });
-  assert.equal(failing.i18nKey, "ci");
-  assert.equal(failing.valueKey, "failure");
-  assert.equal(failing.className, "text-[var(--danger)]");
-});
-
-test("every review state the API can report has a chip, and nothing else does", () => {
-  for (const [state, key] of Object.entries({ pending: "awaitingReview", review_requested: "reviewRequested", changes_requested: "changesRequested", approved: "approved" })) {
-    assert.equal(factChips({ ...pr, review_status: state }, "reviewer")[0].i18nKey, key, state);
-  }
-  assert.deepEqual(factChips({ ...pr, review_status: "" }, "reviewer"), []);
-  assert.deepEqual(
-    factChips({ ...pr, draft: true, has_conflicts: true }, "authored").map((chip) => chip.key),
-    ["conflict", "draft"],
-  );
+  assert.equal(isReadyToMerge(green, "authored"), true);
+  // A reviewer looking at an approved, green PR is done with it and is not the person who merges, so the same facts produce nothing for them.
+  assert.equal(isReadyToMerge(green, "reviewer"), false);
+  assert.equal(isReadyToMerge({ ...green, checks_status: "failure" }, "authored"), false);
+  assert.equal(isReadyToMerge({ ...green, review_status: "changes_requested" }, "authored"), false);
+  assert.equal(isReadyToMerge({ ...green, has_conflicts: true }, "authored"), false);
+  // No pipeline at all is not a passing pipeline, and neither is one that has not resolved.
+  assert.equal(isReadyToMerge({ ...green, checks_status: undefined }, "authored"), false);
+  assert.equal(isReadyToMerge({ ...green, checks_status: "unknown" }, "authored"), false);
+  // A row nobody has reviewed is not ready however green the build is.
+  assert.equal(isReadyToMerge({ ...green, review_status: undefined }, "authored"), false);
 });
 
 test("reason tones keep the three-way grouping and fall back to neutral", () => {

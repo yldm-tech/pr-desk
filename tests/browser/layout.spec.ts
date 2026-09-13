@@ -4,6 +4,8 @@ import { installFixtures, ROUTES, STRUCTURAL_ROUTES } from "./fixtures";
 // The layout matrix. Every test in this file runs once per project in playwright.config.ts and nowhere else — the behavioural suite is excluded from these projects by `testIgnore`, so nothing here costs the other spec a second run.
 //
 // None of the five sweeps below asserts a pixel value, and that is deliberate: a test that pins geometry fails on every restyle and teaches nothing, while a test that asserts a property the design has to hold at *any* width survives a redesign and still catches a band that stopped being reachable.
+//
+// What the matrix is not: it is a page-load sweep. `open()` navigates and measures, and nothing here interacts, so a control that only exists after a click — a confirmation strip, a dialog, anything conditionally rendered — is measured at none of the twenty-four viewports. Making the sweep stateful would mean a script per route, kept correct forever; the cheaper answer, and the one this pass took, is that the workspace no longer has chrome that appears only after an interaction. What does get measured is anything merely hidden rather than absent: a closed `<details>` still lays its contents out, so the snooze picker inside every card is swept at every width even though nothing here opens one.
 
 // Edge projects only walk the routes whose layout changes band; the device projects walk everything. Declared as a skip inside the test rather than as a collection-time filter because a project's metadata is only readable from inside a test.
 const routesFor = (info: TestInfo) => (info.project.metadata?.routes === "structural" ? STRUCTURAL_ROUTES : ROUTES);
@@ -40,10 +42,12 @@ async function clippedElements(page: Page) {
 // (b) Tap targets, measured in one pass rather than one round trip per control because a route can hold eighty of them. The floor is 44px, which is the figure the whole `pointer-coarse:min-h-11` convention is built on.
 // Two exclusions, both about what a target *is* rather than about which ones currently fail. `display: inline` cannot carry a min-height at all, so sizing such a link means reflowing the prose around it. And an anchor with no padding, no border and no min-height of its own is a bare run of text: its box is its line box, the target is the words, and WCAG 2.5.8 exempts exactly that case ("the size is constrained by the line-height of non-target text"). A padded link, an icon link or anything with a control role is not exempt and is held to the full 44px.
 // Anything translated off the top-left is skipped too: the skip link sits at `translateY(-160%)` until it takes focus, which makes it a keyboard affordance rather than a tap target.
+// `input` is in the selector as of this pass, which is how a 44px checkbox came to sit on every follow-up card on every phone without anything noticing: the sweep could not see it, so the only evidence it existed was the class that sized it. A checkbox or a radio is measured together with its label, though — the UA draws the box at a fixed 13px and nothing but a redesign changes that, while the label is a region that genuinely accepts the tap. Sizing the input's own box instead is precisely the mistake `followUpSelect` made. Every other control, text fields included, is measured on its own box: a label focuses a text field but the caret is placed inside the field, so the field is the target.
 async function smallTargets(page: Page) {
   return page.evaluate(() => {
     const report: string[] = [];
-    for (const el of document.querySelectorAll<HTMLElement>('button, summary, a[href], [role="tab"], [role="button"], select')) {
+    const labelled = (el: HTMLElement) => el.closest("label") ?? (el.id ? document.querySelector<HTMLElement>(`label[for="${CSS.escape(el.id)}"]`) : null);
+    for (const el of document.querySelectorAll<HTMLElement>('button, summary, a[href], [role="tab"], [role="button"], select, input:not([type=hidden])')) {
       const style = getComputedStyle(el);
       if (style.display === "none" || style.display === "inline" || style.visibility === "hidden" || style.pointerEvents === "none") continue;
       if ((el as HTMLButtonElement).disabled) continue;
@@ -51,12 +55,17 @@ async function smallTargets(page: Page) {
       const chrome = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"].reduce((total, side) => total + parseFloat(style[side as "paddingTop"]), 0);
       const unsizedTextLink = el.tagName === "A" && el.getAttribute("role") === null && chrome === 0 && (style.minHeight === "auto" || parseFloat(style.minHeight) === 0);
       if (unsizedTextLink) continue;
-      const rect = el.getBoundingClientRect();
+      const box = el.getBoundingClientRect();
+      const ticked = el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio") ? labelled(el) : null;
+      const label = ticked?.getBoundingClientRect();
+      // The union of the two, not the label alone: a label that sits beside the box rather than around it leaves the box itself as part of the target.
+      const rect = label ? new DOMRect(Math.min(box.x, label.x), Math.min(box.y, label.y), Math.max(box.right, label.right) - Math.min(box.x, label.x), Math.max(box.bottom, label.bottom) - Math.min(box.y, label.y)) : box;
       if (rect.width === 0 || rect.height === 0 || rect.bottom <= 0 || rect.right <= 0) continue;
       // Half a pixel of tolerance: a 44px floor laid out on a fractional grid measures 43.99, which is a rounding artefact and not a control anyone can miss.
       if (Math.min(rect.width, rect.height) >= 43.5) continue;
+      // A control with no text of its own — every input is one — is unidentifiable in a failure report, so the fallbacks below are what make the line actionable rather than a size with no address.
       const name = el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 32);
-      report.push(`${el.tagName.toLowerCase()}[${name}] ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
+      report.push(`${el.tagName.toLowerCase()}[${name || el.getAttribute("name") || el.getAttribute("placeholder") || el.id}] ${rect.width.toFixed(1)}x${rect.height.toFixed(1)}`);
     }
     return report;
   });

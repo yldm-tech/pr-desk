@@ -1,6 +1,7 @@
 import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
 import { followupLocales } from "./followup-locales";
+import { reasonTones } from "./followup-view.ts";
 
 // A counted string does not have the same key in every language: i18next resolves `key` plus the plural category the count falls into, and the set of categories is a property of the language. So parity is compared on stems, and the categories themselves are checked against Intl rather than against English. This mirrors the rule locales.test.mjs already applies to the flat bundles.
 const plural = /_(zero|one|two|few|many|other)$/;
@@ -18,6 +19,12 @@ test("follow-up locales have matching keys and interpolation placeholders", () =
       assert.deepEqual(placeholders(value), placeholders(english), `${locale}.${key}`);
     }
   }
+});
+
+// The parity test above compares the five languages against each other, so a key missing from all five is parity-clean — which is exactly how `changes_requested` shipped rendering as the literal "followup.changes_requested" on the card. Reason chips are looked up as `followup.${reason}`, and `reasonTones` is the one enumeration of the reasons the server can actually raise, so tying the vocabulary to it is the only assertion that can fail on a word no language has.
+test("every reason the server can raise has an English word", () => {
+  const missing = Object.keys(reasonTones).filter((reason) => followupLocales.en[reason] === undefined);
+  assert.deepEqual(missing, []);
 });
 
 test("counted follow-up strings carry the plural categories their language uses", () => {

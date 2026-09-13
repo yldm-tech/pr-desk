@@ -186,3 +186,53 @@ func TestUndoRestoresTheStepBeforeTheLastAction(t *testing.T) {
 		t.Fatal("a second undo changed state it had no snapshot for")
 	}
 }
+
+// The snapshot is one step deep, so the question is which step it is spent on. It used to be whichever came last, which meant clicking a title to go read the thread — the cheapest and most frequent interaction in the product — overwrote a `handled` snapshot holding a three-week-old WaitingSince with one holding the timestamp `handled` had just written. Undo then restored the already-destroyed clock and reported success. `read` now takes no snapshot: it only moves ReadVersion, and new activity re-derives unread on its own (Unread is Version > ReadVersion), so nothing is lost by making it unrecoverable and the step that changed something survives.
+func TestReadDoesNotSpendTheUndoSnapshot(t *testing.T) {
+	db := integrationPoolDB(t)
+	s := &Server{db: db}
+	waiting := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	row := FollowUp{SessionID: "read-undo", PullRequestID: 2, Version: 5, ReadVersion: 2, NeedsConfirmation: true, WaitingSince: waiting, FactsJSON: `{"Role":"authored"}`}
+	if err := db.Create(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	scope := func(tx *gorm.DB) *gorm.DB { return tx.Where("session_id = ?", "read-undo") }
+	handledAt := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "handled", 5, nil, handledAt, scope); err != nil || status != 200 {
+		t.Fatalf("handled: status %d err %v", status, err)
+	}
+	var handled FollowUp
+	if err := db.Where("id = ?", row.ID).First(&handled).Error; err != nil {
+		t.Fatal(err)
+	}
+	if handled.PrevWaitingSince == nil || !handled.PrevWaitingSince.UTC().Equal(waiting) {
+		t.Fatalf("the snapshot does not hold the original waiting clock: %v", handled.PrevWaitingSince)
+	}
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "read", 5, nil, handledAt.Add(time.Minute), scope); err != nil || status != 200 {
+		t.Fatalf("read: status %d err %v", status, err)
+	}
+	var afterRead FollowUp
+	if err := db.Where("id = ?", row.ID).First(&afterRead).Error; err != nil {
+		t.Fatal(err)
+	}
+	if afterRead.ReadVersion != 5 {
+		t.Fatalf("read did not take effect: %d", afterRead.ReadVersion)
+	}
+	if afterRead.PrevWaitingSince == nil || !afterRead.PrevWaitingSince.UTC().Equal(waiting) {
+		t.Fatalf("read overwrote the snapshot of the action worth taking back: %v", afterRead.PrevWaitingSince)
+	}
+	if status, err := s.applyFollowUpAction(fmt.Sprint(row.ID), "undo", 5, nil, handledAt.Add(2*time.Minute), scope); err != nil || status != 200 {
+		t.Fatalf("undo: status %d err %v", status, err)
+	}
+	var restored FollowUp
+	if err := db.Where("id = ?", row.ID).First(&restored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !restored.WaitingSince.UTC().Equal(waiting) {
+		t.Fatalf("undo restored the handled-at timestamp rather than the original waiting clock: %v", restored.WaitingSince)
+	}
+	// Undo restores the whole step, and the step is the `handled`: the read mark it also carried goes back with it. That is the honest consequence of one snapshot per row, and it is cheap — the row is unread again, which is where it was before anything was pressed.
+	if !restored.NeedsConfirmation || restored.ReadVersion != 2 {
+		t.Fatalf("state not restored: confirm=%v read=%d", restored.NeedsConfirmation, restored.ReadVersion)
+	}
+}

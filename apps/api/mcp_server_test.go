@@ -185,8 +185,15 @@ func TestMCPWriteToolsHonourOptimisticConcurrency(t *testing.T) {
 // The spec defaults destructiveHint and openWorldHint to true when they are absent, so omitting them published every tool here as destructive and as reaching GitHub, and a host that auto-approves harmless tools prompted on every mark_follow_up_read. This pins the wire contract so a new AddTool cannot quietly reintroduce the defaults.
 func assertToolAnnotations(t *testing.T, tools []*mcp.Tool) {
 	t.Helper()
-	// undo_follow_up writes: it restores the read, handled, confirmation and waiting state the row had before its last action, so an agent calling it changes stored state exactly as the four above do.
-	writes := map[string]bool{"mark_follow_up_read": true, "mark_follow_up_handled": true, "snooze_follow_up": true, "unsnooze_follow_up": true, "undo_follow_up": true}
+	// The five write tools no longer share one expectation, and the old blanket `destructive: false` was wrong in the way that matters most: it told an agent that mark_follow_up_handled was safe to fan across a page of rows, when the handler sets WaitingSince to now on every one of them. destructiveHint does not mean "deletes a row" — the spec's false means the tool is additive only — so it is true wherever the call discards a value the environment cannot recreate: `handled` overwrites the waiting clock the workspace ranks by, `snooze` and `unsnooze` replace or cancel a reminder date nothing regenerates, and `undo` overwrites whatever the present state is with the snapshot. mark_follow_up_read is the exception for a structural reason rather than a judgement call: unread is derived as Version > ReadVersion, so the next comment on the pull request marks the row unread again without anyone asking. It is also the only write tool still claiming idempotence, and it earns that only because this pass stopped `read` from taking a snapshot — repeating either of the other three writes a fresh `now` or spends the one snapshot on a no-op, both of which are additional effects.
+	type expectation struct{ destructive, idempotent bool }
+	writes := map[string]expectation{
+		"mark_follow_up_read":    {destructive: false, idempotent: true},
+		"mark_follow_up_handled": {destructive: true},
+		"snooze_follow_up":       {destructive: true},
+		"unsnooze_follow_up":     {destructive: true},
+		"undo_follow_up":         {destructive: true},
+	}
 	seen := 0
 	for _, tool := range tools {
 		if tool.Annotations == nil {
@@ -195,10 +202,13 @@ func assertToolAnnotations(t *testing.T, tools []*mcp.Tool) {
 		if tool.Annotations.OpenWorldHint == nil || *tool.Annotations.OpenWorldHint {
 			t.Fatal("tool advertises an open world it never reaches", tool.Name)
 		}
-		if writes[tool.Name] {
+		if want, ok := writes[tool.Name]; ok {
 			seen++
-			if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint {
-				t.Fatal("a write tool that deletes nothing advertises as destructive", tool.Name)
+			if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint != want.destructive {
+				t.Fatal("a write tool misreports whether it discards state nothing can recreate", tool.Name)
+			}
+			if tool.Annotations.IdempotentHint != want.idempotent {
+				t.Fatal("a write tool misreports whether repeating it has an additional effect", tool.Name)
 			}
 			if tool.Annotations.ReadOnlyHint {
 				t.Fatal("a write tool advertises as read-only", tool.Name)

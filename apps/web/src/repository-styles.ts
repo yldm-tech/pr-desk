@@ -29,7 +29,8 @@ export const repositorySearch = [
   "[&_input]:w-full [&_input]:min-w-0 [&_input]:border-0 [&_input]:bg-transparent [&_input]:text-[length:0.8125rem] [&_input]:text-[var(--foreground)] [&_input]:outline-none",
   "[&_button]:flex [&_button]:border-0 [&_button]:bg-transparent [&_button]:p-[3px] [&_button]:text-[var(--muted)]",
   // iOS Safari zooms the page whenever a focused text control computes under 16px, and index.html deliberately carries no maximum-scale, so it never zooms back out. style.css has the same rule for bare controls, but it sits in the components layer and utilities beat it, so the search field has to restate the escape for itself.
-  "pointer-coarse:[&_input]:text-[length:1rem]",
+  // The field itself takes the 44px floor under a coarse pointer, which means the fixed 40px height of the frame around it has to give way. It measured 26px until the tap-target sweep learned to look at `input` at all — the frame was sized and the control inside it was not, which is the same oversight in the other direction from the 44px checkbox the follow-up card used to carry.
+  "pointer-coarse:[&_input]:text-[length:1rem] pointer-coarse:h-auto pointer-coarse:[&_input]:min-h-11",
   // The clear X is a 15px icon pinned against the inside edge of the field, i.e. the control closest to the screen edge and the easiest to miss into the input. Its box grows to the 44px floor under a coarse pointer while the icon stays 15px.
   "pointer-coarse:[&_button]:h-11 pointer-coarse:[&_button]:w-11 pointer-coarse:[&_button]:items-center pointer-coarse:[&_button]:justify-center pointer-coarse:[&_button]:-mr-2",
   "@table/dashboard:basis-[0%]",
