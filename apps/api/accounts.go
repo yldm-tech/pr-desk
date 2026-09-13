@@ -106,7 +106,8 @@ func (s *Server) connectAccount(ctx context.Context, candidate OAuthToken, githu
 		} else if err != nil {
 			return err
 		} else {
-			if err := tx.Model(&account).Updates(map[string]any{"username": candidate.Username, "token": candidate.Token, "authorization_error": "", "git_hub_created_at": candidate.GitHubCreatedAt}).Error; err != nil {
+			// The renewal columns are written from the candidate even when they are empty: a reconnect replaces the whole grant, and leaving a previous refresh token behind would have this account renewing against a credential GitHub retired at the moment of the new login.
+			if err := tx.Model(&account).Updates(map[string]any{"username": candidate.Username, "token": candidate.Token, "refresh_token": candidate.RefreshToken, "token_expires_at": candidate.TokenExpiresAt, "refresh_expires_at": candidate.RefreshExpiresAt, "authorization_error": "", "git_hub_created_at": candidate.GitHubCreatedAt}).Error; err != nil {
 				return err
 			}
 		}

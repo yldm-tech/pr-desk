@@ -334,7 +334,7 @@ func (s *Server) activity(c *gin.Context) {
 		c.JSON(401, gin.H{"error": "not connected"})
 		return
 	}
-	token, err := decrypt(stored.Token)
+	token, err := s.accessTokenFor(c.Request.Context(), stored)
 	if err != nil {
 		c.JSON(401, gin.H{"error": "reconnect GitHub"})
 		return

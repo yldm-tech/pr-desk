@@ -78,7 +78,13 @@ type OAuthToken struct {
 	SessionID            string `gorm:"index;not null"`
 	Username             string
 	Token                string
-	CreatedAt            time.Time
+	// The renewal half of the grant, encrypted with the same key as Token and never serialized to a client. Empty for every row written before renewal existed and for every App that has "Expire user authorization tokens" switched off, and both of those cases mean the access token is used until GitHub refuses it. See token_refresh.go.
+	RefreshToken string `json:"-"`
+	// When the access token stops working. NULL means it does not expire, which is what an App without token expiry issues and what every pre-existing row carries.
+	TokenExpiresAt *time.Time `json:"-"`
+	// When the refresh token itself lapses, recorded for operators. The renewal path never consults it: being refused by GitHub is the authoritative answer and a stored date cannot outrank it.
+	RefreshExpiresAt *time.Time `json:"-"`
+	CreatedAt        time.Time
 }
 type ReviewComment struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -383,7 +389,8 @@ func (s *Server) logout(c *gin.Context) {
 			if err := tx.Where("account_id IN (?)", tx.Model(&OAuthToken{}).Select("id").Where("session_id = ?", sid)).Delete(&BrowserSession{}).Error; err != nil {
 				return err
 			}
-			return tx.Model(&OAuthToken{}).Where("session_id = ?", sid).Updates(map[string]any{"token": "", "authorization_error": "disconnected"}).Error
+			// The refresh token goes with the access token. Blanking only the latter would leave a credential behind that is good for six months and can mint a new access token, which is the opposite of what disconnecting means.
+			return tx.Model(&OAuthToken{}).Where("session_id = ?", sid).Updates(map[string]any{"token": "", "refresh_token": "", "token_expires_at": nil, "refresh_expires_at": nil, "authorization_error": "disconnected"}).Error
 		})
 		if err != nil {
 			c.JSON(503, gin.H{"error": "Unable to disconnect; please retry"})
@@ -559,8 +566,9 @@ func githubCallback(c *gin.Context) {
 	}
 	accessToken := tok.AccessToken
 
-	encrypted, err := crypt(accessToken)
-	if err != nil {
+	// The whole grant is kept, not just the access half. A GitHub App with "Expire user authorization tokens" on — the default — issues an access token good for eight hours plus a refresh token good for six months; storing only the former is what used to make this application demand a fresh login every day.
+	var credential OAuthToken
+	if err := storeToken(&credential, tok); err != nil {
 		c.JSON(500, gin.H{"error": "unable to secure GitHub connection"})
 		return
 	}
@@ -582,7 +590,10 @@ func githubCallback(c *gin.Context) {
 		c.JSON(500, gin.H{"error": "Unable to create account"})
 		return
 	}
-	current, err := appServer.connectAccount(c.Request.Context(), OAuthToken{SessionID: storageID, Username: username, Token: encrypted, GitHubCreatedAt: &accountCreated}, user.GetID(), sessionID)
+	credential.SessionID = storageID
+	credential.Username = username
+	credential.GitHubCreatedAt = &accountCreated
+	current, err := appServer.connectAccount(c.Request.Context(), credential, user.GetID(), sessionID)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Unable to restore GitHub connection data"})
 		return
@@ -670,7 +681,8 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 	succeeded := false
 	defer func() { progress.finishResult(succeeded, result, ctx.Err()) }()
 	ctx = context.WithValue(ctx, historyProgressKey{}, progress)
-	token, err := decrypt(t.Token)
+	// Renewed once, here, and held as plaintext for the rest of the walk. tokenRefreshWindow is what makes that safe: a token within ten minutes of expiry is treated as already spent, so a run never starts on a credential that will die halfway through it.
+	token, err := s.accessTokenFor(ctx, t)
 	if err != nil {
 		return syncResult{401, gin.H{"error": "GitHub connection cannot be decrypted; reconnect GitHub"}}
 	}
