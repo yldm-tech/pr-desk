@@ -71,6 +71,7 @@ import Skeleton from "react-loading-skeleton";
 import { OverviewSkeleton, PRListSkeleton, ActivitySkeleton, PageSkeleton, AccountSkeleton } from "./LoadingSkeleton";
 import i18n from "./i18n";
 import { LanguageMenu } from "./LanguageMenu";
+import { HardRefresh } from "./HardRefresh";
 import { useTranslation } from "react-i18next";
 import { ActivityDialog } from "./ActivityDialog";
 import { ActivityPanel } from "./ActivityPanel";
@@ -564,6 +565,8 @@ export default function App() {
           <div className={accountBar}>
             <time className={headerDate}>{new Intl.DateTimeFormat(i18n.language, { weekday: "long", month: "long", day: "numeric" }).format(new Date())}</time>
             <div className={headerActions}>
+              {/* Renders only in an installed window, where there is no browser reload to reach for. */}
+              <HardRefresh />
               <LanguageMenu />
               {authLoading ? <AccountSkeleton /> : auth?.connected || filter === "About" ? <UserMenu connected={!!auth?.connected} username={auth?.username} onDisconnect={() => logoutMutation.mutate()} disconnecting={logoutMutation.isPending} disconnectError={logoutMutation.isError} /> : null}
             </div>

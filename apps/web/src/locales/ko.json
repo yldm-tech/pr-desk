@@ -8,6 +8,7 @@
   "repositories": "저장소",
   "sync": "지금 동기화",
   "syncing": "동기화 중…",
+  "hardRefresh": "앱 다시 불러오기",
   "search": "Pull Request 검색",
   "searchPlaceholder": "제목, 저장소 또는 번호",
   "clear": "지우기",
