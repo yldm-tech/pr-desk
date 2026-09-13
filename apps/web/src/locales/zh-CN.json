@@ -8,6 +8,7 @@
   "repositories": "仓库",
   "sync": "立即同步",
   "syncing": "同步中…",
+  "hardRefresh": "强制刷新",
   "search": "搜索 Pull Request",
   "searchPlaceholder": "标题、仓库或编号",
   "clear": "清除",
