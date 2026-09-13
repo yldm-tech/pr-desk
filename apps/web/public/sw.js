@@ -36,7 +36,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  if (url.pathname === "/api" || url.pathname.startsWith("/api/") || url.pathname === "/swagger" || url.pathname.startsWith("/swagger/")) return;
+  // The Swagger test is a bare prefix rather than the directory form the API uses, because the bundle's own definition is served from /swagger.json, one level up from /swagger/ -- and that name ends in .json, so the directory form would leave the OpenAPI spec to isPublicFile and hand the documentation page a spec one deploy behind.
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/") || url.pathname.startsWith("/swagger")) return;
   // `mode: "navigate"` rather than an Accept sniff: it is set by the browser for top-level and iframe document loads only, so a same-origin fetch() for HTML is not mistaken for a page load.
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
@@ -54,46 +55,48 @@ function isPublicFile(pathname) {
   return /\.(?:png|svg|ico|webmanifest|json|woff2?)$/.test(pathname);
 }
 
+// Storing is best effort, and deliberately cannot fail the response it was handed. `cache.put` rejects for reasons that have nothing to do with whether the network answered -- the origin is over its storage budget, the reader cleared site data mid-request, the status is the 206 a range request produces -- and a worker that let any of those escape would turn a response the server delivered perfectly well into a failed load. Losing a cache entry costs one refetch; losing the response costs the page.
+async function store(cacheName, key, response, limit) {
+  try {
+    const cache = await self.caches.open(cacheName);
+    await cache.put(key, response);
+    if (limit) await trim(cache, limit);
+  } catch {
+    // Nothing to do and nowhere to say it: the caller already has its answer.
+  }
+}
+
 // The document. Network wins whenever there is one, so a deploy is picked up by the next load and no reader is ever pinned to a stale build; the cache is the offline copy, refreshed on every successful load.
 async function networkFirst(request) {
+  let response;
   try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await self.caches.open(SHELL_CACHE);
-      await cache.put(SHELL_URL, response.clone());
-    }
-    return response;
+    response = await fetch(request);
   } catch (error) {
     const cached = await self.caches.match(SHELL_URL, { cacheName: SHELL_CACHE });
     if (cached) return cached;
     throw error;
   }
+  // A server redirect needs no handling here, which is worth saying because respondWith does reject when a navigation is answered with a response that was itself redirected. It cannot arise: the HTML specification gives navigation requests redirect mode "manual", fetch(request) preserves that, and http.FileServer's 301 from /index.html to ./ therefore comes back as an opaque redirect -- status 0, so `ok` is false and it is never cached -- which the browser follows itself. Rewriting it into a fresh Response.redirect would only take that back off the browser.
+  if (response.ok) await store(SHELL_CACHE, SHELL_URL, response.clone());
+  return response;
 }
 
 // Content-hashed and served `immutable` by the Go handler, so a hit needs no revalidation and a miss can only mean a build this device has not loaded yet.
 async function cacheFirst(request) {
-  const cache = await self.caches.open(ASSET_CACHE);
-  const cached = await cache.match(request);
+  const cached = await (await self.caches.open(ASSET_CACHE)).match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  if (response.ok) {
-    await cache.put(request, response.clone());
-    await trim(cache, ASSET_LIMIT);
-  }
+  if (response.ok) await store(ASSET_CACHE, request, response.clone(), ASSET_LIMIT);
   return response;
 }
 
 // Answer from the cache at once and replace it in the background, so a stable name is still instant offline and still no more than one load behind. The refresh is handed to waitUntil because it outlives the response it was started for, and a worker with nothing left to answer can be killed mid-write.
 async function staleWhileRevalidate(event) {
   const request = event.request;
-  const cache = await self.caches.open(ASSET_CACHE);
-  const cached = await cache.match(request);
+  const cached = await (await self.caches.open(ASSET_CACHE)).match(request);
   const network = fetch(request)
     .then(async (response) => {
-      if (response.ok) {
-        await cache.put(request, response.clone());
-        await trim(cache, ASSET_LIMIT);
-      }
+      if (response.ok) await store(ASSET_CACHE, request, response.clone(), ASSET_LIMIT);
       return response;
     })
     .catch((error) => {
