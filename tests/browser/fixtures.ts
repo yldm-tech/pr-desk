@@ -29,7 +29,8 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       archived_at: null,
       undoable: false,
       snoozed_until: null as string | null,
-      pr: { id: 1, repo: "fixture/calendar", number: 17, title: "Handle timezone boundaries", url: "https://github.com/fixture/calendar/pull/17", review_status: "changes_requested", checks_status: "failure", has_conflicts: true, draft: false },
+      // The facts match the reasons on purpose. presentation() appends conflict and checks_failed to ANY authored row carrying them, independently of the confirmation, so "human_feedback alone on a conflicted, red-CI pull request of my own" is a row the server cannot produce — and a fixture that produces it lets the card be judged against a state that does not exist. Row 35 below is the blocked case, with the reasons to match.
+      pr: { id: 1, repo: "fixture/calendar", number: 17, title: "Handle timezone boundaries", url: "https://github.com/fixture/calendar/pull/17", review_status: "changes_requested", checks_status: "success", has_conflicts: false, draft: false },
     },
     {
       id: 2,
@@ -106,9 +107,11 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       pr: { id: 6, repo: "fixture/calendar", number: 40, title: "Prototype the digest", url: "https://github.com/fixture/calendar/pull/40", review_status: "pending", checks_status: "unknown", has_conflicts: false, draft: true },
     },
   ];
-  // POST /follow-ups/:id, for every id rather than only the first: five of the six tasks are now acted on by some test, and a mutation that silently no-ops would let an assertion about the aftermath pass for the wrong reason. The writes mirror applyFollowUpAction — snooze also marks the row read, which is what makes the server's version gate satisfiable at the moment of snoozing.
+  // POST /follow-ups/:id, for every id rather than only the first: five of the six tasks are now acted on by some test, and a mutation that silently no-ops would let an assertion about the aftermath pass for the wrong reason. The writes mirror applyFollowUpAction followed by presentation(), because a fixture that is more forgiving than the server is how a destructive path passes CI: this one used to answer `handled` by emptying `reasons` and never touching `waiting_since`, so a blocked row obediently disappeared and the clock the whole product ranks by was never seen to reset.
   // One step of history per row, mirroring the snapshot columns: the fixture has to be able to give a row back, or an assertion about undo would pass against a mutation that never happened.
   const previous = new Map<number, string>();
+  // presentation() re-derives these two from synced GitHub facts on every read, so no verb in the product can clear them. They are what `handledIsUseful` refuses a button for, and what `factsSurvive` warns about on a mixed card.
+  const factDerived = (reason: string) => reason === "conflict" || reason === "checks_failed";
   const mutate = (id: number, body: { action: string; until?: string }) => {
     const task = tasks.find((entry) => entry.id === id);
     if (!task) return;
@@ -119,17 +122,27 @@ export async function installFixtures(page: Page, options: { locale?: string } =
       previous.delete(id);
       return;
     }
-    previous.set(id, JSON.stringify(task));
-    task.undoable = true;
+    // `read` takes no snapshot, the same exclusion followup_store.go makes: the one step of history is spent on the action that changed something rather than on the last one to arrive, and clicking a title to go and read the thread is the most ordinary interaction in the product.
+    if (body.action !== "read") {
+      previous.set(id, JSON.stringify(task));
+      task.undoable = true;
+    }
     if (body.action === "unsnooze") {
       task.snoozed_until = null;
       return;
     }
     task.unread = false;
-    if (body.action === "snooze") task.snoozed_until = body.until ?? null;
-    if (body.action === "handled" || body.action === "followed_up") {
+    if (body.action === "snooze") {
+      task.snoozed_until = body.until ?? null;
+      // A live snooze is reported as `waiting` with the reasons still attached — the browser's Muted group is a finer reading of a state the server agrees with, never a second opinion about whether something needs action.
       task.state = "waiting";
-      task.reasons = [];
+      return;
+    }
+    if (body.action === "handled" || body.action === "followed_up") {
+      // The server clears NeedsConfirmation and rewrites WaitingSince, and that is all: the fact-derived reasons come straight back out of the next read, so a row that is only blocked stays exactly where it was with a clock that now says "today". That is the damage the card's withheld button exists to prevent, and it has to be observable here for any test to catch it.
+      task.reasons = task.reasons.filter(factDerived);
+      task.waiting_since = new Date().toISOString();
+      task.state = task.reasons.length > 0 ? "action" : "waiting";
     }
   };
   const destinations: { id: number; name: string; kind: string; enabled: boolean }[] = [];
