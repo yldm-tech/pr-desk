@@ -4,7 +4,7 @@ import { overlays, useShortcut } from "./shortcuts";
 import { Kbd } from "./ui-controls";
 import { Sheet } from "./ui-overlay";
 
-// Keycaps and the two joining words. A keycap is printed as it is engraved, so it is not translated; "then" joins the strokes of a sequence and "or" joins alternatives.
+// Keycaps and the two joins between them. A keycap is printed as it is engraved, so it is not translated; "then" joins the strokes of a sequence, and alternatives are separated by a slash that is read out as "or", which keeps a four-way choice such as the snooze presets on one short line.
 type Token = string | { join: "then" | "or" };
 const then: Token = { join: "then" };
 const or: Token = { join: "or" };
@@ -17,7 +17,18 @@ function Keys({ tokens }: { tokens: Token[] }) {
   return (
     <span className="flex flex-wrap items-center justify-end gap-1">
       {tokens.map((token, index) => (
-        <Fragment key={index}>{typeof token === "string" ? <Kbd>{token}</Kbd> : <span className="px-0.5 text-caption text-fg-subtle">{token.join === "then" ? t("palette.then") : t("palette.or")}</span>}</Fragment>
+        <Fragment key={index}>
+          {typeof token === "string" ? (
+            <Kbd>{token}</Kbd>
+          ) : token.join === "then" ? (
+            <span className="px-0.5 text-caption text-fg-subtle">{t("palette.followedBy")}</span>
+          ) : (
+            <span className="text-caption text-fg-subtle">
+              <span aria-hidden="true">/</span>
+              <span className="sr-only">{t("palette.or")}</span>
+            </span>
+          )}
+        </Fragment>
       ))}
     </span>
   );
@@ -103,7 +114,7 @@ export function ShortcutsSheet() {
               {section.rows.map((row) => (
                 <div key={row.label} className="flex items-start justify-between gap-4 border-b border-line py-2 last:border-b-0">
                   <dt className="min-w-0 pt-0.5 text-body text-fg">{row.label}</dt>
-                  <dd className="m-0 max-w-[55%] shrink-0">
+                  <dd className="m-0 max-w-[60%] shrink-0">
                     <Keys tokens={row.keys} />
                   </dd>
                 </div>

@@ -215,10 +215,16 @@ function PaletteDialog() {
               {t("palette.title")}
             </h2>
             <Search size={16} aria-hidden="true" className="shrink-0 text-fg-subtle" />
-            <Command.Input ref={input} value={query} onValueChange={(next) => {
+            <Command.Input
+              ref={input}
+              value={query}
+              onValueChange={(next) => {
                 setQuery(next);
                 setSelected("");
-              }} placeholder={t("palette.placeholder")} className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-body text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none pointer-coarse:text-[length:1rem]" />
+              }}
+              placeholder={t("palette.placeholder")}
+              className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-body text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none pointer-coarse:text-[length:1rem]"
+            />
           </div>
         }
         footer={

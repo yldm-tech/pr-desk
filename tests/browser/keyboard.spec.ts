@@ -200,7 +200,20 @@ test("the palette says when follow-up results are partial or unavailable", async
           json: {
             baseline_complete: false,
             counts: { authored: 1, reviewer: 0, follow_up: 0 },
-            data: [{ id: 9, version: 1, role: "authored", state: "action", reasons: ["human_feedback"], unread: false, excerpt: "", waiting_since: "2026-09-01T00:00:00Z", archived_at: null, pr: { id: 109, repo: "fixture/partial", number: 9, title: "Partial inventory row", url: "https://github.com/fixture/partial/pull/9" } }],
+            data: [
+              {
+                id: 9,
+                version: 1,
+                role: "authored",
+                state: "action",
+                reasons: ["human_feedback"],
+                unread: false,
+                excerpt: "",
+                waiting_since: "2026-09-01T00:00:00Z",
+                archived_at: null,
+                pr: { id: 109, repo: "fixture/partial", number: 9, title: "Partial inventory row", url: "https://github.com/fixture/partial/pull/9" },
+              },
+            ],
           },
         }),
     },
