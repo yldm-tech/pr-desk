@@ -83,11 +83,26 @@ export function Avatar({ login, size, alt = "" }: { login: string; size: 20 | 24
 
 const DAY = 86_400_000;
 
-// A compact age in the active language: "26d" / "26日", or hours and minutes under a day. Intl's narrow unit style does the localisation.
-export function formatAge(value: Date, now: Date, language: string | undefined) {
+const ageParts = (value: Date, now: Date) => {
   const elapsed = Math.max(0, now.getTime() - value.getTime());
-  const [amount, unit] = elapsed >= DAY ? [Math.floor(elapsed / DAY), "day"] : elapsed >= 3_600_000 ? [Math.floor(elapsed / 3_600_000), "hour"] : [Math.max(1, Math.floor(elapsed / 60_000)), "minute"];
-  return new Intl.NumberFormat(language, { style: "unit", unit, unitDisplay: "narrow" }).format(amount);
+  return elapsed >= DAY ? ([Math.floor(elapsed / DAY), "day"] as const) : elapsed >= 3_600_000 ? ([Math.floor(elapsed / 3_600_000), "hour"] as const) : ([Math.max(1, Math.floor(elapsed / 60_000)), "minute"] as const);
+};
+
+// Intl's narrow unit is a Latin letter in Japanese and Spanish ("26d"), so those two take the short style instead, which is their own abbreviation ("26日", "26 d"); Japanese drops the space Intl puts before the unit. Every other language's narrow form is already its own ("26天", "26일", "26d").
+const shortAge = new Set(["ja", "es"]);
+
+// A compact age in the active language: "26d", "26日", "26天", or hours and minutes under a day. It is for the eye; screen readers get formatAgeLong beside it.
+export function formatAge(value: Date, now: Date, language: string | undefined) {
+  const [amount, unit] = ageParts(value, now);
+  const base = (language ?? "en").split("-")[0];
+  const text = new Intl.NumberFormat(language, { style: "unit", unit, unitDisplay: shortAge.has(base) ? "short" : "narrow" }).format(amount);
+  return base === "ja" ? text.replace(/\s+/g, "") : text;
+}
+
+// The same age as a phrase ("26 days ago"), which is what a screen reader should say instead of the compact form's letters.
+export function formatAgeLong(value: Date, now: Date, language: string | undefined) {
+  const [amount, unit] = ageParts(value, now);
+  return new Intl.RelativeTimeFormat(language, { numeric: "auto" }).format(-amount, unit);
 }
 
 export function formatDate(value: Date, language: string | undefined, now = new Date()) {
@@ -105,10 +120,16 @@ export function Time({ value, mode, title, className }: { value: string | Date; 
   const language = i18n.resolvedLanguage;
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return null;
-  const text = mode === "age" ? formatAge(date, new Date(), language) : mode === "date" ? formatDate(date, language) : formatDateTime(date, language);
+  if (mode === "age")
+    return (
+      <time dateTime={date.toISOString()} title={title ?? formatDateTime(date, language)} className={cx("tabular-nums", className)}>
+        <span aria-hidden="true">{formatAge(date, new Date(), language)}</span>
+        <span className="sr-only">{formatAgeLong(date, new Date(), language)}</span>
+      </time>
+    );
   return (
     <time dateTime={date.toISOString()} title={title ?? formatDateTime(date, language)} className={cx("tabular-nums", className)}>
-      {text}
+      {mode === "date" ? formatDate(date, language) : formatDateTime(date, language)}
     </time>
   );
 }
@@ -275,13 +296,13 @@ export function ErrorState({ title, error, description, onRetry, actions, classN
 }
 
 // Every page opens with this frame: an optional caption above the h1 (the Inbox date), the h1 with its count, the page's own actions, and a summary slot below. The count sits beside the heading rather than inside it, so the heading's accessible name stays the page name.
-export function PageHeader({ title, count, caption, actions, summary, className }: { title: string; count?: number; caption?: string; actions?: ReactNode; summary?: ReactNode; className?: string }) {
+export function PageHeader({ title, count, caption, captionClassName, actions, summary, className }: { title: string; count?: number; caption?: string; captionClassName?: string; actions?: ReactNode; summary?: ReactNode; className?: string }) {
   const { i18n } = useTranslation();
   return (
     <header className={cx("grid min-w-0 gap-3", className)}>
       <div className="flex min-w-0 flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          {caption && <p className="mb-0.5 text-caption font-medium tracking-[var(--caption-tracking)] text-fg-subtle [text-transform:var(--caption-transform)]">{caption}</p>}
+          {caption && <p className={cx("mb-0.5 text-caption font-medium tracking-[var(--caption-tracking)] text-fg-subtle [text-transform:var(--caption-transform)]", captionClassName)}>{caption}</p>}
           <div className="flex min-w-0 items-baseline gap-2">
             <h1 className="min-w-0 text-page font-semibold tracking-[var(--tracking-page)] text-fg [overflow-wrap:anywhere]">{title}</h1>
             {count !== undefined && <span className="text-title font-medium text-fg-subtle tabular-nums">{new Intl.NumberFormat(i18n.resolvedLanguage).format(count)}</span>}

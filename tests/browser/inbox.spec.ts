@@ -335,7 +335,7 @@ test("the verb keys act on the row under the cursor", async ({ page }) => {
 test("an action can be taken back from the confirmation that reports it, or with z", async ({ page }) => {
   await page.goto("/#/inbox?role=authored&status=action");
   const row = card(page, "Handle timezone boundaries");
-  const waited = await row.locator("time").first().innerText();
+  const waited = (await row.locator("time").first().textContent()) ?? "";
   await row.getByRole("button", { name: /^Handled · wait for others/ }).click();
   await expect(row).toHaveCount(0);
   const undo = page.getByRole("button", { name: /^Undo/ });
@@ -521,4 +521,15 @@ test("a failed inbox says why and leaves no loading chrome behind", async ({ pag
   await expect(alert).toContainText("Something went wrong on the server.");
   await expect(page.locator(".react-loading-skeleton")).toHaveCount(0);
   await expect(page.getByTestId("nav-badge")).toHaveCount(0);
+});
+
+// Mark read only exists while the row is unread, so pressing it removes it; focus goes back to the row rather than falling to <body>.
+test("mark read from the keyboard keeps the focus on the row", async ({ page }) => {
+  await page.goto("/#/inbox?role=authored&status=action");
+  const row = card(page, "Handle timezone boundaries");
+  const read = row.getByRole("button", { name: /^Mark read/ });
+  await read.focus();
+  await page.keyboard.press("Enter");
+  await expect(read).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("followup-1");
 });

@@ -1,5 +1,5 @@
 import { AnimatePresence } from "motion/react";
-import { Inbox, PanelRight, Settings2 } from "lucide-react";
+import { Inbox, PanelRight, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -18,7 +18,8 @@ import { useReminderSettings } from "./SnoozePopover";
 import { SplitView, useSplitMode } from "./SplitView";
 import { showToast } from "./toast";
 import { useUndoSlot } from "./undo-slot";
-import { Button, Kbd, LinkButton, SearchField, SegmentedControl, Select } from "./ui-controls";
+import { REVEAL_SEARCH_EVENT } from "./shortcuts";
+import { Button, cx, IconButton, Kbd, LinkButton, SearchField, SegmentedControl, Select } from "./ui-controls";
 import { EmptyState, ErrorState, FilterChip, Notice, PageHeader, StaleNotice, Toolbar } from "./ui-display";
 import { ItemList, ListSection } from "./ui-list";
 
@@ -34,6 +35,9 @@ const waitingAt = (item: FollowUp) => {
   return Number.isNaN(value) ? Number.POSITIVE_INFINITY : value;
 };
 
+
+// The pane's id, for the Show activity buttons that fill it in the split view.
+const PANE_ID = "inbox-detail";
 
 const detailTarget = (item: FollowUp) => ({ pr: { id: item.pr.id, repo: item.pr.repo, number: item.pr.number, title: item.pr.title, url: item.pr.url, comments: item.pr.comments_count }, followUp: item });
 
@@ -152,6 +156,12 @@ export function InboxPage() {
   }, []);
   // `read` is posted only on an explicit request to see a row (a click on its body or title, Enter, Show activity), never for moving the cursor or arriving from a link, and at most once per row while the page is open.
   const claimed = useRef(new Set<number>());
+  // A claim lasts until the row is seen read: when new activity makes it unread again, opening it is a fresh request to read and posts again.
+  useEffect(() => {
+    for (const item of query.data?.data ?? []) if (!item.unread) claimed.current.delete(item.id);
+  }, [query.data]);
+  // Said once on an explicit open in the split view, where the pane beside the list changes and focus stays on the row: nothing else would tell a screen-reader user that anything happened. Walking with j/k is not an explicit open and says nothing.
+  const [paneNews, setPaneNews] = useState("");
   const claimRead = (item: FollowUp) => {
     if (!item.unread || claimed.current.has(item.id)) return;
     claimed.current.add(item.id);
@@ -161,6 +171,7 @@ export function InboxPage() {
     if (split) {
       setCursor(item.id);
       claimRead(item);
+      setPaneNews(t("inbox.showingActivity", { title: item.pr.title }) + (paneNews.endsWith(" ") ? "" : " "));
       return;
     }
     // The sheet marks the row read itself when it opens, so the row does not post a second one.
@@ -293,6 +304,32 @@ export function InboxPage() {
   const date = new Intl.DateTimeFormat(i18n.resolvedLanguage, { weekday: "short", month: "short", day: "numeric" }).format(now);
   const reminderSettings = settings.data ? { timezone: settings.data.timezone, digest_time: settings.data.digest_time } : undefined;
 
+  const [searchOpen, setSearchOpen] = useState(false);
+  const focusSearch = useRef(false);
+  const revealSearch = () => {
+    focusSearch.current = true;
+    setSearchOpen(true);
+  };
+  useEffect(() => {
+    if (!searchOpen || !focusSearch.current) return;
+    focusSearch.current = false;
+    document.getElementById("pr-search")?.focus();
+  }, [searchOpen]);
+  // The `/` key asks for the search field wherever it is; below `pair` it may be folded away, so the shell asks the page to open it first.
+  useEffect(() => {
+    const open = () => revealSearch();
+    window.addEventListener(REVEAL_SEARCH_EVENT, open);
+    return () => window.removeEventListener(REVEAL_SEARCH_EVENT, open);
+  }, []);
+
+  // What a search or a filter left in the list, said politely once typing pauses, so a screen-reader user hears that the list changed or emptied. Nothing is said for the default view, which the page heading already counts.
+  const [resultNews, setResultNews] = useState("");
+  const resultText = narrowed && data ? t("inbox.results", { count: items.length }) : "";
+  useEffect(() => {
+    const timer = window.setTimeout(() => setResultNews(resultText), 300);
+    return () => window.clearTimeout(timer);
+  }, [resultText]);
+
   const list = (() => {
     if (query.isPending)
       return (
@@ -328,10 +365,20 @@ export function InboxPage() {
           title={t("caughtUp")}
           description={t("noActionNeeded")}
           secondary={
-            waitingCount > 0 ? (
-              <LinkButton variant="ghost" size="sm" to="/inbox?status=waiting" className="text-accent-text">
-                {t("inbox.waitingOnOthers", { count: waitingCount })}
-              </LinkButton>
+            waitingCount > 0 || (summary?.recentMerged ?? 0) > 0 ? (
+              // Caught up is not the end of the road: what is still out with other people, and what shipped lately, are one step away.
+              <span className="flex flex-wrap justify-center gap-1">
+                {waitingCount > 0 && (
+                  <LinkButton variant="ghost" size="sm" to="/inbox?status=waiting" className="text-accent-text">
+                    {t("inbox.waitingOnOthers", { count: waitingCount })}
+                  </LinkButton>
+                )}
+                {(summary?.recentMerged ?? 0) > 0 && (
+                  <LinkButton variant="ghost" size="sm" to="/inbox?status=archived&merged=1" className="text-accent-text">
+                    {t("inbox.recentMergedCount", { count: summary?.recentMerged ?? 0 })}
+                  </LinkButton>
+                )}
+              </span>
             ) : undefined
           }
         />
@@ -347,6 +394,7 @@ export function InboxPage() {
             heading={t("followup.groupHeading", { label: t(`followup.${group}`), count: rows.length })}
             count={rows.length}
             collapsible={group === "muted"}
+            open={group === "muted" ? mutedOpen : undefined}
             onToggle={group === "muted" ? setMutedOpen : undefined}
             note={group === "draft" && status === "draft" ? t("followup.draftHelp") : undefined}
           >
@@ -371,6 +419,7 @@ export function InboxPage() {
                     onRepository={(value) => change("repo", value)}
                     onShowLatest={showLatest}
                     register={register}
+                    controls={split ? PANE_ID : undefined}
                   />
                 ))}
               </AnimatePresence>
@@ -381,26 +430,46 @@ export function InboxPage() {
     );
   })();
 
-  const pane = paneItem ? (
-    <DetailPane target={detailTarget(paneItem)} mode="pane" />
-  ) : (
-    <section aria-label={t("inbox.detailLabel")} className="sticky top-4 rounded-lg border border-dashed border-line">
-      <EmptyState
-        icon={PanelRight}
-        title={t("inbox.selectPrompt")}
-        secondary={
-          <span className="inline-flex flex-wrap items-center justify-center gap-1 text-fg-muted">
-            <Kbd>j</Kbd>
-            <Kbd>k</Kbd> {t("inbox.hintMove")} · <Kbd>Enter</Kbd> {t("inbox.hintOpen")}
-          </span>
-        }
-      />
-    </section>
+  const pane = (
+    <div id={PANE_ID} className="min-w-0">
+      {paneItem ? (
+        <DetailPane target={detailTarget(paneItem)} mode="pane" />
+      ) : (
+        <section aria-label={t("inbox.detailLabel")} className="sticky top-4 grid min-h-[min(28rem,calc(100dvh-2rem))] place-items-center rounded-lg bg-bg-subtle">
+          <EmptyState
+            icon={PanelRight}
+            title={t("inbox.selectPrompt")}
+            secondary={
+              <span className="inline-flex flex-wrap items-center justify-center gap-1 text-fg-muted">
+                <Kbd>j</Kbd>
+                <Kbd>k</Kbd> {t("inbox.hintMove")} · <Kbd>Enter</Kbd> {t("inbox.hintOpen")}
+              </span>
+            }
+          />
+        </section>
+      )}
+    </div>
   );
 
+  // The search field is always there from `pair` up. Below it the header has no room for a fourth row of controls, so the field waits behind the search button in the title row and opens under the toolbar, focused; it stays open while it holds a query.
+  const searchShown = searchOpen || !!q;
   return (
     <div className="grid min-w-0 gap-4">
-      <PageHeader title={t("inbox.title")} count={summary?.total} caption={date} summary={query.isPending ? <SummarySkeleton /> : summary && <InboxSummary summary={summary} />} />
+      <PageHeader
+        title={t("inbox.title")}
+        count={summary?.total}
+        caption={date}
+        captionClassName="@max-pair/dashboard:hidden"
+        actions={
+          <>
+            <IconButton icon={Search} label={t("inbox.search")} aria-expanded={searchShown} aria-controls="inbox-search" className="@pair/dashboard:hidden" onClick={() => (searchShown && !q ? setSearchOpen(false) : revealSearch())} />
+            <LinkButton variant="ghost" icon={Settings2} to="/settings" title={t("followup.goSettings")} className="@max-pair/dashboard:size-8 @max-pair/dashboard:px-0 pointer-coarse:@max-pair/dashboard:size-11">
+              <span className="@max-pair/dashboard:sr-only">{t("followup.goSettings")}</span>
+            </LinkButton>
+          </>
+        }
+        summary={query.isPending ? <SummarySkeleton /> : summary && <InboxSummary summary={summary} />}
+      />
       {data && !data.baseline_complete && (
         <Notice tone="info" role="status">
           {t("followup.baseline")}
@@ -408,13 +477,13 @@ export function InboxPage() {
       )}
       {query.isError && data && <StaleNotice onRetry={() => void query.refetch()} />}
       <div className="grid min-w-0 gap-2">
-        <Toolbar>
-          <SegmentedControl label={t("inbox.role")} value={role} onChange={(value) => change("role", value === "all" ? "" : value)} items={inboxRoles.map((value) => ({ value, label: t(`followup.${value}`) }))} />
-          <Select label={t("status")} hideLabel="below-pair" value={status} onChange={(event) => change("status", event.target.value === "todo" ? "" : event.target.value)} options={inboxStatuses.map((value) => ({ value, label: t(`followup.${value}`) }))} />
-          <SearchField id="pr-search" label={t("inbox.search")} value={q} onChange={setSearch} mode="live" placeholder={t("searchPlaceholder")} maxLength={120} kbdHint className="min-w-48 flex-1 basis-56" />
-          <LinkButton variant="ghost" icon={Settings2} to="/settings" className="ml-auto">
-            {t("followup.goSettings")}
-          </LinkButton>
+        {/* Below `pair`: the role filter and the status on one line (the role pills scroll if they must), and the search, when it is open, on the line under them. */}
+        <Toolbar className="@max-pair/dashboard:grid @max-pair/dashboard:grid-cols-[minmax(0,1fr)_auto]">
+          <SegmentedControl label={t("inbox.role")} value={role} onChange={(value) => change("role", value === "all" ? "" : value)} items={inboxRoles.map((value) => ({ value, label: t(`followup.${value}`) }))} className="min-w-0" />
+          <Select label={t("status")} hideLabel="below-pair" value={status} onChange={(event) => change("status", event.target.value === "todo" ? "" : event.target.value)} options={inboxStatuses.map((value) => ({ value, label: t(`followup.${value}`) }))} className="shrink-0" />
+          <div id="inbox-search" className={cx("min-w-48 flex-1 basis-56 @max-pair/dashboard:col-span-2 @max-pair/dashboard:min-w-0", !searchShown && "@max-pair/dashboard:hidden")}>
+            <SearchField id="pr-search" label={t("inbox.search")} value={q} onChange={setSearch} mode="live" placeholder={t("searchPlaceholder")} maxLength={120} kbdHint />
+          </div>
         </Toolbar>
         {(repo || merged || tone || ready) && (
           <div role="group" aria-label={t("inbox.appliedFilters")} className="flex flex-wrap items-center gap-2">
@@ -425,7 +494,14 @@ export function InboxPage() {
           </div>
         )}
       </div>
-      <SplitView ref={splitRef} split={split} list={list} detail={pane} />
+      <p className="sr-only" role="status">
+        {paneNews}
+      </p>
+      <p className="sr-only" aria-live="polite">
+        {resultNews}
+      </p>
+      {/* The pane is dropped when there is nothing to show beside: an empty list's message then takes the whole width, rather than sitting next to a prompt to select an item that does not exist. */}
+      <SplitView ref={splitRef} split={split} list={list} detail={groups.length ? pane : null} />
     </div>
   );
 }

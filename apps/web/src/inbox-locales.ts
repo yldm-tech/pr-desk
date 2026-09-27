@@ -50,6 +50,9 @@ export const inboxLocales: LocaleNamespace = {
     appliedFilters: "Applied filters",
     detailLabel: "Activity",
     rowActions: "Actions",
+    showingActivity: "Showing activity for {{title}}",
+    results_one: "{{count}} follow-up shown",
+    results_other: "{{count}} follow-ups shown",
   },
   "zh-CN": {
     title: "待办",
@@ -93,6 +96,8 @@ export const inboxLocales: LocaleNamespace = {
     appliedFilters: "已应用的筛选",
     detailLabel: "动态",
     rowActions: "操作",
+    showingActivity: "正在显示 {{title}} 的动态",
+    results_other: "显示 {{count}} 项跟进",
   },
   ja: {
     title: "受信トレイ",
@@ -136,6 +141,8 @@ export const inboxLocales: LocaleNamespace = {
     appliedFilters: "適用中のフィルター",
     detailLabel: "アクティビティ",
     rowActions: "操作",
+    showingActivity: "{{title}} のアクティビティを表示しています",
+    results_other: "{{count}} 件のフォローアップを表示中",
   },
   ko: {
     title: "수신함",
@@ -179,6 +186,8 @@ export const inboxLocales: LocaleNamespace = {
     appliedFilters: "적용된 필터",
     detailLabel: "활동",
     rowActions: "작업",
+    showingActivity: "{{title}}의 활동을 표시합니다",
+    results_other: "후속 항목 {{count}}개 표시",
   },
   es: {
     title: "Bandeja",
@@ -228,5 +237,9 @@ export const inboxLocales: LocaleNamespace = {
     appliedFilters: "Filtros aplicados",
     detailLabel: "Actividad",
     rowActions: "Acciones",
+    showingActivity: "Mostrando la actividad de {{title}}",
+    results_one: "{{count}} seguimiento visible",
+    results_many: "{{count}} seguimientos visibles",
+    results_other: "{{count}} seguimientos visibles",
   },
 };

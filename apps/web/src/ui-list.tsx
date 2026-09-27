@@ -3,12 +3,12 @@ import type { HTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
 import { cx } from "./ui-controls";
 
 // The grid of every list row, by kind. Track counts only ever grow with width, which is what the layout suite's monotonicity sweep checks: a row that loses a column while the window widens has a band in the wrong place.
-// list: an Inbox row. 2 tracks (glyph, body) until its own list container reaches `row`, then 3 (glyph, body, rail).
-// list-split: the same row in the split view, where the list pane is at least 400px and always has room for the rail: always 3 tracks, with no container query, so the flip into split mode cannot take a track away.
+// list: an Inbox row. 3 tracks at every width: glyph, body, and a trailing column that holds the age on the title's line. Below its list container's `row` width the verbs sit on a line of their own under the body; from `row` they join the trailing column under the age, so the age and the verbs share one right edge in every row.
+// list-split: the same row in the split view, where the list pane is at least 28rem: always the wide form, with no container query, so the flip into split mode cannot move anything.
 // table: a pull-request row. 2 tracks, then 4 from `row`, then 5 from `table`, all measured against <main>.
 // repo: a repository row. 2 tracks, then 3 from `row`, then 6 from `table`.
 export const itemTracks = {
-  list: "grid-cols-[20px_minmax(0,1fr)] @row/list:grid-cols-[20px_minmax(0,1fr)_auto]",
+  list: "grid-cols-[20px_minmax(0,1fr)_auto]",
   "list-split": "grid-cols-[20px_minmax(0,1fr)_auto]",
   table: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto] @table/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_4.5rem_5rem]",
   repo: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] @table/dashboard:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_5rem_auto]",
@@ -87,6 +87,8 @@ type RowProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
   title: ReactNode;
   meta?: ReactNode;
   excerpt?: ReactNode;
+  // The list tracks' trailing cell on the title's line: the age, which stays in the same place whatever the width and whichever row is active.
+  aside?: ReactNode;
   rail?: ReactNode;
   active?: boolean;
   unread?: boolean;
@@ -99,7 +101,7 @@ type RowProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
 
 // One row. For the list tracks it lays out glyph | title, meta, excerpt | rail, and moves the rail under the body when the list is narrow. For the table and repo tracks the glyph and title form the first cell and `children` supply the rest, each its own grid item (role=cell for a table).
 // active is the keyboard cursor (a filled row with an inset accent bar, read by the tests as box-shadow); highlight flashes the row once, for a deep link or "Show latest"; exiting is a row on its way out, which gives up its id, test id and cursor and becomes inert so nothing can find or focus a ghost.
-export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, rail, active = false, unread = false, highlight = false, exiting = false, onBodyClick, className, children, onClick, ref, ...rest }: RowProps) {
+export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, aside, rail, active = false, unread = false, highlight = false, exiting = false, onBodyClick, className, children, onClick, ref, ...rest }: RowProps) {
   const Tag = as;
   const attributes: Record<string, unknown> = { ...rest };
   if (exiting) {
@@ -137,13 +139,14 @@ export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, rail,
     >
       {list ? (
         <>
-          <div className="pt-px">{glyph}</div>
-          <div className="grid min-w-0 gap-1">
+          <div className="col-start-1 row-start-1 pt-px">{glyph}</div>
+          <div className={cx("col-start-2 row-start-1 grid min-w-0 gap-1", tracks === "list-split" ? "row-end-3" : "@row/list:row-end-3")}>
             <div className={cx("min-w-0 text-body [overflow-wrap:anywhere]", unread ? "font-semibold" : "font-medium")}>{title}</div>
             {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-fg-muted">{meta}</div>}
             {excerpt}
           </div>
-          {rail && <div className={cx("col-start-2 flex min-w-0 flex-wrap items-center gap-2", tracks === "list-split" ? "col-start-3 row-start-1 flex-col items-end" : "@row/list:col-start-3 @row/list:row-start-1 @row/list:flex-col @row/list:items-end")}>{rail}</div>}
+          <div className="col-start-3 row-start-1 min-w-0 justify-self-end pl-2 text-right">{aside}</div>
+          {rail && <div className={cx("row-start-2 flex min-w-0 items-center", tracks === "list-split" ? "col-start-3 justify-self-end pl-2" : "col-start-2 col-end-4 @row/list:col-start-3 @row/list:justify-self-end @row/list:pl-2")}>{rail}</div>}
         </>
       ) : (
         <>
@@ -195,6 +198,7 @@ export function ListSection({
   note,
   children,
   className,
+  open,
   onToggle,
 }: {
   id: string;
@@ -205,13 +209,16 @@ export function ListSection({
   note?: ReactNode;
   children: ReactNode;
   className?: string;
+  // A collapsible section's open state, when the page tracks it: a disclosure that unmounts and mounts again (its group emptied and came back) then opens in the state the page still believes it is in, rather than closed under a page that thinks it is open.
+  open?: boolean;
   onToggle?: (open: boolean) => void;
 }) {
   const sticky = "sticky top-[var(--topbar-h)] z-[2] bg-bg py-2 shell:top-0";
   if (collapsible)
     return (
-      <details id={id} open={defaultOpen || undefined} onToggle={(event) => onToggle?.(event.currentTarget.open)} className={cx("group min-w-0", className)}>
-        <summary className={cx(sticky, "flex cursor-pointer list-none items-center gap-1.5 rounded-sm px-1 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden")}>
+      <details id={id} open={(open ?? defaultOpen) || undefined} onToggle={(event) => onToggle?.(event.currentTarget.open)} className={cx("group min-w-0", className)}>
+        {/* The chevron hangs in the gutter (-ml-5 is its 14px plus the 6px gap), so the label starts at the same x as every other section's heading. */}
+        <summary className={cx(sticky, "-ml-5 flex cursor-pointer list-none items-center gap-1.5 rounded-sm px-1 pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden")}>
           <ChevronRight size={14} aria-hidden="true" className="shrink-0 text-fg-subtle transition-transform duration-[var(--dur-fast)] group-open:rotate-90" />
           <SectionHeading heading={heading} count={count} />
         </summary>

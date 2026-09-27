@@ -1,5 +1,4 @@
 import { CircleCheck, GitMerge } from "lucide-react";
-import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import type { InboxSummary as Summary } from "./followup-view";
@@ -45,53 +44,42 @@ export function InboxSummary({ summary }: { summary: Summary }) {
     },
   ];
   const shownChips = chips.filter((chip) => chip.count > 0);
+  // One flowing line: the counts, then the two chips. No separators between the parts: a middle dot always ends up at the start or the end of a wrapped line in some language, so the gap alone separates them and the first part's weight says where the sentence starts.
   return (
     <nav aria-label={t("inbox.summaryLabel")} className="grid min-w-0 gap-2.5">
-      {shown.length > 0 && (
-        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 text-body text-fg-muted">
+      {(shown.length > 0 || shownChips.length > 0) && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-body text-fg-muted">
           {shown.map((part, index) => (
-            <Fragment key={part.key}>
-              {index > 0 && (
-                <span aria-hidden="true" className="text-fg-subtle">
-                  ·
-                </span>
-              )}
-              <Link
-                to={part.to}
-                aria-current={current(part.params) ? "true" : undefined}
-                className={cx("rounded-sm no-underline decoration-1 underline-offset-2 hover:underline aria-[current=true]:font-medium aria-[current=true]:text-fg aria-[current=true]:underline", index === 0 ? "font-medium text-fg" : part.tone === "blocked" ? "text-tone-blocked" : "text-fg-muted hover:text-fg")}
-              >
-                <span aria-hidden="true">{part.visible}</span>
-                <span className="sr-only">{part.name}</span>
-              </Link>
-            </Fragment>
+            <Link
+              key={part.key}
+              to={part.to}
+              aria-current={current(part.params) ? "true" : undefined}
+              className={cx("rounded-sm no-underline decoration-1 underline-offset-2 hover:underline aria-[current=true]:font-medium aria-[current=true]:text-fg aria-[current=true]:underline", index === 0 ? "font-medium text-fg" : part.tone === "blocked" ? "text-tone-blocked" : "text-fg-muted hover:text-fg")}
+            >
+              <span aria-hidden="true">{part.visible}</span>
+              <span className="sr-only">{part.name}</span>
+            </Link>
           ))}
-        </p>
+          {shownChips.map((chip) => {
+            const Icon = chip.icon;
+            // The link is the bare text box and the pill is drawn inside it, so the chip stays text-sized beside the sentence; on a touch screen the invisible ::before stretches the target to 44px without growing the pill.
+            return (
+              <Link key={chip.key} to={chip.to} aria-current={current(chip.params) ? "true" : undefined} className="group/chip relative rounded-full no-underline pointer-coarse:before:absolute pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-inset-x-1 pointer-coarse:before:content-['']">
+                <span className={cx("inline-flex min-h-6 items-center gap-1.5 rounded-full border bg-transparent px-2.5 text-caption font-medium group-hover/chip:bg-bg-muted group-aria-[current=true]/chip:bg-bg-muted", chip.tone)}>
+                  <Icon size={12} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
+                  <span aria-hidden="true">{chip.visible}</span>
+                  <span className="sr-only">{chip.name}</span>
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       )}
       {summary.total > 0 && segments.length > 0 && (
         <div aria-hidden="true" data-segments className="flex h-1.5 w-full max-w-xl gap-0.5 overflow-hidden rounded-full">
           {segments.map((segment) => (
             <span key={segment.key} data-segment className={cx("h-full min-w-1 rounded-full", segment.fill)} style={{ flexGrow: segment.value }} />
           ))}
-        </div>
-      )}
-      {shownChips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {shownChips.map((chip) => {
-            const Icon = chip.icon;
-            return (
-              <Link
-                key={chip.key}
-                to={chip.to}
-                aria-current={current(chip.params) ? "true" : undefined}
-                className={cx("inline-flex min-h-6 items-center gap-1.5 rounded-full border bg-transparent px-2.5 text-caption font-medium no-underline hover:bg-bg-muted aria-[current=true]:bg-bg-muted pointer-coarse:min-h-11 pointer-coarse:px-3.5", chip.tone)}
-              >
-                <Icon size={12} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
-                <span aria-hidden="true">{chip.visible}</span>
-                <span className="sr-only">{chip.name}</span>
-              </Link>
-            );
-          })}
         </div>
       )}
     </nav>

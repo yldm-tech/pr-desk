@@ -60,6 +60,7 @@ export function InboxRow({
   onRepository,
   onShowLatest,
   register,
+  controls,
 }: {
   item: FollowUp;
   group: FollowUpGroup;
@@ -78,6 +79,8 @@ export function InboxRow({
   onRepository: (repo: string) => void;
   onShowLatest: (item: FollowUp) => void;
   register: (id: number, commands: RowCommands | null) => void;
+  // The id of the detail pane Show activity fills in the split view.
+  controls?: string;
 }) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
@@ -143,7 +146,7 @@ export function InboxRow({
   const blockedOnly = !handledIsUseful(item) && group !== "archived";
   const stale = action.isError && isStale(action.error);
 
-  // The first <time> in the row is always the rail's: the age of a waiting row, the outcome of an archived one. Nothing earlier in the row is a <time>, so "the row's time" has one answer.
+  // The first <time> in the row is always the one on the title's line: the age of a waiting row, the outcome of an archived one. Nothing earlier in the row is a <time>, so "the row's time" has one answer. The age is printed compact ("26d") and read out in full ("Waiting 26 days"), because a screen reader says the compact form letter by letter.
   const time =
     group === "archived" ? (
       outcome && (
@@ -152,12 +155,10 @@ export function InboxRow({
         </time>
       )
     ) : group === "draft" || Number.isNaN(started) ? null : (
-      <span className="flex flex-wrap items-baseline justify-end gap-x-1.5 text-caption">
-        <time dateTime={new Date(started).toISOString()} title={`${waiting ? t(waiting.key, { count: waiting.count }) : ""} · ${formatDateTime(new Date(started), language)}`} className="font-medium text-fg-muted tabular-nums">
-          {formatAge(new Date(started), now, language)}
-        </time>
-        {overdueIn !== undefined && <span className="text-fg-subtle">{t("inbox.overdueIn", { count: overdueIn })}</span>}
-      </span>
+      <time dateTime={new Date(started).toISOString()} title={`${waiting ? t(waiting.key, { count: waiting.count }) : ""} · ${formatDateTime(new Date(started), language)}`} className="text-caption font-medium whitespace-nowrap text-fg-muted tabular-nums">
+        <span aria-hidden="true">{formatAge(new Date(started), now, language)}</span>
+        {waiting && <span className="sr-only">{t(waiting.key, { count: waiting.count })}</span>}
+      </time>
     );
 
   return (
@@ -213,8 +214,17 @@ export function InboxRow({
               <span>{t(item.role === "reviewer" ? "followup.roleReviewerItem" : "followup.roleAuthoredItem")}</span>
             </>
           )}
+          {overdueIn !== undefined && (
+            <>
+              <span aria-hidden="true" className="text-fg-subtle">
+                ·
+              </span>
+              <span>{t("inbox.overdueIn", { count: overdueIn })}</span>
+            </>
+          )}
+          {/* No min-w-0: the chips wrap as a group onto their own line rather than letting the group shrink beside the repository until each chip is cut to a fragment. */}
           {(item.reasons.length > 0 || ready || mutedUntil) && (
-            <span data-testid="reasons" className="inline-flex max-w-full min-w-0 flex-wrap items-center gap-1">
+            <span data-testid="reasons" className="inline-flex max-w-full flex-wrap items-center gap-1">
               {item.reasons.map((reason) => {
                 const tone = reasonTone(reason) as Tone;
                 return (
@@ -273,12 +283,8 @@ export function InboxRow({
           )}
         </>
       }
-      rail={
-        <>
-          {time}
-          <FollowUpActions item={item} variant={split ? "row-split" : "row"} action={action} now={now} emphasis={emphasis} settings={settings} snoozeOpen={snoozeOpen} onSnoozeOpenChange={setSnoozeOpen} snoozeRef={snoozeRef} onShowActivity={(opener) => onOpen(item, opener)} />
-        </>
-      }
+      aside={time}
+      rail={<FollowUpActions item={item} variant={split ? "row-split" : "row"} action={action} now={now} emphasis={emphasis} settings={settings} snoozeOpen={snoozeOpen} onSnoozeOpenChange={setSnoozeOpen} snoozeRef={snoozeRef} onShowActivity={(opener) => onOpen(item, opener)} controls={controls} />}
     />
   );
 }

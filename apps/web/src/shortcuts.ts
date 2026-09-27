@@ -8,6 +8,9 @@ export function isShortcutTarget(e: KeyboardEvent): boolean {
   return !!document.querySelector("dialog[open],[data-state=open][role=dialog]");
 }
 
+// Sent by the `/` key when the page's search field exists but is folded away (the Inbox below `pair`), so the page can open it before it is focused.
+export const REVEAL_SEARCH_EVENT = "prdesk:reveal-search";
+
 type Stroke = { key: string; at: number };
 // How long the second key of a `g` sequence may follow the first.
 const SEQUENCE_WINDOW_MS = 1000;

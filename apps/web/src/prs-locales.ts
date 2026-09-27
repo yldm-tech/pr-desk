@@ -21,6 +21,8 @@ export const prsLocales: LocaleNamespace = {
     showOpen: "Show open PRs",
     emptyView: "No pull requests in this view.",
     unavailable: "Unable to load pull requests",
+    results_one: "{{count}} pull request matches",
+    results_other: "{{count}} pull requests match",
   },
   "zh-CN": {
     title: "拉取请求",
@@ -40,6 +42,7 @@ export const prsLocales: LocaleNamespace = {
     showOpen: "查看进行中的 PR",
     emptyView: "此视图中没有拉取请求。",
     unavailable: "无法加载拉取请求",
+    results_other: "{{count}} 个拉取请求匹配",
   },
   ja: {
     title: "プルリクエスト",
@@ -59,6 +62,7 @@ export const prsLocales: LocaleNamespace = {
     showOpen: "オープンな PR を表示",
     emptyView: "この表示にはプルリクエストがありません。",
     unavailable: "プルリクエストを読み込めません",
+    results_other: "{{count}} 件のプルリクエストが一致",
   },
   ko: {
     title: "풀 리퀘스트",
@@ -78,6 +82,7 @@ export const prsLocales: LocaleNamespace = {
     showOpen: "열린 PR 보기",
     emptyView: "이 보기에는 풀 리퀘스트가 없습니다.",
     unavailable: "풀 리퀘스트를 불러올 수 없습니다",
+    results_other: "풀 리퀘스트 {{count}}개 일치",
   },
   es: {
     title: "Pull requests",
@@ -99,5 +104,8 @@ export const prsLocales: LocaleNamespace = {
     showOpen: "Ver PR abiertos",
     emptyView: "No hay pull requests en esta vista.",
     unavailable: "No se pueden cargar las pull requests",
+    results_one: "{{count}} pull request coincide",
+    results_many: "{{count}} pull requests coinciden",
+    results_other: "{{count}} pull requests coinciden",
   },
 };

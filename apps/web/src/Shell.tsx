@@ -18,7 +18,7 @@ import { SyncStatus, useSyncProgress } from "./SyncProgress";
 import { AccountMenu, ThemeSwitch } from "./UserMenu";
 import { useAuth, useFollowUps, useLogout, useSyncFeedback, useSyncMutation, useSyncPending } from "./queries";
 import { destinationOf, paths, type Destination } from "./routes";
-import { overlays, useShortcut } from "./shortcuts";
+import { overlays, REVEAL_SEARCH_EVENT, useShortcut } from "./shortcuts";
 import { dismissToast, showToast, useToast } from "./toast";
 import { cx, Kbd, LinkButton } from "./ui-controls";
 import { ToastRegion } from "./ui-overlay";
@@ -53,7 +53,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
   useShortcut("/", () => {
     const input = document.getElementById("pr-search");
     if (!input) return false;
-    input.focus();
+    // A field that is in the page but folded away has no box to focus; the page opens it and focuses it itself.
+    if (!input.getClientRects().length) window.dispatchEvent(new Event(REVEAL_SEARCH_EVENT));
+    else input.focus();
   });
 
   const { data: auth, isPending: authLoading } = useAuth();
