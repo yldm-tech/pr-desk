@@ -101,7 +101,7 @@ test("a failed load says so and offers a retry", async ({ page }) => {
   await installFixtures(page, { overrides: { repositories: (route: Route) => (mode === "up" ? route.fulfill({ json: data }) : route.fulfill({ status: 500, json: { error: "boom" } })) } });
   await page.goto("/#/repos");
   // The app retries a failed query once, after 600ms, so the failure is final within about a second.
-  const alert = page.getByRole("alert").filter({ hasText: "Unable to load repositories." });
+  const alert = page.getByRole("alert").filter({ hasText: "Repositories could not be loaded" });
   await expect(alert).toBeVisible({ timeout: 5_000 });
   mode = "up";
   await alert.getByRole("button", { name: "Retry" }).click();

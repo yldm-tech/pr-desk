@@ -274,7 +274,7 @@ test("a list that cannot load says so and offers a retry", async ({ page }) => {
     },
   });
   await page.goto("/#/prs");
-  const alert = page.getByRole("alert").filter({ hasText: "Unable to load pull requests" });
+  const alert = page.getByRole("alert").filter({ hasText: "Pull requests could not be loaded" });
   await expect(alert).toBeVisible();
   mode = "up";
   await alert.getByRole("button", { name: "Retry" }).click();

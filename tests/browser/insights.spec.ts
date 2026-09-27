@@ -173,7 +173,7 @@ test("a failed report offers a retry and the widest scope", async ({ page }) => 
   let fail = true;
   await installFixtures(page, { overrides: { overview: (route) => (fail ? route.fulfill({ status: 500, json: { error: "boom" } }) : route.fulfill({ json: overview() })) } });
   await page.goto("/#/insights");
-  const alert = page.getByRole("alert").filter({ hasText: "Unable to load contributions" });
+  const alert = page.getByRole("alert").filter({ hasText: "Contributions could not be loaded" });
   // The app retries a failed query once, after 600ms, so the error settles within about a second.
   await expect(alert).toBeVisible({ timeout: 5000 });
   await expect(alert.getByRole("button", { name: "All contributions" })).toBeVisible();

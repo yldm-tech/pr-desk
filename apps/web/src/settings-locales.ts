@@ -3,7 +3,7 @@ import type { LocaleNamespace } from "./locale-namespaces";
 // Strings under `settings.*`: the Settings. Every key needs all five languages: locales.test.mjs checks this namespace for key parity, placeholders and plural categories through the aggregator in locale-namespaces.ts.
 export const settingsLocales: LocaleNamespace = {
   en: {
-    unavailable: "Settings could not be loaded.",
+    unavailable: "Settings could not be loaded",
     tabGitHub: "GitHub access",
     digestLanguage: "Digest language",
     digestLanguageHelp: "Pushes and the daily digest are available in English and Chinese. This does not change the language of this app.",
@@ -26,7 +26,7 @@ export const settingsLocales: LocaleNamespace = {
     unsaved: "Unsaved changes",
   },
   "zh-CN": {
-    unavailable: "无法加载设置。",
+    unavailable: "无法加载设置",
     tabGitHub: "GitHub 访问",
     digestLanguage: "摘要语言",
     digestLanguageHelp: "推送和每日摘要支持英文和中文。此设置不会改变本应用的界面语言。",
@@ -49,7 +49,7 @@ export const settingsLocales: LocaleNamespace = {
     unsaved: "有未保存的更改",
   },
   ja: {
-    unavailable: "設定を読み込めませんでした。",
+    unavailable: "設定を読み込めませんでした",
     tabGitHub: "GitHub アクセス",
     digestLanguage: "ダイジェストの言語",
     digestLanguageHelp: "プッシュ通知と毎日のダイジェストは英語と中国語に対応しています。このアプリの表示言語は変わりません。",
@@ -72,7 +72,7 @@ export const settingsLocales: LocaleNamespace = {
     unsaved: "未保存の変更があります",
   },
   ko: {
-    unavailable: "설정을 불러올 수 없습니다.",
+    unavailable: "설정을 불러올 수 없습니다",
     tabGitHub: "GitHub 접근",
     digestLanguage: "요약 언어",
     digestLanguageHelp: "푸시 알림과 일일 요약은 영어와 중국어를 지원합니다. 이 앱의 표시 언어는 바뀌지 않습니다.",
@@ -95,7 +95,7 @@ export const settingsLocales: LocaleNamespace = {
     unsaved: "저장하지 않은 변경 사항",
   },
   es: {
-    unavailable: "No se pudo cargar la configuración.",
+    unavailable: "No se pudo cargar la configuración",
     tabGitHub: "Acceso a GitHub",
     digestLanguage: "Idioma del resumen",
     digestLanguageHelp: "Las notificaciones y el resumen diario están disponibles en inglés y chino. Esto no cambia el idioma de esta aplicación.",
