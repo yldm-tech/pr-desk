@@ -94,6 +94,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     activeNavButton.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }, [destination]);
   const insights = destination === "insights";
+  const pageOwnsHeading = destination === "about" || (!authLoading && (!auth?.connected || destination === "settings"));
   const navItem = (target: Destination) => ({ ref: destination === target ? activeNavButton : null, className: navButton(destination === target), "aria-current": destination === target ? ("page" as const) : undefined, onClick: () => go(target) });
   return (
     <div className={`${appShell} ${insights ? overviewCanvas : ""}`}>
@@ -172,25 +173,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       >
         <header className={`${pageHeader} ${insights ? overviewHeaderGap : pageHeaderGap}`}>
           <div className={headerTitleSlot}>
-            <h1 className={insights ? `${pageTitle} ${overviewHeading}` : pageTitle}>
-              {destination === "about" ? (
-                t("navAbout")
-              ) : authLoading ? (
-                <Skeleton width={120} height={23} />
-              ) : !auth?.connected ? (
-                t("welcomeHeading")
-              ) : destination === "settings" ? (
-                t("followup.settings")
-              ) : insights ? (
-                t("navOverview")
-              ) : destination === "repos" ? (
-                t("navRepositories")
-              ) : destination === "inbox" ? (
-                t("navAttention")
-              ) : (
-                t(view ? prViewTitleKeys[view] : "navAll")
-              )}
-            </h1>
+            {/* Settings, About and Welcome render their own h1 inside the page (spec §4.1), so the shell leaves the heading to them. */}
+            {!pageOwnsHeading && (
+              <h1 className={insights ? `${pageTitle} ${overviewHeading}` : pageTitle}>{authLoading ? <Skeleton width={120} height={23} /> : insights ? t("navOverview") : destination === "repos" ? t("navRepositories") : destination === "inbox" ? t("navAttention") : t(view ? prViewTitleKeys[view] : "navAll")}</h1>
+            )}
 
             {oauthError && (
               <p className="flex items-center gap-2 text-[var(--danger)]" role="alert">

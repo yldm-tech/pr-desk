@@ -1,39 +1,22 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import * as Tabs from "@radix-ui/react-tabs";
-import { Check, Plus } from "lucide-react";
+import Skeleton from "react-loading-skeleton";
+import { BellRing, Check, Plus } from "lucide-react";
 import ky, { HTTPError } from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
-import { AccessSettings } from "./AccessSettings";
-import { compactAction, dangerAction, linkAction, primaryAction, secondaryAction } from "./action-styles";
-import { syncStatusError } from "./status-styles";
-import {
-  destinationActions,
-  destinationForm,
-  rowConfirm,
-  rowFailing,
-  rowList,
-  rowNarrow,
-  rowState,
-  rowTag,
-  settingsActions,
-  settingsCard,
-  settingsEmptyNote,
-  settingsField,
-  settingsFieldError,
-  settingsFieldWide,
-  settingsFields,
-  settingsGroup,
-  settingsHeading,
-  settingsNote,
-  settingsSaveStatus,
-  settingsWarning,
-  teamList,
-  teamOption,
-} from "./settings-styles";
+import { AccessSettings, SettingsCard } from "./AccessSettings";
+import { GitHubAccessPanel } from "./GitHubAccessPanel";
+import { FormSkeleton } from "./LoadingSkeleton";
+import { OverridesEditor, overridesDays, rowsFromDays, type OverrideProblems, type OverridesValue } from "./OverridesEditor";
+import { useRepositories } from "./queries";
+import { Button, Checkbox, cx, Field, LinkButton, Tabs, TextField } from "./ui-controls";
+import { Badge, EmptyState, FactChip, Notice, PageHeader, StaleNotice } from "./ui-display";
+import { ConfirmInline } from "./ui-overlay";
+
+export { parseOverrides } from "./OverridesEditor";
 
 const settingsSchema = z.object({ timezone: z.string(), digest_time: z.string(), wait_days: z.number(), language: z.enum(["en", "zh-CN"]).default("en"), teams: z.array(z.string()).nullable(), repository_days: z.record(z.string(), z.number()).nullable() });
 type Settings = z.infer<typeof settingsSchema>;
@@ -46,9 +29,7 @@ const channelLabel = (kind: string) => `followup.channel${kind.charAt(0).toUpper
 // Mirrors destinationNameLimit and destinationRecipientLimit on the server.
 const nameLimit = 100;
 const recipientLimit = 20;
-// The server parses addresses with net/mail, which accepts a display name. The
-// browser check stays deliberately narrower than RFC 5322 but has to allow the
-// same two spellings so the form does not reject what the server stores.
+// The server parses addresses with net/mail, which accepts a display name. The browser check stays deliberately narrower than RFC 5322 but has to allow the same two spellings so the form does not reject what the server stores.
 const emailPattern = /^(?:[^<>]*<\s*[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+\s*>|[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)$/;
 const recipientList = (value: string) =>
   value
@@ -56,8 +37,7 @@ const recipientList = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
-// The server refuses to dial private addresses, so the same families are
-// reported in the form instead of after a failed delivery attempt.
+// The server refuses to dial private addresses, so the same families are reported in the form instead of after a failed delivery attempt.
 function isPrivateHost(value: string) {
   let host = value.trim().toLowerCase();
   try {
@@ -73,9 +53,7 @@ function isPrivateHost(value: string) {
   return first === 0 || first === 10 || first === 127 || (first === 100 && second >= 64 && second <= 127) || (first === 169 && second === 254) || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
 }
 
-// allowPrivate mirrors NOTIFY_ALLOW_PRIVATE_HOSTS on the server: with it the
-// server also accepts plain http, because internal endpoints rarely have a
-// certificate, and the form has to accept the same addresses it does.
+// allowPrivate mirrors NOTIFY_ALLOW_PRIVATE_HOSTS on the server: with it the server also accepts plain http, because internal endpoints rarely have a certificate, and the form has to accept the same addresses it does.
 export function draftErrors(draft: Draft, allowPrivate: boolean): Record<string, string> {
   const found: Record<string, string> = {};
   if (!draft.name.trim()) found.name = "followup.required";
@@ -105,9 +83,7 @@ export function draftErrors(draft: Draft, allowPrivate: boolean): Record<string,
   return found;
 }
 
-// A rejected destination comes back with the reason it was refused, which names
-// the offending field; anything else keeps the generic copy, because a status
-// line from a proxy is not something to show an operator as an explanation.
+// A rejected destination comes back with the reason it was refused, which names the offending field; anything else keeps the generic copy, because a status line from a proxy is not something to show an operator as an explanation.
 export function addErrorMessage(error: unknown): string {
   if (!(error instanceof HTTPError) || error.response.status !== 400) return "";
   const body = z.object({ error: z.string().optional() }).safeParse(error.data);
@@ -120,7 +96,6 @@ function destinationPayload(draft: Draft) {
   if (draft.kind === "email") return { ...base, host: draft.host.trim(), port: Number(draft.port.trim()) || 587, username: draft.username.trim(), password: draft.password, from: draft.from.trim(), to: recipientList(draft.to) };
   return { ...base, url: draft.url.trim(), secret: draft.secret.trim() };
 }
-type ControlProps = { id: string; "aria-describedby": string | undefined; "aria-invalid": true | undefined };
 
 // The zone list keeps the free-text IANA field autocompletable; older engines simply get no suggestions.
 const supportedTimezones = (): string[] => {
@@ -140,54 +115,29 @@ const isTimezone = (zone: string) => {
     return false;
   }
 };
-const parseOverrides = (text: string): { days: Record<string, number> } | { invalidLine: number } => {
-  const days: Record<string, number> = {};
-  const lines = text.split("\n");
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index].trim();
-    if (!line) continue;
-    const match = line.match(/^([\w.-]+\/[\w.-]+)=(\d+)$/);
-    if (!match || Number(match[2]) < 1 || Number(match[2]) > 365) return { invalidLine: index + 1 };
-    days[match[1]] = Number(match[2]);
-  }
-  return { days };
-};
 
-function Field({ label, hint, error, wide, children }: { label: string; hint?: string; error?: string; wide?: boolean; children: (props: ControlProps) => ReactNode }) {
-  const id = useId();
-  const describedBy = [hint ? `${id}-hint` : "", error ? `${id}-error` : ""].filter(Boolean).join(" ");
-  return (
-    <div className={wide ? `${settingsField} ${settingsFieldWide}` : settingsField}>
-      <label htmlFor={id}>{label}</label>
-      {children({ id, "aria-describedby": describedBy || undefined, "aria-invalid": error ? true : undefined })}
-      {hint && <small id={`${id}-hint`}>{hint}</small>}
-      {error && (
-        <p className={settingsFieldError} id={`${id}-error`} role="alert">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
+// The look of the Select primitive for a select that Field labels: Select brings its own label, and a second one would read the name twice.
+const selectClass =
+  "min-h-8 w-full min-w-0 cursor-pointer appearance-none rounded-md border border-line-strong bg-surface bg-[image:var(--icon-chevron)] bg-[length:14px] bg-[position:right_0.5rem_center] bg-no-repeat py-1 pr-8 pl-2.5 text-body text-fg transition-colors duration-[var(--dur-fast)] hover:border-fg-subtle aria-invalid:border-tone-blocked disabled:opacity-50 pointer-coarse:min-h-11 pointer-coarse:text-[length:1rem]";
 
 function SettingsForm({ settings }: { settings: Settings }) {
   const { t } = useTranslation();
   const client = useQueryClient();
+  const id = useId();
+  const form = useRef<HTMLFormElement>(null);
   const [timezone, setTimezone] = useState(settings.timezone);
   const [time, setTime] = useState(settings.digest_time);
   const [days, setDays] = useState(settings.wait_days);
   const [language, setLanguage] = useState(settings.language);
   const [selected, setSelected] = useState(settings.teams || []);
   const [saved] = useState(() => settings.teams || []);
-  const [overrides, setOverrides] = useState(
-    Object.entries(settings.repository_days || {})
-      .map(([repo, value]) => `${repo}=${value}`)
-      .join("\n"),
-  );
+  const [overrides, setOverrides] = useState<OverridesValue>(() => ({ mode: "rows", rows: rowsFromDays(settings.repository_days), text: "" }));
+  const [overrideProblems, setOverrideProblems] = useState<OverrideProblems>({});
   const [timezoneInvalid, setTimezoneInvalid] = useState(false);
-  const [invalidLine, setInvalidLine] = useState(0);
-  const zonesId = useId();
+  const [focusInvalid, setFocusInvalid] = useState(0);
   const zones = useMemo(supportedTimezones, []);
+  const repositories = useRepositories(true);
+  const suggestions = useMemo(() => (repositories.data || []).map((entry) => entry.repo), [repositories.data]);
   const teams = useQuery({
     queryKey: ["review-teams"],
     queryFn: ({ signal }) =>
@@ -204,131 +154,328 @@ function SettingsForm({ settings }: { settings: Settings }) {
       void client.invalidateQueries({ queryKey: ["follow-ups"] });
     },
   });
-  // A saved team stays listed even when GitHub no longer returns it — losing
-  // read:org or leaving the team would otherwise hide the subscription while
-  // the form kept posting it back, with no way to remove it. The saved ids are
-  // captured once so that clearing a checkbox does not remove its own row.
+  // A save the form refused moves the focus to the first field it named, so a keyboard or screen-reader user lands on the problem instead of hearing an alert about a field somewhere above.
+  useEffect(() => {
+    if (focusInvalid) form.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [focusInvalid]);
+  // Any change after a save clears its outcome, so "Saved" never describes values that have since been edited.
+  const edited = () => {
+    if (mutation.isSuccess || mutation.isError) mutation.reset();
+  };
+  // A saved team stays listed even when GitHub no longer returns it — losing read:org or leaving the team would otherwise hide the subscription while the form kept posting it back, with no way to remove it. The saved ids are captured once so that clearing a checkbox does not remove its own row.
   const fetched = teams.data?.data || [];
-  const teamOptions = [...fetched, ...saved.filter((id) => !fetched.some((team) => team.id === id)).map((id) => ({ id, name: id }))];
+  const teamOptions = [...fetched, ...saved.filter((team) => !fetched.some((entry) => entry.id === team)).map((team) => ({ id: team, name: team }))];
+  const scheduleTitle = `${id}-schedule`;
+  const teamsTitle = `${id}-teams`;
+  const overridesTitle = `${id}-overrides`;
   return (
     <form
-      className={settingsCard}
-      onChange={() => {
-        if (mutation.isSuccess || mutation.isError) mutation.reset();
-      }}
+      ref={form}
+      noValidate
+      className="grid min-w-0 gap-4"
+      onChange={edited}
       onSubmit={(event) => {
         event.preventDefault();
-        const parsed = parseOverrides(overrides);
         const zoneOk = isTimezone(timezone.trim());
+        const result = overridesDays(overrides);
         setTimezoneInvalid(!zoneOk);
-        setInvalidLine("invalidLine" in parsed ? parsed.invalidLine : 0);
-        if (!zoneOk || !("days" in parsed)) return;
-        mutation.mutate(parsed.days);
+        setOverrideProblems("problems" in result ? result.problems : {});
+        if (!zoneOk || "problems" in result) {
+          setFocusInvalid((count) => count + 1);
+          return;
+        }
+        mutation.mutate(result.days);
       }}
     >
-      <div className={settingsGroup}>
-        <div className={settingsHeading}>
-          <h2>{t("followup.schedule")}</h2>
-          <p>{t("followup.scheduleHelp")}</p>
-        </div>
-        <div className={settingsFields}>
-          <Field label={t("followup.notificationLanguage")} hint={t("followup.notificationLanguageHelp")}>
-            {(props) => (
-              <select {...props} value={language} onChange={(e) => setLanguage(e.target.value as "en" | "zh-CN")}>
-                <option value="en">English</option>
-                <option value="zh-CN">简体中文</option>
-              </select>
-            )}
+      <SettingsCard title={t("followup.schedule")} titleId={scheduleTitle} description={t("followup.scheduleHelp")}>
+        <div className="grid min-w-0 gap-4">
+          <Field label={t("followup.timezone")} help={t("followup.timezoneHelp")} error={timezoneInvalid ? t("followup.timezoneInvalid") : undefined} htmlFor={`${id}-timezone`} layout="inline">
+            <TextField
+              id={`${id}-timezone`}
+              className="@pair/dashboard:max-w-80"
+              list={zones.length ? `${id}-zones` : undefined}
+              value={timezone}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => {
+                setTimezone(event.target.value);
+                setTimezoneInvalid(false);
+              }}
+              required
+              placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
+            />
           </Field>
-          <Field label={t("followup.timezone")} hint={t("followup.timezoneHelp")} error={timezoneInvalid ? t("followup.timezoneInvalid") : undefined}>
-            {(props) => (
-              <>
-                <input
-                  {...props}
-                  list={zones.length ? zonesId : undefined}
-                  value={timezone}
-                  onChange={(e) => {
-                    setTimezone(e.target.value);
-                    setTimezoneInvalid(false);
-                  }}
-                  required
-                  placeholder={Intl.DateTimeFormat().resolvedOptions().timeZone}
-                />
-                {zones.length > 0 && (
-                  <datalist id={zonesId}>
-                    {zones.map((zone) => (
-                      <option key={zone} value={zone} />
-                    ))}
-                  </datalist>
-                )}
-              </>
-            )}
+          {zones.length > 0 && (
+            <datalist id={`${id}-zones`}>
+              {zones.map((zone) => (
+                <option key={zone} value={zone} />
+              ))}
+            </datalist>
+          )}
+          <Field label={t("followup.digestTime")} help={t("followup.digestTimeHelp")} htmlFor={`${id}-time`} layout="inline">
+            <TextField id={`${id}-time`} className="max-w-40" type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
           </Field>
-          <Field label={t("followup.digestTime")} hint={t("followup.digestTimeHelp")}>
-            {(props) => <input {...props} type="time" value={time} onChange={(e) => setTime(e.target.value)} required />}
+          <Field label={t("followup.waitDays")} help={t("followup.waitDaysHelp")} htmlFor={`${id}-days`} layout="inline">
+            <TextField id={`${id}-days`} className="max-w-24" type="number" min={1} max={365} inputMode="numeric" value={days} onChange={(event) => setDays(Number(event.target.value))} required />
           </Field>
-          <Field label={t("followup.waitDays")} hint={t("followup.waitDaysHelp")}>
-            {(props) => <input {...props} type="number" min={1} max={365} inputMode="numeric" value={days} onChange={(e) => setDays(Number(e.target.value))} required />}
+          <Field label={t("settings.digestLanguage")} help={t("settings.digestLanguageHelp")} htmlFor={`${id}-language`} layout="inline">
+            <select id={`${id}-language`} className={cx(selectClass, "@pair/dashboard:max-w-60")} value={language} onChange={(event) => setLanguage(event.target.value as "en" | "zh-CN")}>
+              <option value="en">English</option>
+              <option value="zh-CN">简体中文</option>
+            </select>
           </Field>
         </div>
-      </div>
-      <fieldset className={settingsGroup}>
-        <legend>{t("followup.teams")}</legend>
-        <p className={settingsNote}>{t("followup.teamsHelp")}</p>
+      </SettingsCard>
+
+      <SettingsCard title={t("followup.teams")} titleId={teamsTitle} description={t("followup.teamsHelp")}>
         {teams.isError && (
-          <p className={settingsWarning} role="alert">
-            <span>{t("followup.teamsError")}</span>
-            <button className={secondaryAction} type="button" onClick={() => teams.refetch()}>
-              {t("followup.retry")}
-            </button>
-          </p>
+          <Notice
+            tone="danger"
+            role="alert"
+            actions={
+              <Button size="sm" onClick={() => void teams.refetch()}>
+                {t("followup.retry")}
+              </Button>
+            }
+          >
+            {t("followup.teamsError")}
+          </Notice>
         )}
-        {teams.isPending && <p className={settingsNote}>{t("loading")}</p>}
+        {teams.isPending && (
+          <div className="grid gap-2" aria-busy="true">
+            <span className="sr-only" role="status">
+              {t("loading")}
+            </span>
+            <Skeleton width="min(220px, 100%)" height={20} />
+            <Skeleton width="min(180px, 100%)" height={20} />
+          </div>
+        )}
         {teamOptions.length > 0 ? (
-          <div className={teamList}>
+          <div role="group" aria-labelledby={teamsTitle} className="grid min-w-0 gap-1 @pair/dashboard:grid-cols-2">
             {teamOptions.map((team) => (
-              <label key={team.id} className={teamOption}>
-                <input type="checkbox" checked={selected.includes(team.id)} onChange={(e) => setSelected((current) => (e.target.checked ? [...current, team.id] : current.filter((id) => id !== team.id)))} />
-                <span>
-                  {team.name}
-                  {team.name !== team.id && <small>{team.id}</small>}
-                </span>
-              </label>
+              <Checkbox key={team.id} label={team.name} description={team.name !== team.id ? team.id : undefined} checked={selected.includes(team.id)} onChange={(event) => setSelected((current) => (event.target.checked ? [...current, team.id] : current.filter((entry) => entry !== team.id)))} />
             ))}
           </div>
         ) : (
-          !teams.isPending && !teams.isError && <p className={settingsEmptyNote}>{t("followup.teamsEmpty")}</p>
+          !teams.isPending && !teams.isError && <p className="rounded-md border border-dashed border-line px-3 py-3 text-small text-fg-muted">{t("followup.teamsEmpty")}</p>
         )}
-      </fieldset>
-      <div className={settingsGroup}>
-        <Field label={t("followup.overrides")} hint={t("followup.overridesHelp")} error={invalidLine ? t("followup.overridesInvalid", { line: invalidLine }) : undefined} wide>
-          {(props) => (
-            <textarea
-              {...props}
-              rows={4}
-              value={overrides}
-              onChange={(e) => {
-                setOverrides(e.target.value);
-                setInvalidLine(0);
-              }}
-              placeholder="owner/repository=14"
-            />
-          )}
-        </Field>
-      </div>
-      <div className={settingsActions}>
-        <button className={primaryAction} type="submit" disabled={mutation.isPending}>
+      </SettingsCard>
+
+      <SettingsCard title={t("followup.overrides")} titleId={overridesTitle}>
+        <OverridesEditor
+          value={overrides}
+          onChange={(next) => {
+            setOverrides(next);
+            edited();
+          }}
+          problems={overrideProblems}
+          onProblemsChange={setOverrideProblems}
+          defaultDays={days}
+          suggestions={suggestions}
+          labelledBy={overridesTitle}
+        />
+      </SettingsCard>
+
+      {/* Below `pair` the form is taller than the screen, so the save bar rides along the bottom edge, above the tab bar, instead of waiting at the end of the page. */}
+      <div className="sticky bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+8px)] z-10 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 shadow-1 shell:bottom-2 @pair/dashboard:static @pair/dashboard:border-0 @pair/dashboard:bg-transparent @pair/dashboard:p-0 @pair/dashboard:shadow-none">
+        <Button type="submit" variant="primary" disabled={mutation.isPending}>
           {mutation.isPending ? t("followup.saving") : t("followup.save")}
-        </button>
+        </Button>
         {mutation.isError && (
-          <p className={settingsFieldError} role="alert">
+          <p className="min-w-0 flex-1 text-small text-tone-blocked" role="alert">
             {t("followup.saveError")}
           </p>
         )}
         {mutation.isSuccess && !mutation.isPending && (
-          <p className={settingsSaveStatus} role="status">
+          <p className="inline-flex items-center gap-1.5 text-small font-medium text-tone-ready" role="status">
             <Check size={14} aria-hidden="true" />
             {t("followup.saved")}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
+
+// The Reminders tab reads the stored settings; the other tabs do not need them, so their loading and failure are this panel's alone.
+function ReminderSettings() {
+  const { t } = useTranslation();
+  const query = useQuery({
+    queryKey: ["follow-up-settings"],
+    queryFn: ({ signal }) =>
+      ky
+        .get(apiURL + "/api/v1/follow-up-settings", { credentials: "include", signal, retry: 0 })
+        .json()
+        .then((data) => settingsSchema.parse(data)),
+    retry: false,
+  });
+  if (query.isPending)
+    return (
+      <div className="grid gap-4">
+        <span className="sr-only" role="status">
+          {t("loading")}
+        </span>
+        <FormSkeleton fields={4} />
+        <FormSkeleton fields={1} />
+      </div>
+    );
+  // A background refetch that fails leaves the settings in hand: replacing the panel then would throw away a half-filled form along with what it shows.
+  if (query.isError && !query.data)
+    return (
+      <Notice
+        tone="danger"
+        role="alert"
+        title={t("settings.unavailable")}
+        actions={
+          <>
+            <Button size="sm" onClick={() => void query.refetch()}>
+              {t("retry")}
+            </Button>
+            <LinkButton size="sm" variant="ghost" href={apiURL + "/api/v1/auth/github"}>
+              {t("followup.reconnect")}
+            </LinkButton>
+          </>
+        }
+      />
+    );
+  return (
+    <div className="grid min-w-0 gap-4">
+      {query.isError && <StaleNotice onRetry={() => void query.refetch()} />}
+      <SettingsForm settings={query.data} />
+    </div>
+  );
+}
+
+function DestinationForm({ draft, setDraft, errors, setErrors, allowPrivate, onClose, titleId }: { draft: Draft; setDraft: (next: Draft) => void; errors: Record<string, string>; setErrors: (next: Record<string, string>) => void; allowPrivate: boolean; onClose: () => void; titleId: string }) {
+  const { t } = useTranslation();
+  const client = useQueryClient();
+  const id = useId();
+  const channelSelect = useRef<HTMLSelectElement>(null);
+  const [addFailure, setAddFailure] = useState("");
+  const [added, setAdded] = useState({ text: "", id: 0 });
+  useEffect(() => {
+    channelSelect.current?.focus();
+  }, []);
+  const addDestination = useMutation({
+    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", retry: 0, json: destinationPayload(draft) }),
+    onError: (error) => setAddFailure(addErrorMessage(error)),
+    onSuccess: () => {
+      setDraft({ ...emptyDraft, kind: draft.kind });
+      setAdded((previous) => ({ text: t("settings.announceAdded"), id: previous.id + 1 }));
+      void client.invalidateQueries({ queryKey: ["notification-destinations"] });
+    },
+  });
+  const field = (key: keyof Draft) => ({
+    id: `${id}-${key}`,
+    value: draft[key],
+    onChange: (event: { target: { value: string } }) => {
+      setDraft({ ...draft, [key]: event.target.value });
+      if (errors[key]) setErrors({ ...errors, [key]: "" });
+    },
+  });
+  const error = (key: string) => (errors[key] ? t(errors[key]) : undefined);
+  return (
+    <form
+      noValidate
+      aria-labelledby={titleId}
+      className="grid min-w-0 gap-4 rounded-md border border-line bg-surface p-4"
+      onChange={() => {
+        if (addDestination.isError) addDestination.reset();
+      }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        const target = event.currentTarget;
+        const found = draftErrors(draft, allowPrivate);
+        setErrors(found);
+        if (Object.values(found).some(Boolean)) {
+          requestAnimationFrame(() => target.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+          return;
+        }
+        addDestination.mutate();
+      }}
+    >
+      <h3 id={titleId} className="text-body font-semibold text-fg">
+        {t("settings.newDestination")}
+      </h3>
+      <p className="sr-only" role="status">
+        {added.text && `${added.text}${added.id % 2 ? " " : ""}`}
+      </p>
+      <div className="grid min-w-0 gap-4 @pair/dashboard:grid-cols-2">
+        <Field label={t("followup.channel")} htmlFor={`${id}-kind`}>
+          <select
+            ref={channelSelect}
+            id={`${id}-kind`}
+            className={selectClass}
+            value={draft.kind}
+            onChange={(event) => {
+              setDraft({ ...emptyDraft, name: draft.name, kind: event.target.value as Channel });
+              setErrors({});
+            }}
+          >
+            {channels.map((channel) => (
+              <option key={channel} value={channel}>
+                {t(channelLabel(channel))}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t("followup.destinationName")} help={t("followup.destinationNameHelp")} error={error("name")} htmlFor={`${id}-name`}>
+          <TextField {...field("name")} autoComplete="off" />
+        </Field>
+        <p className="text-small text-fg-muted @pair/dashboard:col-span-2">{t(`followup.${draft.kind}Help`)}</p>
+        {draft.kind === "telegram" && (
+          <>
+            <Field label={t("followup.chatId")} help={t("followup.chatIdHelp")} error={error("chat_id")} htmlFor={`${id}-chat_id`}>
+              <TextField {...field("chat_id")} inputMode="numeric" autoComplete="off" />
+            </Field>
+            <Field label={t("followup.botToken")} help={t("followup.botTokenHelp")} error={error("token")} htmlFor={`${id}-token`}>
+              <TextField {...field("token")} type="password" autoComplete="off" />
+            </Field>
+          </>
+        )}
+        {(draft.kind === "lark" || draft.kind === "webhook") && (
+          <>
+            <Field label={t("followup.webhookUrl")} help={t("followup.webhookUrlHelp")} error={error("url")} htmlFor={`${id}-url`} className="@pair/dashboard:col-span-2">
+              <TextField {...field("url")} inputMode="url" placeholder="https://" autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={t("followup.signingSecret")} help={t("followup.signingSecretHelp")} htmlFor={`${id}-secret`} className="@pair/dashboard:col-span-2">
+              <TextField {...field("secret")} type="password" autoComplete="off" />
+            </Field>
+          </>
+        )}
+        {draft.kind === "email" && (
+          <>
+            <Field label={t("followup.smtpHost")} error={error("host")} htmlFor={`${id}-host`}>
+              <TextField {...field("host")} placeholder="smtp.example.com" autoComplete="off" spellCheck={false} />
+            </Field>
+            <Field label={t("followup.smtpPort")} help={t("followup.smtpPortHelp")} error={error("port")} htmlFor={`${id}-port`}>
+              <TextField {...field("port")} inputMode="numeric" autoComplete="off" />
+            </Field>
+            <Field label={t("followup.smtpUsername")} help={t("followup.smtpUsernameHelp")} htmlFor={`${id}-username`}>
+              <TextField {...field("username")} autoComplete="off" />
+            </Field>
+            <Field label={t("followup.smtpPassword")} htmlFor={`${id}-password`}>
+              <TextField {...field("password")} type="password" autoComplete="off" />
+            </Field>
+            <Field label={t("followup.emailFrom")} error={error("from")} htmlFor={`${id}-from`}>
+              <TextField {...field("from")} inputMode="email" autoComplete="off" />
+            </Field>
+            <Field label={t("followup.emailTo")} help={t("followup.emailToHelp")} error={error("to")} htmlFor={`${id}-to`}>
+              <TextField {...field("to")} inputMode="email" autoComplete="off" />
+            </Field>
+          </>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" icon={Plus} disabled={addDestination.isPending}>
+          {addDestination.isPending ? t("followup.adding") : t("followup.add")}
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          {t("followup.cancel")}
+        </Button>
+        {addDestination.isError && (
+          <p className="min-w-0 basis-full text-small text-tone-blocked" role="alert">
+            {addFailure || t("followup.addError")}
           </p>
         )}
       </div>
@@ -339,236 +486,142 @@ function SettingsForm({ settings }: { settings: Settings }) {
 function NotificationDestinations() {
   const { t } = useTranslation();
   const client = useQueryClient();
+  const id = useId();
+  // The form and its draft live here rather than in the form, so closing it is a decision and a trip to another tab is not: the panel stays mounted while hidden.
+  const [formOpen, setFormOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [addFailure, setAddFailure] = useState("");
-  const [confirming, setConfirming] = useState(0);
-  const [cancelled, setCancelled] = useState(0);
-  // Removing a destination takes the focused button with it and said nothing.
+  const [removals, setRemovals] = useState(0);
+  const openButton = useRef<HTMLButtonElement>(null);
+  const [returnFocus, setReturnFocus] = useState(false);
+  useEffect(() => {
+    if (!returnFocus) return;
+    openButton.current?.focus();
+    setReturnFocus(false);
+  }, [returnFocus]);
+  // Removing a destination takes the focused button with it, so the card takes the focus instead of the document, and the removal is said out loud.
   const [announcement, setAnnouncement] = useState({ text: "", id: 0 });
-  const region = useRef<HTMLDivElement>(null);
+  const region = useRef<HTMLElement>(null);
   const announce = (text: string) => setAnnouncement((previous) => ({ text, id: previous.id + 1 }));
   useEffect(() => {
     if (announcement.id && document.activeElement === document.body) region.current?.focus();
   }, [announcement]);
-  // Asking for confirmation swaps the focused button for a different one, so the focus follows it there and back instead of falling to the document.
-  useEffect(() => {
-    if (confirming) document.getElementById(`destination-confirm-${confirming}`)?.focus();
-  }, [confirming]);
-  useEffect(() => {
-    if (!cancelled) return;
-    document.getElementById(`destination-remove-${cancelled}`)?.focus();
-    setCancelled(0);
-  }, [cancelled]);
-  const stopConfirming = (id: number) => {
-    setConfirming(0);
-    setCancelled(id);
-  };
   const invalidate = () => void client.invalidateQueries({ queryKey: ["notification-destinations"] });
   const destinations = useQuery({ queryKey: ["notification-destinations"], queryFn: ({ signal }) => ky.get(apiURL + "/api/v1/notification-destinations", { credentials: "include", signal }).json<{ data: Destination[]; allow_private_hosts?: boolean }>(), retry: false });
-  const addDestination = useMutation({
-    mutationFn: () => ky.post(apiURL + "/api/v1/notification-destinations", { credentials: "include", retry: 0, json: destinationPayload(draft) }),
-    onError: (error) => setAddFailure(addErrorMessage(error)),
-    onSuccess: () => {
-      setDraft({ ...emptyDraft, kind: draft.kind });
-      invalidate();
-    },
-  });
-  const field = (key: keyof Draft) => ({
-    value: draft[key],
-    onChange: (event: { target: { value: string } }) => {
-      setDraft({ ...draft, [key]: event.target.value });
-      if (errors[key]) setErrors({ ...errors, [key]: "" });
-    },
-  });
   const updateDestination = useMutation({ mutationFn: (d: Destination) => ky.put(apiURL + `/api/v1/notification-destinations/${d.id}`, { credentials: "include", retry: 0, json: { name: d.name, enabled: !d.enabled } }), onSuccess: invalidate });
   const deleteDestination = useMutation({
-    mutationFn: (id: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${id}`, { credentials: "include", retry: 0 }),
+    mutationFn: (destination: number) => ky.delete(apiURL + `/api/v1/notification-destinations/${destination}`, { credentials: "include", retry: 0 }),
     onSuccess: () => {
-      setConfirming(0);
+      setRemovals((count) => count + 1);
       announce(t("followup.announceRemoved"));
       invalidate();
     },
   });
   const rows = destinations.data?.data || [];
+  const open = () => setFormOpen(true);
+  const close = () => {
+    setFormOpen(false);
+    setDraft(emptyDraft);
+    setErrors({});
+    setReturnFocus(true);
+  };
+  const addButton = (
+    <Button ref={openButton} icon={Plus} onClick={open}>
+      {t("settings.addDestination")}
+    </Button>
+  );
+  const loaded = !destinations.isPending && !(destinations.isError && !destinations.data);
   return (
-    <section className={settingsCard} aria-labelledby="notification-destinations-heading">
-      <div className={settingsGroup} ref={region} tabIndex={-1}>
-        <p className="sr-only" role="status" aria-live="polite">
-          {announcement.text}
-        </p>
-        <div className={settingsHeading}>
-          <h2 id="notification-destinations-heading">{t("followup.notifications")}</h2>
-          <p>{t("followup.notificationsHelp")}</p>
+    <SettingsCard ref={region} tabIndex={-1} title={t("followup.notifications")} description={t("followup.notificationsHelp")} footer={loaded && rows.length > 0 && !formOpen ? addButton : undefined}>
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement.text}
+      </p>
+      {/* A failed refresh keeps the destinations that were already loaded: they are still accurate, and replacing them with an error hides what the operator came to read. */}
+      {destinations.isError && destinations.data && <StaleNotice onRetry={() => void destinations.refetch()} />}
+      {destinations.isPending ? (
+        <div className="grid gap-3" aria-busy="true">
+          <span className="sr-only" role="status">
+            {t("loading")}
+          </span>
+          <Skeleton height={44} count={2} className="mb-2" />
         </div>
-        <form
-          className={destinationForm}
-          onChange={() => {
-            if (addDestination.isError) addDestination.reset();
-          }}
-          onSubmit={(event) => {
-            event.preventDefault();
-            const found = draftErrors(draft, destinations.data?.allow_private_hosts === true);
-            setErrors(found);
-            if (Object.values(found).some(Boolean)) return;
-            addDestination.mutate();
-          }}
+      ) : destinations.isError && !destinations.data ? (
+        <Notice
+          tone="danger"
+          role="alert"
+          actions={
+            <Button size="sm" onClick={() => void destinations.refetch()}>
+              {t("followup.retry")}
+            </Button>
+          }
         >
-          <Field label={t("followup.channel")}>
-            {(props) => (
-              <select
-                {...props}
-                value={draft.kind}
-                onChange={(e) => {
-                  setDraft({ ...emptyDraft, name: draft.name, kind: e.target.value as Channel });
-                  setErrors({});
-                }}
-              >
-                {channels.map((channel) => (
-                  <option key={channel} value={channel}>
-                    {t(channelLabel(channel))}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
-          <Field label={t("followup.destinationName")} hint={t("followup.destinationNameHelp")} error={errors.name ? t(errors.name) : undefined}>
-            {(props) => <input {...props} {...field("name")} />}
-          </Field>
-          <p className={`${settingsNote} ${settingsFieldWide}`}>{t(`followup.${draft.kind}Help`)}</p>
-          {draft.kind === "telegram" && (
-            <>
-              <Field label={t("followup.chatId")} hint={t("followup.chatIdHelp")} error={errors.chat_id ? t(errors.chat_id) : undefined}>
-                {(props) => <input {...props} {...field("chat_id")} inputMode="numeric" />}
-              </Field>
-              <Field label={t("followup.botToken")} hint={t("followup.botTokenHelp")} error={errors.token ? t(errors.token) : undefined}>
-                {(props) => <input {...props} {...field("token")} type="password" autoComplete="off" />}
-              </Field>
-            </>
-          )}
-          {(draft.kind === "lark" || draft.kind === "webhook") && (
-            <>
-              <Field label={t("followup.webhookUrl")} hint={t("followup.webhookUrlHelp")} error={errors.url ? t(errors.url) : undefined} wide>
-                {(props) => <input {...props} {...field("url")} inputMode="url" placeholder="https://" />}
-              </Field>
-              <Field label={t("followup.signingSecret")} hint={t("followup.signingSecretHelp")} wide>
-                {(props) => <input {...props} {...field("secret")} type="password" autoComplete="off" />}
-              </Field>
-            </>
-          )}
-          {draft.kind === "email" && (
-            <>
-              <Field label={t("followup.smtpHost")} error={errors.host ? t(errors.host) : undefined}>
-                {(props) => <input {...props} {...field("host")} placeholder="smtp.example.com" />}
-              </Field>
-              <Field label={t("followup.smtpPort")} hint={t("followup.smtpPortHelp")} error={errors.port ? t(errors.port) : undefined}>
-                {(props) => <input {...props} {...field("port")} inputMode="numeric" />}
-              </Field>
-              <Field label={t("followup.smtpUsername")} hint={t("followup.smtpUsernameHelp")}>
-                {(props) => <input {...props} {...field("username")} autoComplete="off" />}
-              </Field>
-              <Field label={t("followup.smtpPassword")}>{(props) => <input {...props} {...field("password")} type="password" autoComplete="off" />}</Field>
-              <Field label={t("followup.emailFrom")} error={errors.from ? t(errors.from) : undefined}>
-                {(props) => <input {...props} {...field("from")} inputMode="email" />}
-              </Field>
-              <Field label={t("followup.emailTo")} hint={t("followup.emailToHelp")} error={errors.to ? t(errors.to) : undefined}>
-                {(props) => <input {...props} {...field("to")} inputMode="email" />}
-              </Field>
-            </>
-          )}
-          <div className={destinationActions}>
-            <button className={compactAction} type="submit" disabled={addDestination.isPending}>
-              <Plus size={15} aria-hidden="true" />
-              {addDestination.isPending ? t("followup.adding") : t("followup.add")}
-            </button>
-            {addDestination.isError && (
-              <p className={settingsFieldError} role="alert">
-                {addFailure || t("followup.addError")}
-              </p>
-            )}
-          </div>
-        </form>
-        {/* A failed refresh keeps the destinations that were already loaded: they are still accurate, and replacing them with an error hides what the operator came to read. */}
-        {destinations.isError && destinations.data && (
-          <p className={settingsWarning} role="status">
-            <span>{t("refreshFailedKeepData")}</span>
-            <button className={secondaryAction} type="button" onClick={() => destinations.refetch()}>
-              {t("followup.retry")}
-            </button>
-          </p>
-        )}
-        {destinations.isError && !destinations.data ? (
-          <p className={settingsWarning} role="alert">
-            <span>{t("followup.destinationsError")}</span>
-            <button className={secondaryAction} type="button" onClick={() => destinations.refetch()}>
-              {t("followup.retry")}
-            </button>
-          </p>
-        ) : rows.length === 0 && !destinations.isPending ? (
-          <p className={settingsEmptyNote}>{t("followup.destinationsEmpty")}</p>
-        ) : (
-          <ul className={rowList}>
-            {rows.map((destination) => (
-              <li
-                key={destination.id}
-                className={rowNarrow}
-                data-testid="destination"
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && confirming === destination.id) stopConfirming(destination.id);
-                }}
-              >
-                <strong>{destination.name}</strong>
-                <span className={rowTag}>{t(channelLabel(destination.kind || "telegram"))}</span>
-                {destination.failing && <span className={rowFailing}>{t("followup.destinationFailing")}</span>}
-                {/* The two steps are keyed apart because React otherwise reuses the focused Remove button as Cancel, and the next Enter cancels instead of confirming. */}
-                {confirming === destination.id ? (
-                  <Fragment key="confirm">
-                    <span className={rowConfirm} id={`destination-prompt-${destination.id}`}>
-                      {t("followup.confirmRemove")}
-                    </span>
-                    <button id={`destination-confirm-${destination.id}`} className={dangerAction} type="button" disabled={deleteDestination.isPending} aria-describedby={`destination-prompt-${destination.id}`} onClick={() => deleteDestination.mutate(destination.id)}>
-                      {t("followup.remove")}
-                    </button>
-                    <button className={compactAction} type="button" onClick={() => stopConfirming(destination.id)}>
-                      {t("followup.cancel")}
-                    </button>
-                  </Fragment>
-                ) : (
-                  <Fragment key="actions">
-                    <span className={rowState} data-state={destination.enabled ? "enabled" : "disabled"}>
-                      {t(destination.enabled ? "followup.destinationEnabled" : "followup.destinationDisabled")}
-                    </span>
-                    <button className={compactAction} type="button" disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
-                      {t(destination.enabled ? "followup.disable" : "followup.enable")}
-                    </button>
-                    <button id={`destination-remove-${destination.id}`} className={dangerAction} type="button" onClick={() => setConfirming(destination.id)}>
-                      {t("followup.remove")}
-                    </button>
-                  </Fragment>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {(updateDestination.isError || deleteDestination.isError) && (
-          <p className={settingsFieldError} role="alert">
-            {t("followup.destinationActionError")}
-          </p>
-        )}
-      </div>
-    </section>
+          {t("followup.destinationsError")}
+        </Notice>
+      ) : rows.length === 0 ? (
+        !formOpen && <EmptyState icon={BellRing} title={t("followup.destinationsEmpty")} action={addButton} className="py-6" />
+      ) : (
+        <ul className="m-0 grid min-w-0 list-none rounded-md border border-line bg-surface p-0">
+          {rows.map((destination) => (
+            <li key={destination.id} data-testid="destination" className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-line px-3 py-2.5 first:border-t-0">
+              <div className="grid min-w-0 flex-1 basis-48 gap-1">
+                <p className="truncate text-body font-medium text-fg" title={destination.name}>
+                  {destination.name}
+                </p>
+                <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-fg-muted">
+                  <Badge>{t(channelLabel(destination.kind || "telegram"))}</Badge>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span aria-hidden="true" className={cx("size-2 rounded-full", destination.enabled ? "bg-tone-ready" : "border border-fg-subtle")} />
+                    {t(destination.enabled ? "followup.destinationEnabled" : "followup.destinationDisabled")}
+                  </span>
+                  {destination.failing && <FactChip tone="blocked">{t("followup.destinationFailing")}</FactChip>}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" busy={updateDestination.isPending && updateDestination.variables?.id === destination.id} disabled={updateDestination.isPending} onClick={() => updateDestination.mutate(destination)}>
+                  {t(destination.enabled ? "followup.disable" : "followup.enable")}
+                </Button>
+                {/* Keyed on the removal count as well, so a row that is still listed after a removal (a stale list) starts again from its trigger rather than from a confirmation nobody asked for. */}
+                <ConfirmInline
+                  key={`${destination.id}-${removals}`}
+                  triggerLabel={t("followup.remove")}
+                  question={t("followup.confirmRemove")}
+                  confirmLabel={t("followup.remove")}
+                  cancelLabel={t("followup.cancel")}
+                  busy={deleteDestination.isPending && deleteDestination.variables === destination.id}
+                  onConfirm={() => deleteDestination.mutate(destination.id)}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(updateDestination.isError || deleteDestination.isError) && (
+        <p className="text-small text-tone-blocked" role="alert">
+          {t("followup.destinationActionError")}
+        </p>
+      )}
+      {formOpen && <DestinationForm draft={draft} setDraft={setDraft} errors={errors} setErrors={setErrors} allowPrivate={destinations.data?.allow_private_hosts === true} onClose={close} titleId={`${id}-new`} />}
+    </SettingsCard>
   );
 }
 
-const settingsTabs = ["schedule", "notifications", "access"] as const;
+function GitHubAccess() {
+  const { t } = useTranslation();
+  return (
+    <SettingsCard title={t("settings.githubTitle")} description={t("settings.githubHelp")}>
+      <GitHubAccessPanel variant="full" />
+    </SettingsCard>
+  );
+}
+
+// The URL value of each tab. Reminders is the default and carries no parameter, which keeps /settings itself clean; the others keep the names links already use.
+const settingsTabs = ["schedule", "notifications", "github", "access"] as const;
 type SettingsTab = (typeof settingsTabs)[number];
-const tabLabels: Record<SettingsTab, string> = { schedule: "followup.tabSchedule", notifications: "followup.tabNotifications", access: "followup.tabAccess" };
+const tabLabels: Record<SettingsTab, string> = { schedule: "followup.tabSchedule", notifications: "followup.tabNotifications", github: "settings.tabGitHub", access: "followup.tabAccess" };
 
 export function FollowUpSettings() {
   const { t } = useTranslation();
-  // The open tab lives in the URL so a reload, a shared link and the back
-  // button all land on the same one. The first tab is the default and carries
-  // no parameter, which keeps /settings itself clean.
+  // The open tab lives in the URL so a reload, a shared link and the back button all land on the same one.
   const [params, setParams] = useSearchParams();
   const requested = params.get("tab") || "";
   const active: SettingsTab = (settingsTabs as readonly string[]).includes(requested) ? (requested as SettingsTab) : "schedule";
@@ -583,69 +636,13 @@ export function FollowUpSettings() {
       { replace: true },
     );
   };
-  // The open tab also changes from the URL on back and forward, so the set is
-  // kept up to date from the value rather than from the click that set it.
-  const [visited, setVisited] = useState<Set<SettingsTab>>(() => new Set([active]));
-  useEffect(() => {
-    setVisited((current) => (current.has(active) ? current : new Set(current).add(active)));
-  }, [active]);
-  const query = useQuery({
-    queryKey: ["follow-up-settings"],
-    queryFn: ({ signal }) =>
-      ky
-        .get(apiURL + "/api/v1/follow-up-settings", { credentials: "include", signal, retry: 0 })
-        .json()
-        .then((data) => settingsSchema.parse(data)),
-    retry: false,
-  });
-  if (query.isPending) return <p role="status">{t("loading")}</p>;
-  // A background refetch that fails leaves the settings in hand: replacing the
-  // page then would throw away a half-filled form along with what it shows.
-  if (query.isError && !query.data)
-    return (
-      <p role="alert">
-        {t("followup.unavailable")} <a href={apiURL + "/api/v1/auth/github"}>{t("followup.reconnect")}</a>
-      </p>
-    );
   return (
-    // Radix carries the roving tab order and the arrow-key handling that a
-    // tablist is expected to have.
-    <Tabs.Root className="grid items-start gap-5" value={active} onValueChange={select}>
-      {query.isError && (
-        <div className={syncStatusError} role="status">
-          <span>{t("refreshFailedKeepData")}</span>
-          <button className={linkAction} onClick={() => query.refetch()}>
-            {t("retry")}
-          </button>
-        </div>
-      )}
-      {/* The strip runs the full width of the content area so it lines up with
-          whatever the page puts above it; the panels keep a readable measure. */}
-      <Tabs.List className="flex gap-1 overflow-x-auto border-b border-[var(--border)] [overscroll-behavior-x:contain] [scrollbar-width:thin]" aria-label={t("followup.settings")}>
-        {settingsTabs.map((tab) => (
-          // Narrower than the split band the three labels measure wider than the content box, and the strip's sideways scroll is the only thing that reveals the third one: no fade, no chevron, and no scrollbar on a touch device, so the whole agent-token section reads as absent. Tightening them is enough to fit all three; the scroller stays as the backstop for a longer translation.
-          <Tabs.Trigger
-            key={tab}
-            value={tab}
-            className="-mb-px shrink-0 cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-3.5 py-2.5 font-medium text-[var(--muted)] transition-colors @max-split/dashboard:px-2 @max-split/dashboard:text-[length:0.75rem] pointer-coarse:min-h-11 pointer-coarse:min-w-11 hover:text-[var(--foreground)] focus-visible:rounded-t-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--accent)] data-[state=active]:border-[var(--accent)] data-[state=active]:text-[var(--accent-text)]"
-          >
-            {t(tabLabels[tab])}
-          </Tabs.Trigger>
-        ))}
-      </Tabs.List>
-      {/* Radix unmounts a panel that is not open, which discards a half-filled
-          form on a tab switch. A panel that has been opened stays mounted and
-          is hidden instead; the ones never opened are not mounted at all, so
-          opening the page still issues one request rather than three. */}
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="schedule" forceMount={visited.has("schedule") ? true : undefined} hidden={active !== "schedule"}>
-        <SettingsForm settings={query.data} />
-      </Tabs.Content>
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="notifications" forceMount={visited.has("notifications") ? true : undefined} hidden={active !== "notifications"}>
-        <NotificationDestinations />
-      </Tabs.Content>
-      <Tabs.Content className="max-w-[980px] gap-5 data-[state=active]:grid" value="access" forceMount={visited.has("access") ? true : undefined} hidden={active !== "access"}>
-        <AccessSettings />
-      </Tabs.Content>
-    </Tabs.Root>
+    <div className="grid w-full max-w-[720px] min-w-0 gap-4">
+      <PageHeader title={t("followup.settings")} />
+      {/* Radix carries the roving tab order and the arrow keys; the Tabs primitive keeps a visited panel mounted and hidden, so a half-filled form survives a trip to another tab while a tab never opened costs no request. */}
+      <Tabs value={active} onValueChange={select} label={t("followup.settings")} items={settingsTabs.map((tab) => ({ value: tab, label: t(tabLabels[tab]) }))} panelClassName="grid min-w-0 gap-4">
+        {(tab) => (tab === "schedule" ? <ReminderSettings /> : tab === "notifications" ? <NotificationDestinations /> : tab === "github" ? <GitHubAccess /> : <AccessSettings />)}
+      </Tabs>
+    </div>
   );
 }
