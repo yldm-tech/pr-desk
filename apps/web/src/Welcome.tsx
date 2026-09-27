@@ -1,9 +1,9 @@
 import { ArrowRight, ChartColumn, CircleDot, GitPullRequest, RefreshCw, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { apiURL } from "./api-url";
-import { resources } from "./i18n";
+import { LanguageSelect } from "./LanguageMenu";
 import { paths } from "./routes";
-import { LinkButton, Select, TextLink } from "./ui-controls";
+import { LinkButton, TextLink } from "./ui-controls";
 
 const blurbs: { icon: LucideIcon; title: string; description: string }[] = [
   { icon: CircleDot, title: "welcomeFollowTitle", description: "welcomeFollowDescription" },
@@ -13,7 +13,7 @@ const blurbs: { icon: LucideIcon; title: string; description: string }[] = [
 
 // What a signed-out visitor sees on every route but About: what the product does, one way in, and a language switch, in a single centred column. There is no preview of the app: the real thing is one click away, and a picture of it would go stale with every redesign.
 export function Welcome() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   return (
     <section className="mx-auto grid w-full max-w-[36rem] min-w-0 justify-items-center gap-6 pt-6 pb-10 text-center @row/dashboard:pt-14">
       <div className="grid justify-items-center gap-2">
@@ -49,7 +49,7 @@ export function Welcome() {
         ))}
       </ul>
       {/* The only language switch a signed-out visitor needs on this page, as a native select: it is what every platform does best. */}
-      <Select className="mt-2" label={t("language")} value={i18n.resolvedLanguage || "en"} onChange={(event) => void i18n.changeLanguage(event.target.value)} options={Object.keys(resources).map((code) => ({ value: code, label: t("nativeName", { lng: code }) }))} />
+      <LanguageSelect className="mt-2" />
     </section>
   );
 }

@@ -186,7 +186,7 @@ test("the settings tabs are addressable and only display the open one", async ({
   await page.getByRole("tab", { name: "GitHub access" }).click();
   expect(new URL(page.url()).hash).toContain("tab=github");
   await expect(page.getByRole("heading", { name: "GitHub App access" })).toBeVisible();
-  await expect(page.getByRole("tabpanel").locator('a[href$="/api/v1/repository-access/install"]')).toBeVisible();
+  await expect(page.getByRole("tabpanel").getByRole("link", { name: /^Install GitHub App/ })).toBeVisible();
   // The default tab carries no parameter of its own.
   await page.getByRole("tab", { name: "Reminders" }).click();
   expect(new URL(page.url()).hash).toBe("#/settings");
