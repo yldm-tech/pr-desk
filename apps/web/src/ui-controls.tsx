@@ -168,7 +168,7 @@ const stripScroll = "flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar
 export type SegmentItem<T extends string> = { value: T; label: string; count?: number | string; testId?: string };
 
 // A set of mutually exclusive filters that each change the view, not a tab set: pressed toggle buttons (aria-pressed) in a group, so each keeps its own name and the tests and screen readers can address it directly. The track stays one pill high: when it does not fit it scrolls sideways, fades at the edge that has more, and brings the pressed item into view.
-// `fill: "below-pair"` makes the track a full-width row of equal items while the content box is narrower than `pair`, for a toolbar that gives the control a line of its own there; each item still keeps at least its own text's width, so a long label takes more than its share instead of being cut.
+// `fill: "below-pair"` makes the track a full-width row of equal items while the content box is narrower than `pair`, for a toolbar that gives the control a line of its own there; each item still keeps at least its own text's width, so a long label takes more than its share instead of being cut. On a coarse pointer a filled item trades the 16px side padding for 10px: the 44px height already gives the tap target, and at 320px the Japanese labels need those 36px to fit without scrolling.
 export function SegmentedControl<T extends string>({ label, value, onChange, items, size = "md", fill, className }: { label: string; value: T; onChange: (value: T) => void; items: SegmentItem<T>[]; size?: Size; fill?: "below-pair"; className?: string }) {
   const { strip, edges } = useScrollStrip(value);
   return (
@@ -183,8 +183,8 @@ export function SegmentedControl<T extends string>({ label, value, onChange, ite
             data-testid={item.testId}
             onClick={() => onChange(item.value)}
             className={cx(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
-              fill && "@max-pair/dashboard:flex-1 @max-pair/dashboard:justify-center",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11",
+              fill ? "@max-pair/dashboard:flex-1 @max-pair/dashboard:justify-center pointer-coarse:px-4 @max-pair/dashboard:pointer-coarse:px-2.5" : "pointer-coarse:px-4",
               size === "md" ? "min-h-7 px-3 text-body" : "min-h-6 px-2.5 text-small",
               pressed ? "bg-surface text-fg shadow-1" : "bg-transparent text-fg-muted hover:text-fg",
             )}

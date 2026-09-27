@@ -294,9 +294,9 @@ for (const route of ROUTES) {
   });
 }
 
-// (g) The phone Inbox header, where three regressions met. The role filter shared a line with the status select and was cut to "All / My PRs / My…" (in Spanish, two of the three), which the clip sweep cannot see because a strip that scrolls is a scroller and not a clip; the top bar's palette search and the page's own search were the same magnifier 64px apart; and the header pushed the first row below the fold. So: every role reads whole inside its track without scrolling, there is one magnifier on the page, and the first row starts inside a bound on the two widths the design was checked at.
+// (g) The phone Inbox header, where three regressions met. The role filter shared a line with the status select and was cut to "All / My PRs / My…" (in Spanish, two of the three), which the clip sweep cannot see because a strip that scrolls is a scroller and not a clip; the top bar's palette search and the page's own search were the same magnifier 64px apart; and the header pushed the first row below the fold. So: every role reads whole inside its track without scrolling, there is one magnifier on the page, and the first row starts inside a bound on the two widths the design was checked at, in English, Spanish (the longest labels) and Japanese (the widest glyphs, which needed the tighter touch padding to fit at 320px).
 const PHONE_PROJECTS: Record<string, number | undefined> = { "phone-320": 340, "phone-360": undefined, "phone-390": 320, "phone-412": undefined };
-for (const locale of ["en", "es"]) {
+for (const locale of ["en", "es", "ja"]) {
   test(`the phone Inbox shows every role whole, one search and its first row in view in ${locale}`, async ({ page }, info) => {
     test.skip(!(info.project.name in PHONE_PROJECTS), "the phone header runs at the phone widths");
     await installFixtures(page, { locale });
