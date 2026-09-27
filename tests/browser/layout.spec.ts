@@ -287,7 +287,7 @@ for (const route of ROUTES) {
       });
       if (!report) continue;
       if (report.again) break;
-      if (report.covered) hidden.push(`${report.name} under ${"hit" in report ? report.hit : ""} at ${"at" in report ? report.at : ""}`);
+      if (report.covered) hidden.push(`${report.name} under ${"hit" in report ? report.hit : ""} at ${"at" in report && report.at ? report.at.join(",") : ""}`);
     }
     expect(hidden, "focused controls covered by the top bar or the tab bar").toEqual([]);
   });
