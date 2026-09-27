@@ -169,9 +169,9 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const teamsTitle = `${id}-teams`;
   const overridesTitle = `${id}-overrides`;
   return (
+    // The browser's own required/min/max checks stay on for the schedule fields, as they always were; the waiting-period rows carry no such attributes and are checked by the editor, which can name the row.
     <form
       ref={form}
-      noValidate
       className="grid min-w-0 gap-4"
       onChange={edited}
       onSubmit={(event) => {

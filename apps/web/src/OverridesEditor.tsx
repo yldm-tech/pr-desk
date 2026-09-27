@@ -209,7 +209,7 @@ export function OverridesEditor({
                         aria-describedby={repoError}
                         onChange={(event) => updateRow(row.key, "repo", event.target.value)}
                       />
-                      <TextField aria-label={t("settings.overrideDays")} type="number" min={1} max={365} inputMode="numeric" value={row.days} aria-invalid={found?.days ? true : undefined} aria-describedby={daysError} onChange={(event) => updateRow(row.key, "days", event.target.value)} />
+                      <TextField aria-label={t("settings.overrideDays")} type="number" inputMode="numeric" value={row.days} aria-invalid={found?.days ? true : undefined} aria-describedby={daysError} onChange={(event) => updateRow(row.key, "days", event.target.value)} />
                       <IconButton label={row.repo.trim() ? t("settings.removeOverride", { repo: row.repo.trim() }) : t("settings.removeEmptyOverride")} icon={X} onClick={() => removeRow(row.key)} />
                       {(found?.repo || found?.days) && (
                         <div className="col-span-full grid gap-0.5">

@@ -349,3 +349,23 @@ test("removing a destination asks once in place and says it is done", async ({ p
   await removed;
   await expect(page.getByRole("status").filter({ hasText: "Destination removed." })).toBeAttached();
 });
+
+test("an out-of-range waiting period for a row is named on the row, not left to the browser", async ({ page }) => {
+  await page.goto("/#/settings");
+  let posted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/follow-up-settings") && request.method() === "POST") posted = true;
+  });
+  await page.getByRole("button", { name: "Add repository" }).click();
+  await page.getByLabel("Repository", { exact: true }).fill("fixture/calendar");
+  await page.getByLabel("Days", { exact: true }).fill("400");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Use a whole number from 1 to 365." })).toBeVisible();
+  await expect(page.getByLabel("Days", { exact: true })).toBeFocused();
+  // The schedule's own fields keep the browser's range check, so a cleared default (which the field holds as 0) is never posted.
+  await page.getByLabel("Days", { exact: true }).fill("30");
+  await page.getByLabel("Follow up after (days)", { exact: true }).fill("");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect(await page.getByLabel("Follow up after (days)", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
+  expect(posted).toBe(false);
+});
