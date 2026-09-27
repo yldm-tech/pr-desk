@@ -19,16 +19,20 @@ export function parseThemePref(value: unknown): ThemePref {
   return value === "light" || value === "dark" ? value : "system";
 }
 
+// The last choice made on this page, which is the answer when storage cannot give one: without it a choice made under blocked storage was applied to the page while the switch snapped back to "system".
+let memoryPref: ThemePref | null = null;
+
 // Storage can throw outright (Safari private windows, blocked site data), and a theme is never worth an error screen.
 function readPref(): ThemePref {
   try {
     return parseThemePref(window.localStorage.getItem(THEME_STORAGE_KEY));
   } catch {
-    return "system";
+    return memoryPref ?? "system";
   }
 }
 
 function writePref(pref: ThemePref) {
+  memoryPref = pref;
   try {
     if (pref === "system") window.localStorage.removeItem(THEME_STORAGE_KEY);
     else window.localStorage.setItem(THEME_STORAGE_KEY, pref);

@@ -21,7 +21,7 @@ const setTarget = (target: UndoTarget | null) => {
 };
 
 // `run(expected)` undoes only while the slot still holds `expected`: a control that names one row (the toast's Undo) must never restore a different one that took the slot after it was drawn.
-export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | null): void; run(expected?: UndoTarget): Promise<void>; busy: boolean } {
+export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | null): void; run(expected?: UndoTarget): Promise<boolean>; busy: boolean } {
   const { t } = useTranslation();
   const target = useSyncExternalStore(
     subscribe,
@@ -36,13 +36,24 @@ export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | 
     },
   });
   const run = (expected?: UndoTarget) =>
-    new Promise<void>((resolve) => {
+    // Resolves true only when the undo reached the server and was accepted, so a caller that confirms it ("Undone") never says so over a refusal or a no-op.
+    new Promise<boolean>((resolve) => {
       const slot = current;
-      if (!slot || (expected && slot !== expected)) return resolve();
+      if (!slot || (expected && slot !== expected)) return resolve(false);
       // Emptied before the request, not after: the step is spent the moment it is asked for, and a second press while it is in flight must not post a second undo that the server would answer by restoring nothing.
       setTarget(null);
       // A failed undo leaves the step on the server, so the slot is handed back and the reader can try again.
-      bulk.run({ items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } }, { onSuccess: (outcome) => outcome.failed.length > 0 && setTarget(current ?? slot), onSettled: () => resolve() });
+      bulk.run(
+        { items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } },
+        {
+          onSuccess: (outcome) => {
+            const failed = outcome.failed.length > 0;
+            if (failed) setTarget(current ?? slot);
+            resolve(!failed);
+          },
+          onSettled: () => resolve(false),
+        },
+      );
     });
   return { target, set: setTarget, run, busy: bulk.isBusy };
 }

@@ -67,7 +67,7 @@ function SheetFollowUp({ item, now }: { item: FollowUp; now: Date }) {
       const verbs = primaryAction(item, now);
       const offered = [verbs.primary, ...verbs.secondary];
       if (event.key === "e" && offered.includes("handled")) mutate({ action: "handled" });
-      else if (event.key === "e") setFeedback(t("followup.blockedByGitHub"));
+      else if (event.key === "e" && !handledIsUseful(item)) setFeedback(t("followup.blockedByGitHub"));
       else if (event.key === "s" && offered.includes("snooze")) setSnoozeOpen(true);
       else if (event.key === "r" && verbs.markRead) mutate({ action: "read" });
       else if (event.key === "u" && offered.includes("unsnooze")) mutate({ action: "unsnooze" });
@@ -86,7 +86,7 @@ function SheetFollowUp({ item, now }: { item: FollowUp; now: Date }) {
           </p>
           {/* No timer: the sheet exists only until it is dismissed, so the confirmation and its inverse can wait for the reader. */}
           {canUndo && (
-            <Button size="sm" variant="ghost" className="text-accent-text" busy={undo.busy} aria-label={t("followup.undoFor", { action: undo.target!.action, repo: item.pr.repo, number: item.pr.number })} onClick={() => void undo.run(undo.target ?? undefined).then(() => setFeedback(t("followup.undone")))}>
+            <Button size="sm" variant="ghost" className="text-accent-text" busy={undo.busy} aria-label={t("followup.undoFor", { action: undo.target!.action, repo: item.pr.repo, number: item.pr.number })} onClick={() => void undo.run(undo.target ?? undefined).then((done) => done && setFeedback(t("followup.undone")))}>
               {t("followup.undo")}
             </Button>
           )}

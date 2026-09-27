@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { DetailPane } from "./DetailPane";
 import { useDetail } from "./detail-context";
-import { groupItems, inboxRoles, inboxStatuses, inboxSummary, isMuted, matchesReady, matchesStatus, primaryAction, reasonTone, stableOrder, type FollowUp, type FollowUpGroup, type InboxRole } from "./followup-view";
+import { groupItems, handledIsUseful, inboxRoles, inboxStatuses, inboxSummary, isMuted, matchesReady, matchesStatus, primaryAction, reasonTone, stableOrder, type FollowUp, type FollowUpGroup, type InboxRole } from "./followup-view";
 import { InboxRow, type RowCommands, type RowReport } from "./InboxRow";
 import { InboxSummary } from "./InboxSummary";
 import { ItemRowSkeleton, SummarySkeleton } from "./LoadingSkeleton";
@@ -207,6 +207,9 @@ export function InboxPage() {
   // When the row that held focus leaves the list, focus moves to the row that took its index, or to the list itself when none is left, so clearing a queue is one row after another rather than a trip back through the toolbar.
   const previousIds = useRef<number[]>([]);
   useEffect(() => {
+    // Focus that has already moved elsewhere (the search field, a toolbar control) is the reader's own choice, not a loss to rescue: a search that filters the last-focused row out must not pull the caret out of the field mid-word.
+    const active = document.activeElement;
+    if (active && active !== document.body && !region.current?.contains(active)) focusedRow.current = null;
     const held = focusedRow.current;
     if (held !== null && !items.some((item) => item.id === held)) {
       const index = previousIds.current.indexOf(held);
@@ -226,11 +229,16 @@ export function InboxPage() {
     if (!focus || arrived.current === focus) return;
     const row = document.getElementById(`followup-${focus}`);
     if (!row) return;
+    // A muted row sits in a closed disclosure, where it can be neither scrolled to nor seen: open it first and arrive once it is open.
+    if (row.closest("details:not([open])")) {
+      setMutedOpen(true);
+      return;
+    }
     arrived.current = focus;
     row.scrollIntoView({ block: "center" });
     setCursor(Number(focus));
     setHighlight(Number(focus));
-  }, [focus, ids]);
+  }, [focus, ids, mutedOpen]);
 
   const report = (result: RowReport) => {
     const slot = result.undo;
@@ -281,7 +289,9 @@ export function InboxPage() {
     else if (!commands || commands.busy()) return;
     else if (key === "e") {
       if (offered.includes("handled")) commands.run({ action: "handled" });
-      else showToast({ text: t("followup.blockedByGitHub"), tone: "success" });
+      // The push-only sentence is true only of a row whose every reason is fact-derived; a waiting, draft, muted or archived row withholds Handled for other reasons, and the key then simply does nothing.
+      else if (!handledIsUseful(cursorItem)) showToast({ text: t("followup.blockedByGitHub"), tone: "success" });
+      else return false;
     } else if (key === "s" && offered.includes("snooze")) commands.openSnooze();
     else if (key === "r" && verbs.markRead) commands.run({ action: "read" });
     else if (key === "u" && offered.includes("unsnooze")) commands.run({ action: "unsnooze" });
