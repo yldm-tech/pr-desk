@@ -128,6 +128,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               )}
               <LanguageSelect hideLabel />
               <ThemeSwitch variant="compact" />
+              <HardRefresh />
             </div>
           ) : (
             <>
@@ -146,7 +147,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </button>
               <ShellNav current={destination} hrefFor={hrefFor} badge={followUps.data ? inboxSummary(followUps.data.data, followUps.data.counts).total : undefined} badgeLoading={authLoading || followUps.isPending} />
               <div className="hidden shell:mt-auto shell:grid shell:gap-0.5 shell:pt-3">{connected && <SettingsLink current={destination} to={hrefFor("settings")} />}</div>
-              {connected && (
+              {connected ? (
                 <div className="flex min-w-0 items-center gap-0.5 shell:mt-1 shell:border-t shell:border-line shell:pt-2">
                   <div className="min-w-0 shell:flex-1">
                     <SyncStatus progress={progress} auth={auth} pending={pending} onSync={() => syncMutation.mutate()} align={sidebar ? "start" : "end"} />
@@ -154,6 +155,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   {/* Renders only in an installed window, where there is no browser reload to reach for. */}
                   <HardRefresh />
                 </div>
+              ) : (
+                // The session check failed with nothing cached. The reader still needs the language and theme they read the page in and, in an installed window whose shell may be the stale one, the reload that is the way out.
+                !authLoading && (
+                  <div className="flex min-w-0 items-center gap-1 shell:mt-1 shell:flex-wrap shell:border-t shell:border-line shell:pt-2">
+                    <LanguageSelect hideLabel />
+                    <ThemeSwitch variant="compact" />
+                    <HardRefresh />
+                  </div>
+                )
               )}
               <div className="shrink-0 shell:mt-1">{authLoading ? <AccountSkeleton /> : connected ? <AccountMenu username={auth?.username} onDisconnect={() => logoutMutation.mutate()} disconnecting={logoutMutation.isPending} disconnectError={logoutMutation.isError} align={sidebar ? "start" : "end"} /> : null}</div>
             </>
