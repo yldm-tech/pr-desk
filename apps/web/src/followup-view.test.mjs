@@ -126,9 +126,10 @@ test("the wait is a duration, and an unparseable one is no sentence at all", () 
 });
 
 test("the reminder picker cannot offer a date the server will refuse", () => {
-  const ceiling = new Date(now);
-  ceiling.setFullYear(ceiling.getFullYear() + 1);
-  for (const preset of snoozePresets(at)) assert.ok(preset.until.getTime() >= now + 60000 && preset.until.getTime() <= ceiling.getTime(), preset.key);
+  const bounds = snoozeBounds(now);
+  assert.match(bounds.min, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  assert.match(bounds.max, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+  assert.ok(bounds.min < bounds.max);
   // Both bounds are local wall-clock, so they are compared against the raw datetime-local value rather than an ISO instant.
   assert.equal(bounds.max.slice(0, 4), String(new Date(now).getFullYear() + 1));
   assert.ok(bounds.min > `${new Date(now).getFullYear()}-01-01T00:00`);
@@ -235,6 +236,7 @@ test("reminder presets land where they say and stay inside the server's window",
     expected.setHours(9, 0, 0, 0);
     assert.equal(local.getTime(), expected.getTime());
   }
-  const bounds = snoozeBounds(now);
-  for (const preset of snoozePresets(at)) assert.ok(preset.until.getTime() >= Date.parse(new Date(now + 60000).toISOString()) && preset.until.getTime() <= new Date(now).setFullYear(new Date(now).getFullYear() + 1), bounds.max);
+  const ceiling = new Date(now);
+  ceiling.setFullYear(ceiling.getFullYear() + 1);
+  for (const preset of snoozePresets(at)) assert.ok(preset.until.getTime() >= now + 60000 && preset.until.getTime() <= ceiling.getTime(), preset.key);
 });
