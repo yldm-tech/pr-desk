@@ -99,7 +99,7 @@ export function Sheet({
             <header className="flex shrink-0 items-start gap-3 border-b border-line px-4 pt-[max(12px,env(safe-area-inset-top))] pb-3 roomy:px-5 shell:pt-3">
               <div className="min-w-0 flex-1">{header}</div>
               {/* The first stop on open: on a phone this is the sheet's only visible exit, in the corner where thumb accuracy is worst, so it takes the full 44px on a coarse pointer. */}
-              {showClose && <IconButton label={closeLabel ?? t("close")} icon={X} autoFocus onClick={() => close.current()} className="-mt-1 -mr-2" />}
+              {showClose && <IconButton label={closeLabel ?? t("close")} icon={X} autoFocus onClick={() => close.current()} className="-mt-1 -mr-1" />}
             </header>
           )}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 roomy:px-5">{children}</div>
