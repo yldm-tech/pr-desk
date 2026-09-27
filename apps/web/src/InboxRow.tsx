@@ -89,15 +89,13 @@ export function InboxRow({
   const exiting = !present;
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const snoozeRef = useRef<HTMLButtonElement>(null);
-  const quiet = useRef(false);
+  // The requests that asked to go unannounced, by identity: onDone is handed the very object `mutate` was given. A flag on the row instead belonged to whichever request answered next, so a quiet read that failed silenced the next Mark read, and a reminder set while the read was in flight made the read speak over its confirmation. Retry posts a copy, so a retry the reader presses is announced like any other request of theirs.
+  const quiet = useRef(new WeakSet<FollowUpActionInput>());
   const action = useFollowUpAction({
     item,
     onDone: (done) => {
       if (done.action === "snooze") setSnoozeOpen(false);
-      if (done.action === "read" && quiet.current) {
-        quiet.current = false;
-        return;
-      }
+      if (quiet.current.has(done)) return;
       const label = t(`followup.${actionLabels[done.action] ?? "followedUp"}`);
       // Handled clears the confirmation and nothing else, while conflict and checks_failed are re-derived from GitHub on every read; saying so is the difference between a button that looks broken and one whose limit is understood.
       const survives = done.action === "handled" && factsSurvive(item);
@@ -120,7 +118,7 @@ export function InboxRow({
   const commands = useRef<RowCommands | null>(null);
   commands.current = {
     run: (input, options) => {
-      quiet.current = !!options?.quiet;
+      if (options?.quiet) quiet.current.add(input);
       mutate(input);
     },
     openSnooze: () => setSnoozeOpen(true),
@@ -275,7 +273,7 @@ export function InboxRow({
                   {t("inbox.showLatest")}
                 </Button>
               ) : (
-                <Button size="sm" variant="ghost" className="text-accent-text" onClick={() => action.variables && mutate(action.variables)}>
+                <Button size="sm" variant="ghost" className="text-accent-text" onClick={() => action.variables && mutate({ ...action.variables })}>
                   {t("retry")}
                 </Button>
               )}

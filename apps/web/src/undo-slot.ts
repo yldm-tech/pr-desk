@@ -20,6 +20,9 @@ const setTarget = (target: UndoTarget | null) => {
   for (const listener of listeners) listener();
 };
 
+// The undo in flight, kept beside the slot rather than in the caller: TanStack drops `mutate`'s per-call callbacks once the component that called it unmounts, so a toast's Undo pressed on the Inbox and answered after the reader moved to another page would never hand a failed step back. The mutation's own onDone still runs, and it reads this.
+let inFlight: { slot: UndoTarget; resolve(done: boolean): void } | null = null;
+
 // `run(expected)` undoes only while the slot still holds `expected`: a control that names one row (the toast's Undo) must never restore a different one that took the slot after it was drawn.
 export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | null): void; run(expected?: UndoTarget): Promise<boolean>; busy: boolean } {
   const { t } = useTranslation();
@@ -33,6 +36,11 @@ export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | 
     onDone: (outcome) => {
       const failed = outcome.failed.length > 0;
       showToast({ text: t(failed ? "followup.saveError" : "followup.undone"), tone: failed ? "error" : "success" });
+      const pending = inFlight;
+      inFlight = null;
+      // A failed undo leaves the step on the server, so the slot is handed back and the reader can try again, unless a newer action has taken it meanwhile.
+      if (failed && pending) setTarget(current ?? pending.slot);
+      pending?.resolve(!failed);
     },
   });
   const run = (expected?: UndoTarget) =>
@@ -42,18 +50,9 @@ export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | 
       if (!slot || (expected && slot !== expected)) return resolve(false);
       // Emptied before the request, not after: the step is spent the moment it is asked for, and a second press while it is in flight must not post a second undo that the server would answer by restoring nothing.
       setTarget(null);
-      // A failed undo leaves the step on the server, so the slot is handed back and the reader can try again.
-      bulk.run(
-        { items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } },
-        {
-          onSuccess: (outcome) => {
-            const failed = outcome.failed.length > 0;
-            if (failed) setTarget(current ?? slot);
-            resolve(!failed);
-          },
-          onSettled: () => resolve(false),
-        },
-      );
+      inFlight = { slot, resolve };
+      // The per-call onSettled only covers a mutation that ends without onDone while its caller is still mounted; by then onDone has already resolved any answer that arrived.
+      bulk.run({ items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } }, { onSettled: () => resolve(false) });
     });
   return { target, set: setTarget, run, busy: bulk.isBusy };
 }

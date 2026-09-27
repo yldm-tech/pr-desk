@@ -373,6 +373,53 @@ test("an action in the sheet withdraws a toast that names another row", async ({
   expect(posts.filter((post) => post.body.action === "undo")).toEqual([]);
 });
 
+// The toast outlives the page that drew it, so its Undo can be answered after the reader has left the Inbox. A refusal that arrives then still hands the step back to the slot, and `z` on the next visit to the Inbox retries it.
+test("a failed undo answered on another page hands the step back", async ({ page }) => {
+  const posts = recordPosts(page);
+  let release!: () => void;
+  const answered = new Promise<void>((resolve) => (release = resolve));
+  let held = false;
+  await page.route("**/api/v1/follow-ups/1", async (route) => {
+    if (route.request().method() !== "POST" || route.request().postDataJSON().action !== "undo" || held) return route.fallback();
+    held = true;
+    await answered;
+    await route.fulfill({ status: 409, json: { error: "version mismatch" } });
+  });
+  await page.goto("/#/inbox?role=authored&status=action");
+  const row = card(page, "Handle timezone boundaries");
+  await row.getByRole("button", { name: /^Handled · wait for others/ }).click();
+  await expect(row).toHaveCount(0);
+  await page.getByRole("button", { name: /^Undo.*fixture\/calendar #17/ }).click();
+  await expect.poll(() => held).toBe(true);
+  await page.goto("/#/prs");
+  await expect(page.getByRole("heading", { level: 1, name: "Pull requests" })).toBeVisible();
+  release();
+  await expect(page.getByRole("alert").filter({ hasText: "Could not save." })).toHaveCount(1);
+
+  await page.goto("/#/inbox?role=authored&status=action");
+  await expect(page.getByTestId("follow-up-card").first()).toBeVisible();
+  await page.keyboard.press("z");
+  await expect(row).toHaveCount(1);
+  expect(posts.filter((post) => post.id === 1 && post.body.action === "undo")).toHaveLength(2);
+});
+
+// Opening a row reads it without saying so. When that read fails, the next Mark read the reader presses is theirs and is confirmed like any other.
+test("a failed read on open does not silence the next Mark read", async ({ page }) => {
+  let failed = false;
+  await page.route("**/api/v1/follow-ups/1", (route) => {
+    if (route.request().method() !== "POST" || failed) return route.fallback();
+    failed = true;
+    return route.fulfill({ status: 500, json: { error: "boom" } });
+  });
+  await page.goto("/#/inbox?role=authored&status=action");
+  const row = card(page, "Handle timezone boundaries");
+  await row.getByRole("link", { name: /Handle timezone boundaries/ }).click();
+  // Reported twice, by the toast and by the row in place, so either will do.
+  await expect(page.getByRole("alert").filter({ hasText: "Could not save." }).first()).toBeAttached();
+  await row.getByRole("button", { name: /^Mark read/ }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Mark read: Handle timezone boundaries" })).toHaveCount(1);
+});
+
 // Six seconds for a confirmation with nothing to take back; one that carries an Undo waits for the reader. (Known flaky in CI; tracked separately, not retried here.)
 test("a confirmation waits when it carries an undo and clears itself when it does not", async ({ page }) => {
   await page.goto("/#/inbox?role=authored&status=action");
