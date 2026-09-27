@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Skeleton from "react-loading-skeleton";
-import { CircleAlert, GitMerge, Info, RefreshCw } from "lucide-react";
+import { GitMerge, Info, RefreshCw } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
 import { apiURL } from "./api-url";
@@ -16,7 +16,7 @@ import { RepoBreakdown } from "./RepoBreakdown";
 import { paths } from "./routes";
 import { fillMonths, TrendChart } from "./TrendChart";
 import { Button, LinkButton, SegmentedControl, Select, Tabs, TextLink } from "./ui-controls";
-import { EmptyState, Notice, PageHeader, StaleNotice, Stat } from "./ui-display";
+import { EmptyState, ErrorState, Notice, PageHeader, StaleNotice, Stat } from "./ui-display";
 
 const schema = z.object({
   visibility_counts: z.object({ public_repositories: z.number().optional(), private_repositories: z.number().optional(), unknown_repositories: z.number().optional(), public: z.number(), private: z.number(), unknown: z.number() }),
@@ -69,7 +69,9 @@ export default function Overview() {
   const data = query.data;
   const counts = data?.visibility_counts;
   // A count is only a count once the history behind it is complete; until then, and while the previous scope stands in for the next one, the honest answer is a dash.
-  const repositoryCount = (value: number | undefined) => (!data || query.isPlaceholderData || (!data.history_complete && !value) || value === undefined ? "—" : number.format(value));
+  // The report failed with nothing to show: the counts that depend on it are left blank rather than drawn as a dash beside the error.
+  const failed = query.isError && !data;
+  const repositoryCount = (value: number | undefined) => (failed ? undefined : !data || query.isPlaceholderData || (!data.history_complete && !value) || value === undefined ? "—" : number.format(value));
   const missing = privateAccessMissing(access.data);
   const visibilityItems = [
     { value: "all" as const, label: t("insights.visibilityAll") },
@@ -83,31 +85,24 @@ export default function Overview() {
       <PageHeader
         title={t("insights.title")}
         actions={<SegmentedControl label={t("visibilityScope")} value={visibility} onChange={(value) => changeScope("visibility", value)} items={visibilityItems} />}
-        summary={<VisibilityFeedback visibility={visibility} data={data} placeholder={query.isPlaceholderData} access={access} />}
+        summary={!failed && <VisibilityFeedback visibility={visibility} data={data} placeholder={query.isPlaceholderData} access={access} />}
       />
       {visibility === "private" && <GitHubAccessPanel variant="compact" />}
       {query.isPending ? (
         <OverviewSkeleton />
-      ) : query.isError && !data ? (
-        <div role="alert">
-          <EmptyState
-            icon={CircleAlert}
-            tone="blocked"
-            title={t("overviewError")}
-            action={
-              <>
-                <Button icon={RefreshCw} onClick={() => query.refetch()}>
-                  {t("retry")}
-                </Button>
-                {visibility !== "all" && (
-                  <Button variant="ghost" onClick={() => changeScope("visibility", "all")}>
-                    {t("allContributions")}
-                  </Button>
-                )}
-              </>
-            }
-          />
-        </div>
+      ) : failed ? (
+        <ErrorState
+          title={t("overviewError")}
+          error={query.error}
+          onRetry={() => void query.refetch()}
+          actions={
+            visibility !== "all" && (
+              <Button variant="ghost" onClick={() => changeScope("visibility", "all")}>
+                {t("allContributions")}
+              </Button>
+            )
+          }
+        />
       ) : (
         data && (
           <>

@@ -79,7 +79,7 @@ export function PullRequestsPage() {
   // One reading of "now" per render, so a list cannot straddle a midnight boundary halfway down.
   const now = Date.now();
   const stats = useStats();
-  const { data, isLoading, isError, isFetching, isPlaceholderData, refetch } = usePRList({ view, page, q: search, repo: repository });
+  const { data, error, isLoading, isError, isFetching, isPlaceholderData, refetch } = usePRList({ view, page, q: search, repo: repository });
   const shown = React.useMemo(() => data?.items ?? [], [data]);
   const total = data?.total ?? 0;
 
@@ -121,10 +121,12 @@ export function PullRequestsPage() {
   const summary = stats.data;
   const counts: Partial<Record<PRView, number>> = summary ? { open: summary.open, "review-requested": summary.needs_review, blocked: summary.attention } : {};
   const filtered = !!search || !!repository;
+  // The list itself failed: the pill counts go blank with it rather than standing beside the error as dashes. A failure of the counts alone keeps its dash and its own sentence under the pills.
+  const listFailed = isError && !data;
 
   let body: React.ReactNode;
   if (isLoading) body = <PRListSkeleton />;
-  else if (isError && !data) body = <ErrorState title={t("unablePRs")} onRetry={() => void refetch()} />;
+  else if (isError && !data) body = <ErrorState title={t("prs.unavailable")} error={error} onRetry={() => void refetch()} />;
   else if (shown.length === 0)
     body = (
       <EmptyState
@@ -166,7 +168,7 @@ export function PullRequestsPage() {
         count={data ? total : undefined}
         summary={
           <div className="grid min-w-0 justify-items-start gap-1.5">
-            <SegmentedControl label={t("prs.views")} value={view} onChange={showView} items={viewOrder.map((value) => ({ value, label: t(viewLabelKeys[value]), count: countedViews.includes(value) ? (counts[value] ?? "—") : undefined }))} />
+            <SegmentedControl label={t("prs.views")} value={view} onChange={showView} items={viewOrder.map((value) => ({ value, label: t(viewLabelKeys[value]), count: countedViews.includes(value) && !listFailed ? (counts[value] ?? "—") : undefined }))} />
             {stats.isError && (
               <p role="status" className="flex flex-wrap items-center gap-x-1 text-caption text-fg-muted">
                 {t("summaryUnavailable")}

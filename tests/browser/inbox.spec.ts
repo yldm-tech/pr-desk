@@ -511,3 +511,14 @@ test("the detail is a pane beside the list from 880px of content, and a sheet be
   // Opened four times, read once: the first opening was the explicit request, and the row was no longer unread after it.
   expect(posts.filter((post) => post.id === 2 && post.body.action === "read")).toHaveLength(1);
 });
+
+// A failed load is said once, in the content region, in words that match the failure, and nothing that stood for the missing data keeps pulsing or dashing beside it.
+test("a failed inbox says why and leaves no loading chrome behind", async ({ page }) => {
+  await page.route("**/api/v1/follow-ups", (route) => route.fulfill({ status: 500, json: { error: "boom" } }));
+  await page.goto("/#/inbox");
+  const alert = page.getByRole("alert").filter({ hasText: "Follow-ups could not be loaded" });
+  await expect(alert).toBeVisible({ timeout: 5000 });
+  await expect(alert).toContainText("Something went wrong on the server.");
+  await expect(page.locator(".react-loading-skeleton")).toHaveCount(0);
+  await expect(page.getByTestId("nav-badge")).toHaveCount(0);
+});

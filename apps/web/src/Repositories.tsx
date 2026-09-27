@@ -76,7 +76,8 @@ function RepositoryRow({ repo }: { repo: RepositorySummary }) {
 }
 
 // The authored repositories with open pull requests, narrowed and sorted locally. Every control writes the address with replace, so the list is shareable without every keystroke becoming a history entry.
-export function Repositories({ repositories, loading, error, retry }: { repositories: RepositorySummary[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
+// `error` is the query's error, null while the last request succeeded.
+export function Repositories({ repositories, loading, error, retry }: { repositories: RepositorySummary[] | undefined; loading: boolean; error: unknown; retry: () => void }) {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") || "";
@@ -109,11 +110,13 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       return next;
     });
   const known = !loading && !!repositories;
+  // Nothing to show at all: every placeholder that stands for a number (the scope counts, the result line) goes with the list, so the error is the only thing the page says.
+  const failed = error != null && !repositories;
   const ownerOptions = [{ value: "", label: t("allOwners") }, ...(owner && !owners.includes(owner) ? [{ value: owner, label: owner }] : []), ...owners.map((name) => ({ value: name, label: name }))];
 
   let body;
   if (loading) body = <RepositorySkeleton />;
-  else if (error && !repositories) body = <ErrorState title={t("unableRepositories")} onRetry={retry} />;
+  else if (failed) body = <ErrorState title={t("unableRepositories")} error={error} onRetry={retry} />;
   else if (!shown.length)
     body = (
       <EmptyState
@@ -164,7 +167,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
             label={t("repositoryScope")}
             value={scope}
             onChange={(value) => change("scope", value === "all" ? "" : value)}
-            items={(["all", "attention", "conflicts"] as const).map((value) => ({ value, label: t(value === "all" ? "repos.scopeAll" : value === "attention" ? "attentionRepositories" : "conflictRepositories"), count: known ? counts[value] : "—" }))}
+            items={(["all", "attention", "conflicts"] as const).map((value) => ({ value, label: t(value === "all" ? "repos.scopeAll" : value === "attention" ? "attentionRepositories" : "conflictRepositories"), count: known ? counts[value] : failed ? undefined : "—" }))}
           />
         }
       />
@@ -185,7 +188,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       </Toolbar>
       <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <p aria-live="polite" className="text-small text-fg-muted tabular-nums">
-          {known ? t("repos.results", { count: shown.length }) : "—"}
+          {known ? t("repos.results", { count: shown.length }) : failed ? "" : "—"}
         </p>
         {filtered && (
           <Button variant="ghost" size="sm" icon={X} onClick={clear}>
@@ -193,7 +196,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
           </Button>
         )}
       </div>
-      {error && repositories && <StaleNotice onRetry={retry} />}
+      {error != null && repositories && <StaleNotice onRetry={retry} />}
       <div className="min-w-0">{body}</div>
     </section>
   );

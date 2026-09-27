@@ -46,9 +46,9 @@ function PageTitle({ parts }: { parts: string[] }) {
 function Connected() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const { data: auth, isPending, isError, refetch } = useAuth();
+  const { data: auth, isPending, isError, error, refetch } = useAuth();
   if (isPending) return <PageSkeleton page={skeletonPage[destinationOf(pathname) ?? "inbox"]} />;
-  if (isError && !auth) return <ErrorState title={t("apiUnavailable")} onRetry={() => void refetch()} />;
+  if (isError && !auth) return <ErrorState title={t("apiUnavailable")} error={error} onRetry={() => void refetch()} />;
   if (!auth?.connected)
     return (
       <>
@@ -60,10 +60,10 @@ function Connected() {
 }
 
 function RepositoriesRoute() {
-  const { data, isLoading, isError, refetch } = useRepositories(true);
+  const { data, isLoading, error, refetch } = useRepositories(true);
   return (
     <Lazy page="repos">
-      <Repositories repositories={data} loading={isLoading} error={isError} retry={() => void refetch()} />
+      <Repositories repositories={data} loading={isLoading} error={error} retry={() => void refetch()} />
     </Lazy>
   );
 }

@@ -174,8 +174,8 @@ test("a failed report offers a retry and the widest scope", async ({ page }) => 
   await installFixtures(page, { overrides: { overview: (route) => (fail ? route.fulfill({ status: 500, json: { error: "boom" } }) : route.fulfill({ json: overview() })) } });
   await page.goto("/#/insights");
   const alert = page.getByRole("alert").filter({ hasText: "Unable to load contributions" });
-  // The query keeps TanStack's default three retries with backoff, as it always has, so the error takes about seven seconds to settle.
-  await expect(alert).toBeVisible({ timeout: 15000 });
+  // The app retries a failed query once, after 600ms, so the error settles within about a second.
+  await expect(alert).toBeVisible({ timeout: 5000 });
   await expect(alert.getByRole("button", { name: "All contributions" })).toBeVisible();
   fail = false;
   await alert.getByRole("button", { name: "Retry" }).click();

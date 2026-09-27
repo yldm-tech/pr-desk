@@ -39,7 +39,8 @@ export function ShellNav({ current, hrefFor, badge, badgeLoading }: { current: D
             {/* From `shell` the wrapper dissolves (display: contents), so the badge becomes a direct item of the row and can sit at its far end; below it, the badge is pinned to the icon's corner. */}
             <span className="relative inline-flex shrink-0 shell:contents">
               <Icon size={20} aria-hidden="true" className="shrink-0 shell:size-4 shell:text-fg-subtle shell:group-aria-[current=page]/nav:text-fg" />
-              {destination === "inbox" && (
+              {/* Nothing to say is said with nothing: no badge for an empty Inbox, and none for a count that failed to load, rather than a 0 or a dash that is noise beside the label. While the count loads the badge keeps its place, hidden, so the label does not move when it lands. */}
+              {destination === "inbox" && (badgeLoading || (badge !== undefined && badge > 0)) && (
                 <b
                   data-testid="nav-badge"
                   style={{ visibility: badgeLoading ? "hidden" : undefined }}
@@ -47,7 +48,7 @@ export function ShellNav({ current, hrefFor, badge, badgeLoading }: { current: D
                   className="absolute -top-1.5 left-3.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[length:0.6875rem] leading-none font-semibold text-accent-fg tabular-nums ring-2 ring-bg shell:static shell:order-last shell:ml-auto shell:h-5 shell:min-w-5 shell:bg-accent-subtle shell:px-1.5 shell:text-caption shell:font-medium shell:text-accent-text shell:ring-0"
                 >
                   {/* The count is unbounded and the badge sits beside a label that already has no room to spare, so four digits are spelled as three. */}
-                  {badge === undefined ? "—" : badge > 99 ? "99+" : badge}
+                  {badge === undefined ? "" : badge > 99 ? "99+" : badge}
                 </b>
               )}
             </span>

@@ -12,8 +12,8 @@ import { GitHubAccessPanel } from "./GitHubAccessPanel";
 import { FormSkeleton } from "./LoadingSkeleton";
 import { OverridesEditor, overridesDays, rowsFromDays, type OverrideProblems, type OverridesValue } from "./OverridesEditor";
 import { useRepositories } from "./queries";
-import { Button, Checkbox, cx, Field, LinkButton, Tabs, TextField } from "./ui-controls";
-import { Badge, EmptyState, FactChip, Notice, PageHeader, StaleNotice } from "./ui-display";
+import { Button, Checkbox, cx, Field, Tabs, TextField } from "./ui-controls";
+import { Badge, EmptyState, ErrorState, FactChip, Notice, PageHeader, StaleNotice } from "./ui-display";
 import { ConfirmInline } from "./ui-overlay";
 
 export { parseOverrides } from "./OverridesEditor";
@@ -320,24 +320,7 @@ function ReminderSettings() {
       </div>
     );
   // A background refetch that fails leaves the settings in hand: replacing the panel then would throw away a half-filled form along with what it shows.
-  if (query.isError && !query.data)
-    return (
-      <Notice
-        tone="danger"
-        role="alert"
-        title={t("settings.unavailable")}
-        actions={
-          <>
-            <Button size="sm" onClick={() => void query.refetch()}>
-              {t("retry")}
-            </Button>
-            <LinkButton size="sm" variant="ghost" href={apiURL + "/api/v1/auth/github"}>
-              {t("followup.reconnect")}
-            </LinkButton>
-          </>
-        }
-      />
-    );
+  if (query.isError && !query.data) return <ErrorState title={t("settings.unavailable")} error={query.error} onRetry={() => void query.refetch()} />;
   return (
     <div className="grid min-w-0 gap-4">
       {query.isError && <StaleNotice onRetry={() => void query.refetch()} />}

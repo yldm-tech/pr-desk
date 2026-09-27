@@ -242,3 +242,33 @@ test("signed out, the shell drops the navigation and keeps the preferences", asy
   await page.goto("/#/about");
   await expect(page.getByRole("link", { name: "Conectar GitHub" }).first()).toBeVisible();
 });
+
+// The pill shows the failure, but a retry sent from it is still a run in flight: the button stays disabled until the server has answered, so a second press cannot post a run the server would refuse with a 409.
+test("Sync now stays disabled while a run is in flight after a failed one", async ({ page }) => {
+  const posts: string[] = [];
+  await page.route("**/api/v1/sync/progress", (route) => route.fulfill({ json: { status: "failed", phase: "account", completed: 0, total: 0, retry_at: 0, error_code: "network", last_synced_at: "2026-09-11T00:00:00Z" } }));
+  await page.route("**/api/v1/sync", async (route) => {
+    posts.push(route.request().method());
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({ json: { status: "queued" } });
+  });
+  await page.goto("/#/inbox");
+  await page.locator("aside [data-health]").click();
+  const popover = page.getByRole("dialog", { name: "Sync status" });
+  await popover.getByRole("button", { name: "Sync now" }).click();
+  await expect(popover.getByRole("button", { name: "Syncing…" })).toBeDisabled();
+  expect(posts).toEqual(["POST"]);
+});
+
+// An installed window whose session check fails is exactly the stale shell the reload exists for, so the reload and the reader's preferences stay on screen without a session.
+test("without a session the installed shell still offers the reload and the language", async ({ page }) => {
+  await page.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (query: string) => (query.includes("display-mode") ? ({ matches: true, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false } as MediaQueryList) : real(query));
+  });
+  await page.route("**/api/v1/auth/status", (route) => route.fulfill({ status: 503, json: { error: "unavailable" } }));
+  await page.goto("/#/inbox");
+  await expect(page.getByRole("alert").filter({ hasText: "API unavailable" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reload the app" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Language" })).toHaveCount(1);
+});

@@ -20,6 +20,7 @@ export const prsLocales: LocaleNamespace = {
     keyboardHint: "Use j and k to move between rows, Enter to open the activity and o to open the pull request on GitHub.",
     showOpen: "Show open PRs",
     emptyView: "No pull requests in this view.",
+    unavailable: "Unable to load pull requests",
   },
   "zh-CN": {
     title: "拉取请求",
@@ -38,6 +39,7 @@ export const prsLocales: LocaleNamespace = {
     keyboardHint: "按 j 和 k 在行间移动，按 Enter 查看动态，按 o 在 GitHub 上打开拉取请求。",
     showOpen: "查看进行中的 PR",
     emptyView: "此视图中没有拉取请求。",
+    unavailable: "无法加载拉取请求",
   },
   ja: {
     title: "プルリクエスト",
@@ -56,6 +58,7 @@ export const prsLocales: LocaleNamespace = {
     keyboardHint: "j と k で行を移動し、Enter でアクティビティを開き、o で GitHub のプルリクエストを開きます。",
     showOpen: "オープンな PR を表示",
     emptyView: "この表示にはプルリクエストがありません。",
+    unavailable: "プルリクエストを読み込めません",
   },
   ko: {
     title: "풀 리퀘스트",
@@ -74,6 +77,7 @@ export const prsLocales: LocaleNamespace = {
     keyboardHint: "j와 k로 행을 이동하고, Enter로 활동을 열고, o로 GitHub에서 풀 리퀘스트를 엽니다.",
     showOpen: "열린 PR 보기",
     emptyView: "이 보기에는 풀 리퀘스트가 없습니다.",
+    unavailable: "풀 리퀘스트를 불러올 수 없습니다",
   },
   es: {
     title: "Pull requests",
@@ -94,5 +98,6 @@ export const prsLocales: LocaleNamespace = {
     keyboardHint: "Usa j y k para moverte entre filas, Intro para abrir la actividad y o para abrir el pull request en GitHub.",
     showOpen: "Ver PR abiertos",
     emptyView: "No hay pull requests en esta vista.",
+    unavailable: "No se pueden cargar las pull requests",
   },
 };

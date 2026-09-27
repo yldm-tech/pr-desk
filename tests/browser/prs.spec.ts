@@ -293,3 +293,22 @@ test("an empty view says which list is empty and offers the way back to open wor
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(page).toHaveURL(/#\/prs$/);
 });
+
+// Inside the sheet the verbs are single keys, but a reminder menu open inside it owns the keyboard: `e` pressed there is not a request to mark the row handled behind the menu.
+test("the sheet's verb keys stand down while its reminder menu is open", async ({ page }) => {
+  const posts: { id: string; action: string }[] = [];
+  page.on("request", (request) => {
+    const match = /\/follow-ups\/(\d+)$/.exec(new URL(request.url()).pathname);
+    if (match && request.method() === "POST") posts.push({ id: match[1], action: request.postDataJSON().action });
+  });
+  await page.goto("/#/prs");
+  await page.locator("#pr-row-101").getByTestId("pr-activity").click();
+  const dialog = page.getByRole("dialog", { name: "Comments · fixture/calendar #17" });
+  await expect(dialog).toBeVisible();
+  await expect.poll(() => posts).toEqual([{ id: "1", action: "read" }]);
+  await page.keyboard.press("s");
+  await expect(page.getByRole("button", { name: /^3 days/ })).toBeVisible();
+  await page.keyboard.press("e");
+  await page.waitForTimeout(300);
+  expect(posts.filter((post) => post.action === "handled")).toEqual([]);
+});

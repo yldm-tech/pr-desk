@@ -100,9 +100,9 @@ test("a failed load says so and offers a retry", async ({ page }) => {
   const data = { data: [{ repo: "fixture/calendar", total: 12, open: 4, conflicts: 1, needs_attention: 2, checks_failing: 1 }] };
   await installFixtures(page, { overrides: { repositories: (route: Route) => (mode === "up" ? route.fulfill({ json: data }) : route.fulfill({ status: 500, json: { error: "boom" } })) } });
   await page.goto("/#/repos");
-  // The query keeps TanStack's default retries, so the failure takes a few seconds to be final.
+  // The app retries a failed query once, after 600ms, so the failure is final within about a second.
   const alert = page.getByRole("alert").filter({ hasText: "Unable to load repositories." });
-  await expect(alert).toBeVisible({ timeout: 15_000 });
+  await expect(alert).toBeVisible({ timeout: 5_000 });
   mode = "up";
   await alert.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("listitem")).toHaveCount(1);

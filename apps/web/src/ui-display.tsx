@@ -1,9 +1,11 @@
-import { CircleAlert, CircleCheck, Info, LoaderCircle, TriangleAlert, UserRound, X, type LucideIcon } from "lucide-react";
+import { HTTPError, NetworkError, TimeoutError } from "ky";
+import { CircleAlert, CircleCheck, Info, LoaderCircle, RefreshCw, TriangleAlert, UserRound, X, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { glyphIcon, toneBorder, toneText, type GlyphKind, type Tone } from "./tone";
-import { Button, cx, IconButton } from "./ui-controls";
+import { apiURL } from "./api-url";
+import { Button, buttonClass, cx, IconButton } from "./ui-controls";
 
 export type { Tone, GlyphKind } from "./tone";
 
@@ -238,17 +240,35 @@ export function EmptyState({ icon: Icon, tone, title, description, action, secon
   );
 }
 
-export function ErrorState({ title, description, onRetry, className }: { title: string; description?: string; onRetry: () => void; className?: string }) {
+// What kind of failure a request ended in, which is what decides the sentence under an error: a 401 is a session to reconnect, any other 4xx or a 5xx is the server's, and a request that never got an answer is the network's. Null when there is nothing more useful to say than the title.
+export function errorKind(error: unknown): "auth" | "server" | "offline" | null {
+  if (error instanceof HTTPError) return error.response.status === 401 ? "auth" : "server";
+  if (error instanceof TimeoutError || error instanceof NetworkError || error instanceof TypeError || (typeof navigator !== "undefined" && navigator.onLine === false)) return "offline";
+  return null;
+}
+
+// The one failure state every page uses in its content region, in the same place and alignment as EmptyState: what could not be loaded (the title), why in words chosen by the kind of failure, the retry, and for an ended session the way to reconnect. `actions` are the page's own extra ways out, after the retry.
+export function ErrorState({ title, error, description, onRetry, actions, className }: { title: string; error?: unknown; description?: string; onRetry: () => void; actions?: ReactNode; className?: string }) {
   const { t } = useTranslation();
+  const kind = errorKind(error);
+  const said = description ?? (kind === "auth" ? t("shell.errorAuth") : kind === "offline" ? t("shell.errorOffline") : kind === "server" ? t("shell.errorServer") : undefined);
   return (
     <div role="alert" className={cx("mx-auto grid max-w-md justify-items-center gap-2 px-4 py-12 text-center", className)}>
       <span aria-hidden="true" className="mb-1 inline-grid size-10 place-items-center rounded-full bg-tone-blocked-soft text-tone-blocked">
         <CircleAlert size={20} />
       </span>
       <p className="text-title font-semibold text-fg">{title}</p>
-      {description && <p className="text-body text-fg-muted">{description}</p>}
-      <div className="mt-2">
-        <Button onClick={onRetry}>{t("retry")}</Button>
+      {said && <p className="text-body text-fg-muted">{said}</p>}
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        <Button icon={RefreshCw} onClick={onRetry}>
+          {t("retry")}
+        </Button>
+        {kind === "auth" && (
+          <a href={apiURL + "/api/v1/auth/github"} className={buttonClass("ghost")}>
+            {t("followup.reconnect")}
+          </a>
+        )}
+        {actions}
       </div>
     </div>
   );

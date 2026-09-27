@@ -316,7 +316,7 @@ export function InboxPage() {
           ))}
         </div>
       );
-    if (query.isError && !data) return <ErrorState title={t("followup.unavailable")} onRetry={() => void query.refetch()} />;
+    if (query.isError && !data) return <ErrorState title={t("followup.unavailable")} error={query.error} onRetry={() => void query.refetch()} />;
     if (!groups.length) {
       if (narrowed)
         return (
@@ -411,7 +411,7 @@ export function InboxPage() {
 
   return (
     <div className="grid min-w-0 gap-4">
-      <PageHeader title={t("inbox.title")} count={summary?.total} caption={date} summary={query.isPending ? <SummarySkeleton /> : <InboxSummary summary={summary} />} />
+      <PageHeader title={t("inbox.title")} count={summary?.total} caption={date} summary={query.isPending ? <SummarySkeleton /> : summary && <InboxSummary summary={summary} />} />
       {data && !data.baseline_complete && (
         <Notice tone="info" role="status">
           {t("followup.baseline")}

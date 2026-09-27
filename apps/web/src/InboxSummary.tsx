@@ -3,17 +3,15 @@ import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import type { InboxSummary as Summary } from "./followup-view";
-import { SummarySkeleton } from "./LoadingSkeleton";
 import { cx } from "./ui-controls";
 
 type Part = { key: string; visible: string; name?: string; to: string; params: Record<string, string>; tone?: "blocked" };
 
 // The sentence at the top of the Inbox: how much there is to do and where it comes from, each part a link to exactly the rows it counts. It ignores the page's own filters, like the tiles it replaces did, so the numbers do not shrink while the reader narrows the list below. A part whose count is zero is left out rather than printed as "0 to review".
 // The bar under it is the same breakdown drawn once more for the eye, in the order the sentence reads; it is hidden from assistive technology because every number in it is already said in words.
-export function InboxSummary({ summary }: { summary: Summary | undefined }) {
+export function InboxSummary({ summary }: { summary: Summary }) {
   const { t } = useTranslation();
   const [params] = useSearchParams();
-  if (!summary) return <SummarySkeleton />;
   // A link is "current" when the page is showing exactly what it counts, so the reader can see which part of the sentence the list below is.
   const defaults: Record<string, string> = { role: "all", status: "todo" };
   const current = (wanted: Record<string, string>) => ["role", "status", "tone", "merged", "ready", "repo", "q"].every((key) => (params.get(key) || defaults[key] || "") === (wanted[key] ?? defaults[key] ?? ""));
