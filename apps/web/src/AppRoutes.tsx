@@ -11,7 +11,7 @@ import { PullRequestsPage } from "./PullRequestsPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OverviewSkeleton, PageSkeleton } from "./LoadingSkeleton";
 import { emptyState, secondaryAction } from "./action-styles";
-import { useAuth, useRepositories, useSyncMutation } from "./queries";
+import { useAuth, useRepositories } from "./queries";
 import { destinationOf, legacyRedirect, paths, prViewFromPath, prViewTitleKeys, type Destination } from "./routes";
 import { useDocumentTitle } from "./page-title";
 
@@ -64,14 +64,12 @@ function RepositoriesRoute() {
   return <Repositories repositories={data} loading={isLoading} error={isError} retry={() => void refetch()} />;
 }
 
+// The full sync a newly granted installation needs is started by useRepositoryAccess inside the page, once per grant however many pages read the access check.
 function InsightsRoute() {
-  const { mutate } = useSyncMutation();
-  // A newly granted installation can read private repositories the last sync skipped, so granting access starts a full sync.
-  const onAccessGranted = React.useCallback(() => mutate(true), [mutate]);
   return (
     <ErrorBoundary>
       <React.Suspense fallback={<OverviewSkeleton controls />}>
-        <Overview onAccessGranted={onAccessGranted} />
+        <Overview />
       </React.Suspense>
     </ErrorBoundary>
   );
