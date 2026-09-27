@@ -30,7 +30,7 @@ export function OutcomeBar({ merged, open, closed }: { merged: number; open: num
           <li key={outcome.key} className="inline-flex min-w-0 items-center gap-2">
             <span aria-hidden="true" className={cx("size-2.5 shrink-0 rounded-sm", outcome.fill)} />
             {outcome.to ? (
-              <Link to={outcome.to} className="rounded-sm text-fg-muted underline decoration-current/40 underline-offset-2 hover:text-fg pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
+              <Link to={outcome.to} className="rounded-sm text-fg-muted underline decoration-current/40 underline-offset-2 hover:text-fg pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:items-center pointer-coarse:justify-center">
                 {outcome.label}
               </Link>
             ) : (

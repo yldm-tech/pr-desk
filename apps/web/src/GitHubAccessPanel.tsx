@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import Skeleton from "react-loading-skeleton";
 import { Building2, CircleCheck, OctagonAlert, RefreshCw } from "lucide-react";
 import { installHref, openInstallPopup, privateAccessMissing, useRepositoryAccess, type Installation } from "./github-access";
-import { Button, LinkButton, TextLink } from "./ui-controls";
+import { Button, cx, LinkButton, TextLink } from "./ui-controls";
 import { Avatar, FactChip, Notice } from "./ui-display";
 
 // One installation: the account it is on, what it may read, and the way to its settings on GitHub. An installation without pull request permission is the blocked case, because only a change on GitHub can clear it.
@@ -29,9 +29,9 @@ function InstallationRow({ installation }: { installation: Installation }) {
   );
 }
 
-function InstallationList({ installations, labelledBy, label }: { installations: Installation[]; labelledBy?: string; label?: string }) {
+function InstallationList({ installations, labelledBy, label, className }: { installations: Installation[]; labelledBy?: string; label?: string; className?: string }) {
   return (
-    <ul aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : label} className="m-0 grid min-w-0 list-none p-0">
+    <ul aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : label} className={cx("m-0 grid min-w-0 list-none p-0", className)}>
       {installations.map((installation) => (
         <InstallationRow key={installation.account} installation={installation} />
       ))}
@@ -66,7 +66,7 @@ export function GitHubAccessPanel({ variant }: { variant: "full" | "compact" }) 
   if (variant === "compact") {
     if (access.isPending) return <AccessLoading rows={2} />;
     if (!installations.length) return null;
-    return <InstallationList installations={installations} label={t("insights.installations")} />;
+    return <InstallationList installations={installations} label={t("insights.installations")} className="rounded-lg border border-line px-3" />;
   }
   const href = installHref(access.data);
   const missing = privateAccessMissing(access.data);
