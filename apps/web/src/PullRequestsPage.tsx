@@ -106,9 +106,15 @@ export function PullRequestsPage() {
     setDraftSearch("");
   };
   const activeFilterButton = React.useRef<HTMLButtonElement | null>(null);
-  // The strip scrolls horizontally when it does not fit, and has no scroll affordance, so landing on /prs/approved from a bookmark would otherwise show a row of pills that are all unselected. "nearest" leaves a strip that already shows the selection alone.
+  // The strip scrolls horizontally when it does not fit, and has no scroll affordance, so landing on /prs/approved from a bookmark would otherwise show a row of pills that are all unselected. Only the strip is scrolled: scrollIntoView would also scroll the page to bring the strip into view, which on a phone moves the table under the reader the moment the list mounts. A strip that already shows the selection is left alone.
   React.useEffect(() => {
-    activeFilterButton.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    const button = activeFilterButton.current;
+    const strip = button?.parentElement;
+    if (!button || !strip) return;
+    const pill = button.getBoundingClientRect();
+    const track = strip.getBoundingClientRect();
+    if (pill.left < track.left) strip.scrollLeft -= track.left - pill.left;
+    else if (pill.right > track.right) strip.scrollLeft += pill.right - track.right;
   }, [view]);
   return (
     <>

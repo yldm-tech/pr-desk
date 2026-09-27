@@ -6,7 +6,7 @@ import type { FollowUp } from "./followup-view";
 export type DetailTarget = { pr: { id: number; repo: string; number: number; title: string; url?: string; comments?: number }; followUp?: FollowUp };
 
 type DetailState = { target: DetailTarget | null; opener: HTMLElement | null };
-type DetailContext = { target: DetailTarget | null; opener: HTMLElement | null; open(t: DetailTarget, opener?: HTMLElement | null): void; close(): void };
+type DetailContext = { target: DetailTarget | null; opener: HTMLElement | null; open: (t: DetailTarget, opener?: HTMLElement | null) => void; close: () => void };
 
 const Context = createContext<DetailContext | null>(null);
 
