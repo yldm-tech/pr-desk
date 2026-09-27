@@ -192,7 +192,8 @@ function PaletteDialog() {
   }
 
   return (
-    <Command label={t("palette.inputLabel")} shouldFilter={false} loop value={value} onValueChange={setSelected} className="contents">
+    // No vim bindings: cmdk would take Control+K as "previous item" and prevent it, so on Windows and Linux the key that opened the palette could never close it. The arrow keys, Home and End still move the selection.
+    <Command label={t("palette.inputLabel")} shouldFilter={false} loop vimBindings={false} value={value} onValueChange={setSelected} className="contents">
       <Sheet
         open
         onClose={close}
