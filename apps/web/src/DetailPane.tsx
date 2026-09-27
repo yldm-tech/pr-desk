@@ -85,7 +85,7 @@ function SheetFollowUp({ item, now }: { item: FollowUp; now: Date }) {
           </p>
           {/* No timer: the sheet exists only until it is dismissed, so the confirmation and its inverse can wait for the reader. */}
           {canUndo && (
-            <Button size="sm" variant="ghost" className="text-accent-text" busy={undo.busy} aria-label={t("followup.undoFor", { action: undo.target!.action, repo: item.pr.repo, number: item.pr.number })} onClick={() => void undo.run().then(() => setFeedback(t("followup.undone")))}>
+            <Button size="sm" variant="ghost" className="text-accent-text" busy={undo.busy} aria-label={t("followup.undoFor", { action: undo.target!.action, repo: item.pr.repo, number: item.pr.number })} onClick={() => void undo.run(undo.target ?? undefined).then(() => setFeedback(t("followup.undone")))}>
               {t("followup.undo")}
             </Button>
           )}

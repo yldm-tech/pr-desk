@@ -235,7 +235,7 @@ export function InboxPage() {
   const report = (result: RowReport) => {
     const slot = result.undo;
     if (slot) undo.set(slot);
-    showToast({ text: result.text, tone: result.tone, undo: slot ? { label: t("followup.undo"), name: t("followup.undoFor", { action: slot.action, repo: slot.repo, number: slot.number }), run: () => void undo.run() } : undefined });
+    showToast({ text: result.text, tone: result.tone, undo: slot ? { label: t("followup.undo"), name: t("followup.undoFor", { action: slot.action, repo: slot.repo, number: slot.number }), run: () => void undo.run(slot), target: slot } : undefined });
   };
   const showLatest = (item: FollowUp) => {
     void query.refetch();

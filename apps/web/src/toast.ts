@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 // The single toast slot. One slot, not a stack: every result the app reports replaces the previous one, which is also what makes one Undo button unambiguous about the action it would reverse.
-export type ToastInput = { text: string; tone: "success" | "error"; undo?: { label: string; name: string; run(): void }; sticky?: boolean };
+// `undo.target` is the undo-slot entry the button was created for. The slot holds one step for the whole app, so when another surface takes it (the sheet footer, the `z` key) the toast that names the old row is withdrawn rather than left offering to undo a row it does not name.
+export type ToastInput = { text: string; tone: "success" | "error"; undo?: { label: string; name: string; run(): void; target?: unknown }; sticky?: boolean };
 // `seq` changes on every show, so the region can announce the same sentence twice in a row.
 export type ToastState = ToastInput & { seq: number };
 
@@ -29,6 +30,11 @@ export function dismissToast(): void {
   if (!current) return;
   current = null;
   emit();
+}
+
+// Withdraws a toast whose Undo belongs to a step the slot no longer holds. Called by the undo slot on every change of target.
+export function retireUndoToast(target: unknown): void {
+  if (current?.undo?.target !== undefined && current.undo.target !== target) dismissToast();
 }
 
 function subscribe(listener: () => void) {

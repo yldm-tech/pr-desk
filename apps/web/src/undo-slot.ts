@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { useBulkFollowUpAction } from "./followup-actions";
-import { showToast } from "./toast";
+import { retireUndoToast, showToast } from "./toast";
 
 // What Undo would put back: the row, the version its snapshot was taken at, and enough to name it ("Undo Handled · wait for others — fixture/calendar #17").
 export type UndoTarget = { id: number; version: number; repo: string; number: number; action: string };
@@ -16,10 +16,12 @@ const subscribe = (listener: () => void) => {
 const setTarget = (target: UndoTarget | null) => {
   if (current === target) return;
   current = target;
+  retireUndoToast(target);
   for (const listener of listeners) listener();
 };
 
-export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | null): void; run(): Promise<void>; busy: boolean } {
+// `run(expected)` undoes only while the slot still holds `expected`: a control that names one row (the toast's Undo) must never restore a different one that took the slot after it was drawn.
+export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | null): void; run(expected?: UndoTarget): Promise<void>; busy: boolean } {
   const { t } = useTranslation();
   const target = useSyncExternalStore(
     subscribe,
@@ -33,10 +35,10 @@ export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | 
       showToast({ text: t(failed ? "followup.saveError" : "followup.undone"), tone: failed ? "error" : "success" });
     },
   });
-  const run = () =>
+  const run = (expected?: UndoTarget) =>
     new Promise<void>((resolve) => {
       const slot = current;
-      if (!slot) return resolve();
+      if (!slot || (expected && slot !== expected)) return resolve();
       // Emptied before the request, not after: the step is spent the moment it is asked for, and a second press while it is in flight must not post a second undo that the server would answer by restoring nothing.
       setTarget(null);
       // A failed undo leaves the step on the server, so the slot is handed back and the reader can try again.

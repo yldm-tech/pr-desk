@@ -354,6 +354,25 @@ test("an action can be taken back from the confirmation that reports it, or with
   await expect(row.locator("time").first()).toHaveText(waited);
 });
 
+// One undo slot for the whole app: when the sheet footer takes it for another row, the toast that names the first row is withdrawn rather than left behind to undo the wrong one.
+test("an action in the sheet withdraws a toast that names another row", async ({ page }) => {
+  const posts = recordPosts(page);
+  await page.goto("/#/inbox?role=authored&status=action");
+  await card(page, "Handle timezone boundaries")
+    .getByRole("button", { name: /^Handled · wait for others/ })
+    .click();
+  await expect(page.getByRole("button", { name: /^Undo/ })).toHaveAccessibleName(/fixture\/calendar #17/);
+  await page.goto("/#/prs");
+  await page.locator("#pr-row-102").getByTestId("pr-activity").click();
+  const dialog = page.getByRole("dialog", { name: "Comments · fixture/reviewer #24" });
+  await dialog.getByRole("button", { name: /^Handled · wait for others — fixture\/reviewer #24/ }).click();
+  await expect.poll(() => posts.some((post) => post.id === 2 && post.body.action === "handled")).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Undo.*fixture\/calendar #17/ })).toHaveCount(0);
+  expect(posts.filter((post) => post.body.action === "undo")).toEqual([]);
+});
+
 // Six seconds for a confirmation with nothing to take back; one that carries an Undo waits for the reader. (Known flaky in CI; tracked separately, not retried here.)
 test("a confirmation waits when it carries an undo and clears itself when it does not", async ({ page }) => {
   await page.goto("/#/inbox?role=authored&status=action");
