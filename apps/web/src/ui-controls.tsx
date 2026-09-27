@@ -119,12 +119,24 @@ export function TextLink({ tone = "default", inline = false, externalIcon = true
 }
 
 // Whether a horizontal strip has more content past its edges, kept current as it scrolls and resizes, and a one-time scroll that brings `selected` into view. Only the strip is scrolled, never the page: scrollIntoView would also move the document to bring the strip itself into view, which on a phone shifts the list under the reader the moment the page mounts.
+// Bring an item wholly inside the strip, with a little room past it. Chromium's own scroll on keyboard focus stops once part of the item shows, which leaves a focused pill half under the next control.
+function revealInStrip(element: HTMLElement, item: HTMLElement) {
+  const pill = item.getBoundingClientRect();
+  const track = element.getBoundingClientRect();
+  if (pill.left < track.left) element.scrollLeft -= track.left - pill.left + 8;
+  else if (pill.right > track.right) element.scrollLeft += pill.right - track.right + 8;
+}
+
 function useScrollStrip(selected: string | undefined) {
   const strip = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState<"none" | "start" | "end" | "both">("none");
   useLayoutEffect(() => {
     const element = strip.current;
     if (!element) return;
+    const focused = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement && event.target !== element) revealInStrip(element, event.target);
+    };
+    element.addEventListener("focusin", focused);
     const measure = () => {
       const before = element.scrollLeft > 1;
       const after = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
@@ -137,24 +149,21 @@ function useScrollStrip(selected: string | undefined) {
     return () => {
       observer.disconnect();
       element.removeEventListener("scroll", measure);
+      element.removeEventListener("focusin", focused);
     };
   }, []);
   useLayoutEffect(() => {
     const element = strip.current;
     const item = element?.querySelector<HTMLElement>("[aria-pressed=true],[aria-selected=true]");
-    if (!element || !item) return;
-    const pill = item.getBoundingClientRect();
-    const track = element.getBoundingClientRect();
-    if (pill.left < track.left) element.scrollLeft -= track.left - pill.left + 8;
-    else if (pill.right > track.right) element.scrollLeft += pill.right - track.right + 8;
+    if (element && item) revealInStrip(element, item);
   }, [selected]);
   return { strip, edges };
 }
 
 // The fade that says a strip continues past an edge. A mask rather than an overlay, so it fades whatever the strip sits on in either theme; the mask only reads alpha.
 const stripFade = "data-[edges=end]:[mask-image:linear-gradient(to_right,black_85%,transparent)] data-[edges=start]:[mask-image:linear-gradient(to_left,black_85%,transparent)] data-[edges=both]:[mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]";
-// One line whatever the width: a strip too wide for its row scrolls sideways, snapping to whole items, with no scrollbar drawn over the pill, instead of wrapping into a taller shape.
-const stripScroll = "flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity";
+// One line whatever the width: a strip too wide for its row scrolls sideways, with no scrollbar drawn over the pill, instead of wrapping into a taller shape. No scroll snapping: a snap point pulls a focused item at the end of the strip back out of view.
+const stripScroll = "flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export type SegmentItem<T extends string> = { value: T; label: string; count?: number | string; testId?: string };
 
@@ -173,7 +182,7 @@ export function SegmentedControl<T extends string>({ label, value, onChange, ite
             data-testid={item.testId}
             onClick={() => onChange(item.value)}
             className={cx(
-              "inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
               size === "md" ? "min-h-7 px-3 text-body" : "min-h-6 px-2.5 text-small",
               pressed ? "bg-surface text-fg shadow-1" : "bg-transparent text-fg-muted hover:text-fg",
             )}
@@ -210,7 +219,7 @@ export function Tabs({ value, onValueChange, label, items, children, className, 
           <RadixTabs.Trigger
             key={item.value}
             value={item.value}
-            className="inline-flex min-h-9 shrink-0 snap-start items-center border-0 whitespace-nowrap border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
+            className="inline-flex min-h-9 shrink-0 items-center border-0 whitespace-nowrap border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
           >
             {item.label}
           </RadixTabs.Trigger>

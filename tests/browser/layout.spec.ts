@@ -28,7 +28,8 @@ async function clippedElements(page: Page) {
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
       if (!["hidden", "clip"].includes(style.overflowX)) continue;
-      if (style.textOverflow === "ellipsis" || style.webkitLineClamp !== "none") continue;
+      // Except inside a status chip ([data-tone]): a chip is two or three words that carry the row's state, and one cut to "Waiting pe…" says nothing, so a chip that does not fit has to wrap onto a line of its own rather than announce its truncation.
+      if ((style.textOverflow === "ellipsis" || style.webkitLineClamp !== "none") && !el.closest("[data-tone]")) continue;
       // `sr-only` is the one place in the codebase that clips on purpose, and it is `clip-path: inset(50%)` over a 1px box. Its padding survives, so the box measures 24px wide rather than 1px on the table header — the clip path, not the width, is what identifies it.
       if (style.clipPath !== "none" || el.clientWidth <= 1) continue;
       if (el.scrollWidth <= el.clientWidth + 1) continue;
@@ -227,7 +228,8 @@ test("no layout loses grid columns as the viewport widens", async ({ page }) => 
 });
 
 // The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple. Korean keeps its spaces but breaks words only at them (keep-all), so it gets the narrowest phone, where that rule is most likely to overflow. Its one- and two-syllable labels ("3일", "막힘") are narrower than any English one, so it is also the locale that proves every compact control keeps its tap floor.
-const LOCALE_PROJECTS: Record<string, string[]> = { es: ["phone-320", "phone-360", "phone-390", "edge-480"], ja: ["phone-320", "phone-360", "phone-390", "edge-480"], ko: ["phone-320"] };
+// Simplified Chinese breaks between characters like Japanese but has its own punctuation rules, so it gets the two commonest phone widths; Japanese also runs at the laptop width, where its long katakana column headers ("アクティビティ") meet the fixed table tracks.
+const LOCALE_PROJECTS: Record<string, string[]> = { es: ["phone-320", "phone-360", "phone-390", "edge-480"], ja: ["phone-320", "phone-360", "phone-390", "edge-480", "laptop"], ko: ["phone-320"], "zh-CN": ["phone-320", "phone-390"] };
 for (const locale of Object.keys(LOCALE_PROJECTS)) {
   for (const route of STRUCTURAL_ROUTES.concat("/#/settings")) {
     test(`${locale} fits ${route}`, async ({ page }, info) => {
@@ -253,5 +255,40 @@ for (const route of STRUCTURAL_ROUTES) {
     expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
     expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
     expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
+  });
+}
+
+// (f) Focus not obscured (WCAG 2.4.11). Below the shell breakpoint the top bar is sticky and the tab bar fixed, both over the page, and nothing in the sweeps above moves focus. This one tabs through each route and asks the browser what is on top at the centre of every control that takes focus: it has to be that control (or something inside it), not a bar. Run where the bars exist and a keyboard is plausible: the narrowest phone, a phone with a hardware keyboard, and a laptop at 200% zoom.
+const FOCUS_PROJECTS = ["phone-320", "phone-390", "zoom-200"];
+for (const route of ROUTES) {
+  test(`focus is never hidden under the bars on ${route}`, async ({ page }, info) => {
+    test.skip(!FOCUS_PROJECTS.includes(info.project.name), "the focus sweep runs where the fixed bars are");
+    await installFixtures(page);
+    await open(page, route);
+    const hidden: string[] = [];
+    for (let stop = 0; stop < 80; stop += 1) {
+      await page.keyboard.press("Tab");
+      const report = await page.evaluate(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || el === document.body) return null;
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        const name = `${el.tagName.toLowerCase()}[${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}]`;
+        // Tab order wraps round to the top of the page; the first control reached twice ends the walk.
+        if (el.dataset.focusSwept) return { name, covered: false, again: true };
+        el.dataset.focusSwept = "";
+        // Visually hidden on purpose (the skip link parked above the top edge, sr-only text) or inside a dialog, which sits above both bars.
+        if (style.clipPath !== "none" || box.width <= 1 || box.bottom <= 0 || el.closest("dialog")) return { name, covered: false, again: false };
+        // The first line box rather than the bounding box: the centre of a link that wraps onto two lines can fall between its words, on the text around it.
+        const line = el.getClientRects()[0] ?? box;
+        const hit = document.elementFromPoint(line.left + line.width / 2, line.top + line.height / 2);
+        return { name, covered: !!hit && hit !== el && !el.contains(hit), again: false, hit: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className).slice(0, 50)}` : "", at: [Math.round(line.left), Math.round(line.top), Math.round(line.width)] };
+      });
+      if (!report) continue;
+      if (report.again) break;
+      if (report.covered) hidden.push(`${report.name} under ${"hit" in report ? report.hit : ""} at ${"at" in report ? report.at : ""}`);
+    }
+    expect(hidden, "focused controls covered by the top bar or the tab bar").toEqual([]);
   });
 }

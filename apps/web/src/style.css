@@ -300,12 +300,13 @@
     line-break: strict;
     letter-spacing: 0;
   }
-  /* auto-phrase keeps Japanese phrases whole where Chromium can find them and is ignored elsewhere; Korean has spaces between words, so keep-all is enough. */
-  :lang(ja) :is(h1, h2, h3, button, label, [data-tone], [data-stat-label]) {
+  /* auto-phrase keeps Japanese phrases whole where Chromium can find them and is ignored elsewhere, and body copy needs it as much as headings do or a paragraph strands a lone "す。" on its last line. Korean has spaces between words, so keep-all is enough, and it is the norm for all Korean UI copy, not just labels: without it a sentence breaks inside a word ("없습니|다"). overflow-wrap: anywhere is the fallback for a single token too long for its line, which keep-all would otherwise push out of the box. */
+  :lang(ja) :is(h1, h2, h3, p, li, dd, dt, button, label, [data-tone], [data-stat-label]) {
     word-break: auto-phrase;
   }
-  :lang(ko) :is(h1, h2, h3, button, label, [data-stat-label]) {
+  :lang(ko) body {
     word-break: keep-all;
+    overflow-wrap: anywhere;
   }
 
   * {
