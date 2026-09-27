@@ -127,6 +127,7 @@ function PaletteDialog() {
   const titleId = useId();
   const input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
   const auth = useAuth();
   const connected = !!auth.data?.connected;
   const followUps = useFollowUps(connected);
@@ -172,7 +173,7 @@ function PaletteDialog() {
   const actions: Entry[] = [
     ...(connected ? [{ id: "sync", label: syncing ? t("syncing") : t("sync"), icon: syncing ? LoaderCircle : RefreshCw, disabled: syncing, run: act(() => sync.mutate()) }] : []),
     ...themes.map(({ pref, label, icon }): Entry => ({ id: `theme-${pref}`, context: t("palette.theme"), label, icon, current: theme.pref === pref, run: act(() => theme.setPref(pref)) })),
-    ...Object.keys(resources).map((code): Entry => ({ id: `language-${code}`, context: t("language"), label: t("nativeName", { lng: code }), keywords: `${code} ${names.of(code) ?? ""}`, icon: Languages, current: (i18n.resolvedLanguage || "en") === code, run: act(() => void i18n.changeLanguage(code)) })),
+    ...Object.keys(resources).map((code): Entry => ({ id: `language-${code.toLowerCase()}`, context: t("language"), label: t("nativeName", { lng: code }), keywords: `${code} ${names.of(code) ?? ""}`, icon: Languages, current: (i18n.resolvedLanguage || "en") === code, run: act(() => void i18n.changeLanguage(code)) })),
     ...(connected ? [{ id: "install", label: t("palette.installApp"), icon: Building2, run: act(openInstall) }] : []),
     ...(installed ? [{ id: "reload", label: t("hardRefresh"), icon: RotateCw, run: act(() => void hardReload()) }] : []),
     { id: "shortcuts", label: t("palette.shortcuts"), icon: Keyboard, keys: ["?"], run: act(overlays.openShortcuts) },
@@ -186,7 +187,11 @@ function PaletteDialog() {
   const shownFollowUps = foundFollowUps.slice(0, FOLLOW_UP_LIMIT);
   const prQuery = trimmed.slice(0, PR_QUERY_MAX);
   const searchPRs = connected && prQuery !== "";
-  const nothing = !shownGoTo.length && !shownActions.length && !shownFollowUps.length && !searchPRs;
+  // "Nothing" means nothing local: the pull request search is offered for any query, as the fallback for text that names no page, action or follow-up.
+  const nothing = trimmed !== "" && !shownGoTo.length && !shownActions.length && !shownFollowUps.length;
+  // The selection is held here rather than left to cmdk, which with its own filtering switched off keeps pointing at an option the new query has just removed, so Enter did nothing. A query change clears it and the first visible option takes over, in the order the groups are drawn.
+  const ids = [...shownGoTo.map((entry) => entry.id), ...shownFollowUps.map((item) => `follow-up-${item.id}`), ...shownActions.filter((entry) => !entry.disabled).map((entry) => entry.id), ...(searchPRs ? ["search-prs"] : [])];
+  const value = ids.includes(selected) ? selected : (ids[0] ?? "");
 
   // Said once, above the results, only while a query could have matched a follow-up: what is missing from the list and why.
   let note: ReactNode = null;
@@ -196,7 +201,7 @@ function PaletteDialog() {
   }
 
   return (
-    <Command label={t("palette.inputLabel")} shouldFilter={false} loop className="contents">
+    <Command label={t("palette.inputLabel")} shouldFilter={false} loop value={value} onValueChange={setSelected} className="contents">
       <Sheet
         open
         onClose={close}
@@ -210,7 +215,10 @@ function PaletteDialog() {
               {t("palette.title")}
             </h2>
             <Search size={16} aria-hidden="true" className="shrink-0 text-fg-subtle" />
-            <Command.Input ref={input} value={query} onValueChange={setQuery} placeholder={t("palette.placeholder")} className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-body text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none pointer-coarse:text-[length:1rem]" />
+            <Command.Input ref={input} value={query} onValueChange={(next) => {
+                setQuery(next);
+                setSelected("");
+              }} placeholder={t("palette.placeholder")} className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-body text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none pointer-coarse:text-[length:1rem]" />
           </div>
         }
         footer={
@@ -238,8 +246,12 @@ function PaletteDialog() {
             {note}
           </div>
         )}
+        {nothing && (
+          <p role="status" className="px-2 py-8 text-center text-body text-fg-muted">
+            {t("palette.empty", { query: trimmed })}
+          </p>
+        )}
         <Command.List className="-mx-2 shell:min-h-64">
-          {nothing && <Command.Empty className="px-2 py-8 text-center text-body text-fg-muted">{t("palette.empty", { query: trimmed })}</Command.Empty>}
           {shownGoTo.length > 0 && (
             <Command.Group heading={t("palette.groupGoTo")} className={groupClass}>
               {shownGoTo.map((entry) => (
@@ -268,19 +280,19 @@ function PaletteDialog() {
               {foundFollowUps.length > shownFollowUps.length && <p className="px-2 pt-1 pb-2 text-caption text-fg-subtle">{t("palette.moreFollowUps", { count: foundFollowUps.length - shownFollowUps.length })}</p>}
             </Command.Group>
           )}
+          {shownActions.length > 0 && (
+            <Command.Group heading={t("palette.groupActions")} className={cx(groupClass, "mt-2")}>
+              {shownActions.map((entry) => (
+                <Row key={entry.id} entry={entry} coarse={coarse} currentLabel={t("palette.current")} />
+              ))}
+            </Command.Group>
+          )}
           {searchPRs && (
             <Command.Group heading={t("palette.groupPulls")} className={cx(groupClass, "mt-2")}>
               <Command.Item value="search-prs" onSelect={go(`${paths.prs}?${new URLSearchParams({ q: prQuery })}`)} className={itemClass}>
                 <Search size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
                 <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t("palette.searchPulls", { query: prQuery })}</span>
               </Command.Item>
-            </Command.Group>
-          )}
-          {shownActions.length > 0 && (
-            <Command.Group heading={t("palette.groupActions")} className={cx(groupClass, "mt-2")}>
-              {shownActions.map((entry) => (
-                <Row key={entry.id} entry={entry} coarse={coarse} currentLabel={t("palette.current")} />
-              ))}
             </Command.Group>
           )}
         </Command.List>
