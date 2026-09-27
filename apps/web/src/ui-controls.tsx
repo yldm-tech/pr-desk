@@ -15,17 +15,18 @@ type Size = "sm" | "md";
 
 // Labels never truncate: a label longer than its row wraps inside the button rather than being cut, and clusters are flex-wrap so whole buttons move to the next line first. The height is a floor, not a fixed value, for that reason. Every control reaches 44px on a coarse pointer.
 const buttonBase = "relative inline-flex max-w-full items-center justify-center gap-1.5 rounded-md border text-center font-medium no-underline transition-colors duration-[var(--dur-fast)] ease-out select-none pointer-coarse:min-h-11 pointer-coarse:min-w-11";
-const buttonSize: Record<Size, string> = { md: "min-h-8 px-3 py-1 text-body", sm: "min-h-7 px-2.5 py-0.5 text-small" };
+// Written as a function rather than a keyed map: lint:responsive refuses the names of the cleared Tailwind breakpoints followed by a colon anywhere in the source, object keys included.
+const buttonSize = (size: Size) => (size === "sm" ? "min-h-7 px-2.5 py-0.5 text-small" : "min-h-8 px-3 py-1 text-body");
 const buttonVariant: Record<ButtonVariant, string> = {
   primary: "border-transparent bg-accent text-accent-fg hover:bg-accent-hover",
   secondary: "border-line-strong bg-surface text-fg hover:bg-bg-subtle",
   ghost: "border-transparent bg-transparent text-fg-muted hover:bg-bg-muted hover:text-fg",
   danger: "border-transparent bg-transparent text-tone-blocked hover:bg-tone-blocked-soft",
 };
-const iconSize: Record<Size, number> = { md: 16, sm: 14 };
+const iconSize = (size: Size) => (size === "sm" ? 14 : 16);
 
 export function buttonClass(variant: ButtonVariant = "secondary", size: Size = "md") {
-  return cx(buttonBase, buttonSize[size], buttonVariant[variant]);
+  return cx(buttonBase, buttonSize(size), buttonVariant[variant]);
 }
 
 function Spinner({ size }: { size: number }) {
@@ -33,7 +34,7 @@ function Spinner({ size }: { size: number }) {
 }
 
 export function Button({ variant = "secondary", size = "md", icon: Icon, busy = false, className, children, disabled, type = "button", ref, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: Size; icon?: LucideIcon; busy?: boolean; ref?: Ref<HTMLButtonElement> }) {
-  const glyph = iconSize[size];
+  const glyph = iconSize(size);
   return (
     <button ref={ref} type={type} className={cx(buttonClass(variant, size), className)} disabled={disabled || busy} aria-busy={busy || undefined} {...props}>
       {/* The spinner takes the icon's place, so the width does not move; a button with no icon keeps its label in the layout (invisible) and centres the spinner over it. */}
@@ -52,8 +53,6 @@ export function Button({ variant = "secondary", size = "md", icon: Icon, busy = 
   );
 }
 
-const iconButtonSize: Record<Size, string> = { md: "size-8", sm: "size-7" };
-
 // An icon with no visible text. The label is the accessible name and, for a mouse, the tooltip.
 export function IconButton({ label, icon: Icon, size = "md", tone, className, type = "button", busy = false, disabled, ref, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; icon: LucideIcon; size?: Size; tone?: Tone; busy?: boolean; ref?: Ref<HTMLButtonElement> }) {
   return (
@@ -64,7 +63,7 @@ export function IconButton({ label, icon: Icon, size = "md", tone, className, ty
       title={label}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={cx("inline-grid shrink-0 place-items-center rounded-md border border-transparent bg-transparent p-0 transition-colors duration-[var(--dur-fast)] hover:bg-bg-muted pointer-coarse:size-11", iconButtonSize[size], tone ? toneText[tone] : "text-fg-muted hover:text-fg", className)}
+      className={cx("inline-grid shrink-0 place-items-center rounded-md border border-transparent bg-transparent p-0 transition-colors duration-[var(--dur-fast)] hover:bg-bg-muted pointer-coarse:size-11", size === "sm" ? "size-7" : "size-8", tone ? toneText[tone] : "text-fg-muted hover:text-fg", className)}
       {...props}
     >
       {busy ? <Spinner size={16} /> : <Icon size={16} aria-hidden="true" />}
@@ -97,7 +96,7 @@ function Anchor({ to, href, external, newTabLabel, children, ref, ...props }: An
 }
 
 export function LinkButton({ variant = "secondary", size = "md", icon: Icon, className, children, external, ...props }: AnchorProps & { variant?: ButtonVariant; size?: Size; icon?: LucideIcon; children: ReactNode }) {
-  const glyph = iconSize[size];
+  const glyph = iconSize(size);
   return (
     <Anchor external={external} className={cx(buttonClass(variant, size), className)} {...props}>
       {Icon && <Icon size={glyph} aria-hidden="true" className="shrink-0" />}
@@ -252,7 +251,29 @@ export function Checkbox({ label, description, className, ref, ...props }: Omit<
 }
 
 // Search in one box: the field, a clear button, and in `submit` mode Enter commits. `live` reports every keystroke (a local filter); `submit` keeps a draft and reports it on Enter (a server query), and clearing commits the empty value at once. id="pr-search" is what the `/` shortcut focuses.
-export function SearchField({ id, label, value, onChange, onSubmit, mode, placeholder, maxLength, kbdHint = false, className }: { id?: string; label: string; value: string; onChange: (value: string) => void; onSubmit?: (value: string) => void; mode: "live" | "submit"; placeholder?: string; maxLength?: number; kbdHint?: boolean; className?: string }) {
+export function SearchField({
+  id,
+  label,
+  value,
+  onChange,
+  onSubmit,
+  mode,
+  placeholder,
+  maxLength,
+  kbdHint = false,
+  className,
+}: {
+  id?: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit?: (value: string) => void;
+  mode: "live" | "submit";
+  placeholder?: string;
+  maxLength?: number;
+  kbdHint?: boolean;
+  className?: string;
+}) {
   const { t } = useTranslation();
   const fallback = useId();
   const inputId = id ?? fallback;

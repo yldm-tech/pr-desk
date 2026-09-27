@@ -33,7 +33,31 @@ const sheetSide = {
 } as const;
 
 // A native modal <dialog>: the browser traps focus, makes the page behind it inert, and turns Escape into `cancel`. Escape and a click on the backdrop both call onClose; the owner decides whether to close. Focus goes back to `returnFocusTo`, or to whatever had it when the sheet opened.
-export function Sheet({ open, onClose, side, labelledBy, header, footer, children, returnFocusTo, closeLabel, showClose = true, className }: { open: boolean; onClose: () => void; side: "right" | "bottom" | "center"; labelledBy: string; header?: ReactNode; footer?: ReactNode; children: ReactNode; returnFocusTo?: HTMLElement | null; closeLabel?: string; showClose?: boolean; className?: string }) {
+export function Sheet({
+  open,
+  onClose,
+  side,
+  labelledBy,
+  header,
+  footer,
+  children,
+  returnFocusTo,
+  closeLabel,
+  showClose = true,
+  className,
+}: {
+  open: boolean;
+  onClose: () => void;
+  side: "right" | "bottom" | "center";
+  labelledBy: string;
+  header?: ReactNode;
+  footer?: ReactNode;
+  children: ReactNode;
+  returnFocusTo?: HTMLElement | null;
+  closeLabel?: string;
+  showClose?: boolean;
+  className?: string;
+}) {
   const { t } = useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   const close = useRef(onClose);

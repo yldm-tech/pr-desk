@@ -16,7 +16,29 @@ export const itemTracks = {
 export type ItemTracks = keyof typeof itemTracks;
 
 // A list of rows, or a table of them. `table` is a div table (role=table/row/columnheader) so a row can be a grid and reflow into a card on a narrow screen; the header row is always in the accessibility tree and only becomes visible once the content box reaches `row`. Rows must be direct children, after the header, for the roles to hold. `busy` draws the thin indeterminate bar of a background refetch, named for assistive technology by `busyLabel`.
-export function ItemList({ mode, label, header, children, containerName, tracks = "table", busy = false, busyLabel, as = "div", className }: { mode: "list" | "table"; label?: string; header?: string[]; children: ReactNode; containerName?: "list"; tracks?: "table" | "repo"; busy?: boolean; busyLabel?: string; as?: "div" | "ul"; className?: string }) {
+export function ItemList({
+  mode,
+  label,
+  header,
+  children,
+  containerName,
+  tracks = "table",
+  busy = false,
+  busyLabel,
+  as = "div",
+  className,
+}: {
+  mode: "list" | "table";
+  label?: string;
+  header?: string[];
+  children: ReactNode;
+  containerName?: "list";
+  tracks?: "table" | "repo";
+  busy?: boolean;
+  busyLabel?: string;
+  as?: "div" | "ul";
+  className?: string;
+}) {
   const bar = busy && (
     <div role="status" className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-0.5 overflow-hidden">
       <span className="sr-only">{busyLabel}</span>
@@ -28,7 +50,14 @@ export function ItemList({ mode, label, header, children, containerName, tracks 
       <div role="table" aria-label={label} className={cx("relative min-w-0", className)}>
         {bar}
         {header && (
-          <div role="row" className={cx("grid gap-x-3 p-0 text-small font-medium text-fg-muted", itemTracks[tracks], "absolute h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)] @row/dashboard:static @row/dashboard:h-auto @row/dashboard:w-auto @row/dashboard:overflow-visible @row/dashboard:border-b @row/dashboard:border-line @row/dashboard:px-3 @row/dashboard:py-2 @row/dashboard:whitespace-normal @row/dashboard:[clip-path:none]")}>
+          <div
+            role="row"
+            className={cx(
+              "grid gap-x-3 p-0 text-small font-medium text-fg-muted",
+              itemTracks[tracks],
+              "absolute h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)] @row/dashboard:static @row/dashboard:h-auto @row/dashboard:w-auto @row/dashboard:overflow-visible @row/dashboard:border-b @row/dashboard:border-line @row/dashboard:px-3 @row/dashboard:py-2 @row/dashboard:whitespace-normal @row/dashboard:[clip-path:none]",
+            )}
+          >
             {header.map((name) => (
               <span role="columnheader" key={name} className="min-w-0 truncate">
                 {name}
@@ -156,7 +185,27 @@ function SectionHeading({ heading, count, id }: { heading: string; count: number
 }
 
 // A group of rows under an h2 that stays pinned while its rows scroll past. `heading` is the full localized string (for example followup.groupHeading); `count` identifies the number inside it. A collapsible section is a native <details>, so it opens and closes without script and is announced as a disclosure.
-export function ListSection({ id, heading, count, collapsible = false, defaultOpen = false, note, children, className, onToggle }: { id: string; heading: string; count: number; collapsible?: boolean; defaultOpen?: boolean; note?: ReactNode; children: ReactNode; className?: string; onToggle?: (open: boolean) => void }) {
+export function ListSection({
+  id,
+  heading,
+  count,
+  collapsible = false,
+  defaultOpen = false,
+  note,
+  children,
+  className,
+  onToggle,
+}: {
+  id: string;
+  heading: string;
+  count: number;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  note?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  onToggle?: (open: boolean) => void;
+}) {
   const sticky = "sticky top-[var(--topbar-h)] z-[2] bg-bg py-2 shell:top-0";
   if (collapsible)
     return (

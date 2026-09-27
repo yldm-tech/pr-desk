@@ -98,7 +98,38 @@ test("the canvas colours match the browser chrome colours", () => {
 });
 
 test("the aliases the older pages read all point at a defined token", () => {
-  const aliases = ["--canvas", "--surface-muted", "--foreground", "--muted", "--border", "--border-subtle", "--accent-soft", "--accent-border", "--success", "--success-soft", "--success-border", "--warning", "--warning-soft", "--warning-border", "--danger", "--danger-soft", "--info", "--hero", "--hero-muted", "--hero-text", "--hero-border", "--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-other", "--select-chevron", "--skeleton-hero-base", "--skeleton-hero-highlight"];
+  const aliases = [
+    "--canvas",
+    "--surface-muted",
+    "--foreground",
+    "--muted",
+    "--border",
+    "--border-subtle",
+    "--accent-soft",
+    "--accent-border",
+    "--success",
+    "--success-soft",
+    "--success-border",
+    "--warning",
+    "--warning-soft",
+    "--warning-border",
+    "--danger",
+    "--danger-soft",
+    "--info",
+    "--hero",
+    "--hero-muted",
+    "--hero-text",
+    "--hero-border",
+    "--chart-1",
+    "--chart-2",
+    "--chart-3",
+    "--chart-4",
+    "--chart-5",
+    "--chart-other",
+    "--select-chevron",
+    "--skeleton-hero-base",
+    "--skeleton-hero-highlight",
+  ];
   for (const alias of aliases) {
     const target = light[alias]?.match(/^var\((--[a-z0-9-]+)\)$/)?.[1];
     assert.ok(target, `${alias} is not an alias`);

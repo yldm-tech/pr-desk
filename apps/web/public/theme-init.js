@@ -3,7 +3,7 @@
   var pref = null;
   try {
     pref = localStorage.getItem("prdesk-theme");
-  } catch (error) {
+  } catch {
     // Storage is blocked; the system theme applies.
   }
   if (pref !== "light" && pref !== "dark") return;
