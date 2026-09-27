@@ -42,6 +42,7 @@ import { AccountSkeleton } from "./LoadingSkeleton";
 import { LanguageMenu } from "./LanguageMenu";
 import { HardRefresh } from "./HardRefresh";
 import { DetailHost } from "./DetailHost";
+import { ToastRegion } from "./ui-overlay";
 import { openInstallPopup } from "./github-access";
 import { useAuth, useFollowUps, useLogout, useSyncFeedback, useSyncMutation, useSyncPending } from "./queries";
 import { destinationOf, paths, prViewFromPath, prViewTitleKeys, type Destination } from "./routes";
@@ -172,25 +173,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
       >
         <header className={`${pageHeader} ${insights ? overviewHeaderGap : pageHeaderGap}`}>
           <div className={headerTitleSlot}>
-            <h1 className={insights ? `${pageTitle} ${overviewHeading}` : pageTitle}>
-              {destination === "about" ? (
-                t("navAbout")
-              ) : authLoading ? (
-                <Skeleton width={120} height={23} />
-              ) : !auth?.connected ? (
-                t("welcomeHeading")
-              ) : destination === "settings" ? (
-                t("followup.settings")
-              ) : insights ? (
-                t("navOverview")
-              ) : destination === "repos" ? (
-                t("navRepositories")
-              ) : destination === "inbox" ? (
-                t("navAttention")
-              ) : (
-                t(view ? prViewTitleKeys[view] : "navAll")
-              )}
-            </h1>
+            {/* The Inbox renders its own h1 (PageHeader) once signed in, so the chrome leaves it out there rather than printing a second one. */}
+            {!(destination === "inbox" && auth?.connected) && (
+              <h1 className={insights ? `${pageTitle} ${overviewHeading}` : pageTitle}>
+                {destination === "about" ? (
+                  t("navAbout")
+                ) : authLoading ? (
+                  <Skeleton width={120} height={23} />
+                ) : !auth?.connected ? (
+                  t("welcomeHeading")
+                ) : destination === "settings" ? (
+                  t("followup.settings")
+                ) : insights ? (
+                  t("navOverview")
+                ) : destination === "repos" ? (
+                  t("navRepositories")
+                ) : destination === "inbox" ? (
+                  t("navAttention")
+                ) : (
+                  t(view ? prViewTitleKeys[view] : "navAll")
+                )}
+              </h1>
+            )}
 
             {oauthError && (
               <p className="flex items-center gap-2 text-[var(--danger)]" role="alert">
@@ -227,6 +231,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
         {children}
       </main>
+      <ToastRegion />
       <DetailHost />
     </div>
   );

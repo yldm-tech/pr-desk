@@ -212,7 +212,10 @@ test("the headline, the badge and the default view are one number", () => {
     ["action", "follow_up"],
   );
   assert.equal(summary.total, badge);
-  assert.equal(summary.total, shown.reduce((sum, group) => sum + group.items.length, 0));
+  assert.equal(
+    summary.total,
+    shown.reduce((sum, group) => sum + group.items.length, 0),
+  );
   assert.deepEqual(summary, { total: 4, blocked: 1, authored: 2, reviewer: 1, followUp: 1, ready: 1, recentMerged: 5 });
   assert.deepEqual(inboxSummary([], {}, at), { total: 0, blocked: 0, authored: 0, reviewer: 0, followUp: 0, ready: 0, recentMerged: 0 });
 });

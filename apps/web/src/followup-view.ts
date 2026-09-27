@@ -156,15 +156,7 @@ export function inboxSummary(items: FollowUp[], counts: Record<string, number>, 
   const reviewer = counts.reviewer || 0;
   const followUp = counts.follow_up || 0;
   const todo = items.filter((item) => item.state === "action" || item.state === "follow_up");
-  return {
-    total: authored + reviewer + followUp,
-    blocked: todo.filter((item) => item.reasons.some((reason) => reasonTone(reason) === "blocked")).length,
-    authored,
-    reviewer,
-    followUp,
-    ready: items.filter((item) => matchesReady(item, now)).length,
-    recentMerged: counts.recent_merged || 0,
-  };
+  return { total: authored + reviewer + followUp, blocked: todo.filter((item) => item.reasons.some((reason) => reasonTone(reason) === "blocked")).length, authored, reviewer, followUp, ready: items.filter((item) => matchesReady(item, now)).length, recentMerged: counts.recent_merged || 0 };
 }
 
 const DAY_MS = 86400000;
