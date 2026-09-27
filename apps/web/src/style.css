@@ -166,6 +166,13 @@
     --overlay: rgb(15 15 18 / 0.4);
     --chart-bar: #6e56cf;
     --chart-grid: #e4e4e8;
+    /* The repository donut's categorical slots, in a fixed order that clears the colour-blind separation checks on adjacent slices; a sixth repository and beyond fold into "other" rather than getting a generated hue. */
+    --chart-series-1: #2a78d6;
+    --chart-series-2: #eb6834;
+    --chart-series-3: #1baf7a;
+    --chart-series-4: #eda100;
+    --chart-series-5: #e87ba4;
+    --chart-series-other: #c4c4ca;
     --skeleton-base: #ededf0;
     --skeleton-highlight: #f6f6f7;
     --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235f5f6b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -230,6 +237,12 @@
       --overlay: rgb(0 0 0 / 0.6);
       --chart-bar: #8b78e8;
       --chart-grid: #2a2a31;
+      --chart-series-1: #3987e5;
+      --chart-series-2: #d95926;
+      --chart-series-3: #199e70;
+      --chart-series-4: #c98500;
+      --chart-series-5: #d55181;
+      --chart-series-other: #4a4a52;
       --skeleton-base: #1f1f24;
       --skeleton-highlight: #27272d;
       --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -268,6 +281,12 @@
     --overlay: rgb(0 0 0 / 0.6);
     --chart-bar: #8b78e8;
     --chart-grid: #2a2a31;
+    --chart-series-1: #3987e5;
+    --chart-series-2: #d95926;
+    --chart-series-3: #199e70;
+    --chart-series-4: #c98500;
+    --chart-series-5: #d55181;
+    --chart-series-other: #4a4a52;
     --skeleton-base: #1f1f24;
     --skeleton-highlight: #27272d;
     --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
