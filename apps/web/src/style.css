@@ -86,8 +86,6 @@
   --text-page--line-height: 1.75rem;
   --text-display: 1.75rem;
   --text-display--line-height: 2.25rem;
-  /* Retired by the redesign; kept as an alias until the last page that reads it is rebuilt. */
-  --text-heading: 0.875rem;
 }
 
 /* Colour utilities (bg-bg, text-fg-muted, border-line-strong, text-tone-blocked ...) resolve to the theme variables at use time, so one class serves both themes and no component ever needs a `dark:` variant. */
@@ -198,40 +196,6 @@
     --topbar-h: 48px;
     --tabbar-h: 56px;
     --sidebar-w: 208px;
-
-    /* Migration aliases: every name the pages built before the redesign read, pointed at its successor so those pages already follow the theme. They are deleted once the last of those pages is rebuilt. */
-    --canvas: var(--bg-subtle);
-    --surface-muted: var(--bg-muted);
-    --foreground: var(--fg);
-    --muted: var(--fg-muted);
-    --border: var(--line);
-    --border-subtle: var(--line);
-    --accent-soft: var(--accent-subtle);
-    --accent-border: var(--accent-line);
-    --success: var(--tone-ready);
-    --success-soft: var(--tone-ready-soft);
-    --success-border: var(--tone-ready-line);
-    --warning: var(--tone-action);
-    --warning-soft: var(--tone-action-soft);
-    --warning-border: var(--tone-action-line);
-    --danger: var(--tone-blocked);
-    --danger-soft: var(--tone-blocked-soft);
-    --info: var(--tone-waiting);
-    /* The hero was a dark card with light ink. It becomes a quiet card, so its ink has to become the normal ink or it would vanish on the new background. */
-    --hero: var(--bg-subtle);
-    --hero-muted: var(--fg-muted);
-    --hero-text: var(--fg);
-    --hero-border: var(--line);
-    --skeleton-hero-base: var(--skeleton-base);
-    --skeleton-hero-highlight: var(--skeleton-highlight);
-    --chart-1: var(--accent);
-    --chart-2: var(--tone-waiting);
-    --chart-3: var(--tone-ready);
-    --chart-4: var(--tone-action);
-    --chart-5: var(--fg-subtle);
-    --chart-other: var(--line);
-    --select-chevron: var(--icon-chevron);
-    --shadow: rgb(0 0 0 / 0.08);
   }
 
   /* The dark theme is written twice with identical bodies: once for a system preference the reader has not overridden, once for an explicit choice. light-dark() would say it once but needs Safari 17.5; tokens.test.mjs fails if the two copies ever drift apart. */

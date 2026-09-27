@@ -97,7 +97,7 @@ test("the canvas colours match the browser chrome colours", () => {
   assert.ok(html.indexOf('src="/theme-init.js"') > html.lastIndexOf('name="theme-color"'));
 });
 
-test("the aliases the older pages read all point at a defined token", () => {
+test("the migration aliases the older pages read are gone, and nothing reads them", () => {
   const aliases = [
     "--canvas",
     "--surface-muted",
@@ -130,9 +130,15 @@ test("the aliases the older pages read all point at a defined token", () => {
     "--skeleton-hero-base",
     "--skeleton-hero-highlight",
   ];
+  aliases.push("--text-heading", "--shadow");
+  // Every page is on the theme tokens now, so an alias that came back would be a second name for a colour, and a read of a deleted one would silently fall back to nothing.
+  const sources = fs
+    .readdirSync(new URL(".", import.meta.url))
+    .filter((name) => /\.(ts|tsx|css)$/.test(name))
+    .map((name) => [name, fs.readFileSync(new URL(`./${name}`, import.meta.url), "utf8")]);
   for (const alias of aliases) {
-    const target = light[alias]?.match(/^var\((--[a-z0-9-]+)\)$/)?.[1];
-    assert.ok(target, `${alias} is not an alias`);
-    assert.ok(light[target] !== undefined, `${alias} points at ${target}, which is not defined`);
+    assert.equal(light[alias], undefined, `${alias} is still declared in :root`);
+    const reader = new RegExp(`var\\(${alias}\\)|\\(${alias}\\)`);
+    for (const [name, text] of sources) assert.doesNotMatch(text, reader, `${name} still reads ${alias}`);
   }
 });

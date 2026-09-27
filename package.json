@@ -27,6 +27,7 @@
     "vitest": "4.1.11"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10",
     "@playwright/test": "^1.63.0",
     "@types/node": "26",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.1",

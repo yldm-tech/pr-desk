@@ -605,8 +605,6 @@ function NotificationDestinations() {
   );
 }
 
-
-
 // The URL value of each tab. Reminders is the default and carries no parameter, which keeps /settings itself clean; the others keep the names links already use.
 const settingsTabs = ["schedule", "notifications", "github", "access"] as const;
 type SettingsTab = (typeof settingsTabs)[number];
