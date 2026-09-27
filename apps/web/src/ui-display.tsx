@@ -21,7 +21,8 @@ export function StateGlyph({ tone, kind, label, unread = false, busy = false, cl
   );
 }
 
-const chipBase = "inline-flex h-5 max-w-full shrink-0 items-center gap-1 rounded-sm border bg-transparent px-1.5 text-caption font-medium whitespace-nowrap no-underline";
+// A chip never truncates: a status of two or three words cut to "Waiting pe…" says nothing. It keeps to one line wherever it fits, which the rows arrange by wrapping whole chips onto their own line, and only a chip wider than its entire container wraps its words inside it.
+const chipBase = "inline-flex min-h-5 max-w-full shrink-0 items-center gap-1 rounded-sm border bg-transparent px-1.5 text-caption font-medium no-underline";
 
 // One fact in the tone that explains it. The border is the tone at 32%, the text the tone itself, and the background transparent, so a chip reads the same on any surface. A chip with `href` or `to` is a link.
 export function FactChip({ tone, icon: Icon, children, title, href, to, className }: { tone: Tone; icon?: LucideIcon; children: ReactNode; title?: string; href?: string; to?: string; className?: string }) {
@@ -29,7 +30,7 @@ export function FactChip({ tone, icon: Icon, children, title, href, to, classNam
   const content = (
     <>
       {Icon && <Icon size={12} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />}
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
     </>
   );
   if (to !== undefined)

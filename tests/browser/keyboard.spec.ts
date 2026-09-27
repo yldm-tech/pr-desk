@@ -237,15 +237,19 @@ test("the palette says when follow-up results are partial or unavailable", async
 
 // Character-key shortcuts can be switched off (WCAG 2.1.4): then `j` and `e` do nothing, while ⌘K still opens the palette, which can switch them back on.
 test("single-key shortcuts can be turned off from the shortcuts sheet", async ({ page }) => {
-  await page.goto("/#/inbox");
-  await expect(page.getByTestId("follow-up-card").first()).toBeVisible();
-  await page.keyboard.press("?");
-  await page.getByRole("checkbox", { name: /Single-key shortcuts/ }).uncheck();
+  await openInbox(page);
+  const sheet = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await expect(async () => {
+    await page.keyboard.press("?");
+    await expect(sheet).toBeVisible({ timeout: 500 });
+  }).toPass();
+  await sheet.getByRole("checkbox", { name: /Single-key shortcuts/ }).uncheck();
   await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
   await page.keyboard.press("j");
   await expect(page.locator("[data-active]")).toHaveCount(0);
-  await page.keyboard.press("ControlOrMeta+k");
-  await page.getByRole("option", { name: "Turn on single-key shortcuts" }).click();
+  const palette = await openPalette(page);
+  await palette.getByRole("option", { name: "Turn on single-key shortcuts" }).click();
   await page.keyboard.press("j");
   await expect(page.locator("[data-active]")).toHaveCount(1);
 });
