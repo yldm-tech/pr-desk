@@ -52,6 +52,11 @@ require "no (pointer: coarse) media rule — the global 16px control font that s
 # Safe-area insets are what make viewport-fit=cover in index.html safe rather than harmful. If these vanish while the meta stays, content moves under the notch.
 require "no safe-area inset in the output while index.html asks for viewport-fit=cover — content would sit under the notch" 'env\(safe-area-inset-'
 
+# Theme and motion. The dark theme exists twice (a system preference not overridden, and an explicit choice) and both halves have to survive minification; losing either leaves a reader on the wrong theme with no error anywhere. The reduced-motion override is the one rule that stops every animation for readers who asked for that.
+require "no [data-theme=dark] rule — an explicit dark choice from the account menu would change nothing" '\[data-theme="?dark"?\]'
+require "no (prefers-color-scheme: dark) rule — the system dark theme compiled away" 'prefers-color-scheme: ?dark'
+require "no prefers-reduced-motion rule — animations would run for readers who turned motion off" 'prefers-reduced-motion'
+
 # Negative checks: shapes the migration removed, which must not come back.
 refuse "a .02 container threshold is back; those were the non-monotonic bounds the named scale replaced" '(760|480|800)\.02'
 refuse "a maximum-scale or user-scalable lock reached the output; pinch-zoom is the only text-scaling lever this app offers on mobile Safari" 'user-scalable|maximum-scale'
