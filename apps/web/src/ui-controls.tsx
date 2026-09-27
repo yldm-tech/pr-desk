@@ -1,6 +1,6 @@
 import * as RadixTabs from "@radix-ui/react-tabs";
 import { ArrowUpRight, LoaderCircle, Search, X, type LucideIcon } from "lucide-react";
-import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toneText, type Tone } from "./tone";
@@ -118,12 +118,51 @@ export function TextLink({ tone = "default", inline = false, externalIcon = true
   );
 }
 
+// Whether a horizontal strip has more content past its edges, kept current as it scrolls and resizes, and a one-time scroll that brings `selected` into view. Only the strip is scrolled, never the page: scrollIntoView would also move the document to bring the strip itself into view, which on a phone shifts the list under the reader the moment the page mounts.
+function useScrollStrip(selected: string | undefined) {
+  const strip = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState<"none" | "start" | "end" | "both">("none");
+  useLayoutEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const measure = () => {
+      const before = element.scrollLeft > 1;
+      const after = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      setEdges(before && after ? "both" : before ? "start" : after ? "end" : "none");
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    element.addEventListener("scroll", measure, { passive: true });
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", measure);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const element = strip.current;
+    const item = element?.querySelector<HTMLElement>("[aria-pressed=true],[aria-selected=true]");
+    if (!element || !item) return;
+    const pill = item.getBoundingClientRect();
+    const track = element.getBoundingClientRect();
+    if (pill.left < track.left) element.scrollLeft -= track.left - pill.left + 8;
+    else if (pill.right > track.right) element.scrollLeft += pill.right - track.right + 8;
+  }, [selected]);
+  return { strip, edges };
+}
+
+// The fade that says a strip continues past an edge. A mask rather than an overlay, so it fades whatever the strip sits on in either theme; the mask only reads alpha.
+const stripFade = "data-[edges=end]:[mask-image:linear-gradient(to_right,black_85%,transparent)] data-[edges=start]:[mask-image:linear-gradient(to_left,black_85%,transparent)] data-[edges=both]:[mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]";
+// One line whatever the width: a strip too wide for its row scrolls sideways, snapping to whole items, with no scrollbar drawn over the pill, instead of wrapping into a taller shape.
+const stripScroll = "flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-proximity";
+
 export type SegmentItem<T extends string> = { value: T; label: string; count?: number | string; testId?: string };
 
-// A set of mutually exclusive filters that each change the view, not a tab set: pressed toggle buttons (aria-pressed) in a group, so each keeps its own name and the tests and screen readers can address it directly. The track wraps rather than scrolls.
+// A set of mutually exclusive filters that each change the view, not a tab set: pressed toggle buttons (aria-pressed) in a group, so each keeps its own name and the tests and screen readers can address it directly. The track stays one pill high: when it does not fit it scrolls sideways, fades at the edge that has more, and brings the pressed item into view.
 export function SegmentedControl<T extends string>({ label, value, onChange, items, size = "md", className }: { label: string; value: T; onChange: (value: T) => void; items: SegmentItem<T>[]; size?: Size; className?: string }) {
+  const { strip, edges } = useScrollStrip(value);
   return (
-    <div role="group" aria-label={label} className={cx("inline-flex max-w-full flex-wrap gap-0.5 rounded-2xl bg-bg-muted p-0.5 pointer-coarse:rounded-3xl", className)}>
+    <div ref={strip} role="group" aria-label={label} data-edges={edges} className={cx("inline-flex max-w-full gap-0.5 rounded-2xl bg-bg-muted p-0.5 pointer-coarse:rounded-3xl", stripScroll, stripFade, className)}>
       {items.map((item) => {
         const pressed = item.value === value;
         return (
@@ -134,7 +173,7 @@ export function SegmentedControl<T extends string>({ label, value, onChange, ite
             data-testid={item.testId}
             onClick={() => onChange(item.value)}
             className={cx(
-              "inline-flex items-center gap-1.5 rounded-full border-0 font-medium transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
+              "inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
               size === "md" ? "min-h-7 px-3 text-body" : "min-h-6 px-2.5 text-small",
               pressed ? "bg-surface text-fg shadow-1" : "bg-transparent text-fg-muted hover:text-fg",
             )}
@@ -148,6 +187,16 @@ export function SegmentedControl<T extends string>({ label, value, onChange, ite
   );
 }
 
+// The tab list, on the same one-line scrolling strip as SegmentedControl, so a narrow screen scrolls the tabs rather than stranding the last one on a second line under the underline. The rule under the tabs is an inset shadow rather than a border: a scroller clips what overhangs it, so the active tab's underline has to sit inside the list's box, over the rule, instead of hanging 1px below it.
+function TabStrip({ label, value, children }: { label: string; value: string; children: ReactNode }) {
+  const { strip, edges } = useScrollStrip(value);
+  return (
+    <RadixTabs.List ref={strip} aria-label={label} data-edges={edges} className={cx("flex gap-x-4 shadow-[inset_0_-1px_0_var(--line)]", stripScroll, stripFade)}>
+      {children}
+    </RadixTabs.List>
+  );
+}
+
 // Radix tabs with an underline. A panel mounts on its first visit and then stays mounted and hidden, so a half-filled form survives a trip to another tab.
 export function Tabs({ value, onValueChange, label, items, children, className, panelClassName }: { value: string; onValueChange: (value: string) => void; label: string; items: { value: string; label: string }[]; children: (value: string) => ReactNode; className?: string; panelClassName?: string }) {
   const [visited, setVisited] = useState(() => new Set([value]));
@@ -156,17 +205,17 @@ export function Tabs({ value, onValueChange, label, items, children, className, 
   }, [value]);
   return (
     <RadixTabs.Root value={value} onValueChange={onValueChange} className={className}>
-      <RadixTabs.List aria-label={label} className="flex flex-wrap gap-x-4 gap-y-0 border-b border-line">
+      <TabStrip label={label} value={value}>
         {items.map((item) => (
           <RadixTabs.Trigger
             key={item.value}
             value={item.value}
-            className="-mb-px inline-flex min-h-9 items-center border-0 border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
+            className="inline-flex min-h-9 shrink-0 snap-start items-center border-0 whitespace-nowrap border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
           >
             {item.label}
           </RadixTabs.Trigger>
         ))}
-      </RadixTabs.List>
+      </TabStrip>
       {items.map(
         (item) =>
           (visited.has(item.value) || item.value === value) && (
