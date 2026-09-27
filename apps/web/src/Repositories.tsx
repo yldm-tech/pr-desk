@@ -5,7 +5,7 @@ import { RepositorySkeleton } from "./LoadingSkeleton";
 import type { RepositorySummary } from "./pr-model";
 import { paths, prViewPath } from "./routes";
 import type { Tone } from "./tone";
-import { Button, cx, LinkButton, SearchField, Select, SegmentedControl, TextLink } from "./ui-controls";
+import { Button, buttonClass, cx, LinkButton, SearchField, Select, SegmentedControl, TextLink } from "./ui-controls";
 import { EmptyState, ErrorState, PageHeader, StaleNotice, StateGlyph, Toolbar } from "./ui-display";
 import { ItemRow, itemTracks } from "./ui-list";
 
@@ -27,12 +27,7 @@ function Count({ value, phrase, tone, to, title, repo }: { value: number; phrase
     </>
   );
   const place = "min-w-0 tabular-nums @table/dashboard:justify-self-end @table/dashboard:text-right";
-  if (value === 0)
-    return (
-      <span className={cx(place, "hidden text-fg-subtle @table/dashboard:block")}>
-        {content}
-      </span>
-    );
+  if (value === 0) return <span className={cx(place, "hidden text-fg-subtle @table/dashboard:block")}>{content}</span>;
   if (!to) return <span className={cx(place, numberTone[tone])}>{content}</span>;
   return (
     <Link to={to} title={title} className={cx(place, numberTone[tone], "inline-flex items-center rounded-sm font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center @table/dashboard:justify-end")}>
@@ -63,7 +58,7 @@ function RepositoryRow({ repo }: { repo: RepositorySummary }) {
         </TextLink>
       }
     >
-      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-caption @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
+      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-caption @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
         <Count value={repo.open} phrase={t("repos.openCount", { count: repo.open })} tone="plain" to={prs} repo={repo.repo} />
         <Count value={repo.needs_attention} phrase={t("repos.attentionCount", { count: repo.needs_attention })} tone="action" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
         <Count value={repo.conflicts} phrase={t("repos.conflictsCount", { count: repo.conflicts })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
@@ -144,7 +139,11 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
           <span className="truncate text-right">{t("repos.colAttention")}</span>
           <span className="truncate text-right">{t("conflicts")}</span>
           <span className="truncate text-right">{t("checksFailing")}</span>
-          <span />
+          {/* The last track is `auto`, which each row sizes to its own View PRs link; an invisible copy of that link gives the header's track the same width, so the count columns line up under their labels. */}
+          <span className={cx(buttonClass("ghost", "sm"), "invisible whitespace-nowrap")}>
+            {t("viewRepositoryPRs")}
+            <ArrowRight size={12} className="shrink-0" />
+          </span>
         </div>
         <ul aria-label={t("navRepositories")} className="m-0 min-w-0 list-none border-t border-line p-0 @table/dashboard:border-t-0">
           {shown.map((repo) => (
@@ -161,6 +160,7 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
         count={known ? all.length : undefined}
         summary={
           <SegmentedControl<Scope>
+            className="justify-self-start"
             label={t("repositoryScope")}
             value={scope}
             onChange={(value) => change("scope", value === "all" ? "" : value)}

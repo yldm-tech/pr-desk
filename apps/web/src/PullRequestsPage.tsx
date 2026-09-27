@@ -131,15 +131,7 @@ export function PullRequestsPage() {
         icon={GitPullRequest}
         title={t("emptyResultsTitle")}
         description={t(filtered || page > 0 ? "emptyResultsDescription" : view === "open" ? "noOpenResults" : "prs.emptyView")}
-        action={
-          page > 0 ? (
-            <Button onClick={() => setPage(0)}>{t("firstPage")}</Button>
-          ) : filtered ? (
-            <Button onClick={clearFilters}>{t("clearFilters")}</Button>
-          ) : (
-            view !== "open" && <LinkButton to={paths.prs}>{t("prs.showOpen")}</LinkButton>
-          )
-        }
+        action={page > 0 ? <Button onClick={() => setPage(0)}>{t("firstPage")}</Button> : filtered ? <Button onClick={clearFilters}>{t("clearFilters")}</Button> : view !== "open" && <LinkButton to={paths.prs}>{t("prs.showOpen")}</LinkButton>}
       />
     );
   else

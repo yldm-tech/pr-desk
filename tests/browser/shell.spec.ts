@@ -24,7 +24,7 @@ test("every legacy address lands on its new home with the query intact", async (
   for (const { from, to } of LEGACY_ROUTES) {
     await page.goto(from);
     await expect(page, from).toHaveURL((url) => url.href.endsWith(to));
-    await expect(page.locator("main h1"), from).toBeVisible();
+    await expect(page.locator("main h1").first(), from).toBeVisible();
   }
   // Rewritten in place: Back from the rewritten address leaves the history entry that came before it rather than returning to the legacy one and redirecting again.
   await page.goto("/#/about");
@@ -38,8 +38,8 @@ test("every legacy address lands on its new home with the query intact", async (
 test("the document title names the page and the view", async ({ page }) => {
   for (const [route, title] of [
     ["/#/inbox", "Needs attention · PR Desk"],
-    ["/#/prs", "My pull requests · PR Desk"],
-    ["/#/prs/blocked", "Blocked · My pull requests · PR Desk"],
+    ["/#/prs", "Pull requests · PR Desk"],
+    ["/#/prs/blocked", "Blocked · Pull requests · PR Desk"],
     ["/#/repos", "Repositories · PR Desk"],
     ["/#/insights", "Overview · PR Desk"],
     ["/#/settings?tab=access", "Settings · PR Desk"],

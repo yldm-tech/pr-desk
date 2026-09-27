@@ -9,12 +9,15 @@ import { FactChip, StateGlyph, Time } from "./ui-display";
 import { ItemRow, itemTracks } from "./ui-list";
 
 // Where each cell sits in the three bands of the table track contract (2 tracks below `row`, 4 from `row`, 5 from `table`). The DOM order is the column order, so a screen reader's table navigation pairs every cell with its own header; the narrow card is arranged by placement alone. Every band states both start and end, because a longhand only unsets what the shorthand below it wrote when both are given.
-// Narrow: title | activity, then repository | updated, then the status chips across the whole card. From `row`: title | repository | status | updated, with the activity button under the date in the same column. From `table`: one line, five columns.
+// Narrow: title over repository beside the activity button, then the status chips beside the age, both indented to the title past the glyph (20px plus the 8px gap). From `row`: title | repository | status | updated, with the activity button under the date in the same column and the status spanning both lines, so the button fills space the chips already take. From `table`: one line, five columns.
+// Between `row` and `table` the fourth track is `auto`, which every row sizes to its own content; the 5rem floor on the header, the date and the button keeps that track the same width in every row, so the columns line up. From `table` the track is fixed and the floor is dropped.
 const cell = {
-  repository: "col-start-1 col-end-2 row-start-2 min-w-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1",
-  status: "col-start-1 col-end-3 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1",
-  updated: "col-start-2 col-end-3 row-start-2 self-center justify-self-end text-caption whitespace-nowrap text-fg-muted tabular-nums @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-1 @row/dashboard:self-start @row/dashboard:pt-0.5",
-  activity: "col-start-2 col-end-3 row-start-1 justify-self-end @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-2 @table/dashboard:col-start-5 @table/dashboard:col-end-6 @table/dashboard:row-start-1 @table/dashboard:-mt-1",
+  repository: "col-start-1 col-end-2 row-start-2 min-w-0 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1",
+  status: "col-start-1 col-end-2 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1 @row/dashboard:row-end-3 @table/dashboard:row-end-auto",
+  updated:
+    "col-start-2 col-end-3 row-start-3 self-center justify-self-end text-caption whitespace-nowrap text-fg-muted tabular-nums @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-1 @row/dashboard:min-w-20 @row/dashboard:self-start @row/dashboard:pt-0.5 @row/dashboard:text-right @table/dashboard:min-w-0",
+  activity:
+    "col-start-2 col-end-3 row-start-1 row-end-3 self-center justify-self-end @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-2 @row/dashboard:row-end-3 @row/dashboard:min-w-20 @row/dashboard:self-start @row/dashboard:text-right @table/dashboard:col-start-5 @table/dashboard:col-end-6 @table/dashboard:row-start-1 @table/dashboard:row-end-2 @table/dashboard:min-w-0 @table/dashboard:-mt-1",
 };
 
 // The same visually-hidden recipe ItemList's own header uses: in the accessibility tree at every width, painted only once the column exists.
@@ -35,7 +38,7 @@ export function PRTableHeader({ labels }: { labels: [string, string, string, str
       <span role="columnheader" className="min-w-0 truncate">
         {status}
       </span>
-      <span role="columnheader" className="min-w-0 truncate text-right">
+      <span role="columnheader" className="min-w-0 truncate text-right @row/dashboard:min-w-20 @table/dashboard:min-w-0">
         {updated}
       </span>
       <span role="columnheader" className={cx("min-w-0 truncate text-right", hiddenUntilTable)}>
@@ -85,7 +88,13 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
     >
       <div role="cell" className={cell.repository}>
         {/* Filters this list to the repository rather than leaving for github.com: the title link already covers going to GitHub, and the repository chip above the table is the way back out. */}
-        <button type="button" title={pr.repo} aria-label={t("filterToRepository", { repo: pr.repo })} onClick={() => onFilterRepository(pr.repo)} className="max-w-full cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-caption text-fg-muted [overflow-wrap:anywhere] hover:text-fg hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
+        <button
+          type="button"
+          title={pr.repo}
+          aria-label={t("filterToRepository", { repo: pr.repo })}
+          onClick={() => onFilterRepository(pr.repo)}
+          className="max-w-full cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-caption text-fg-muted [overflow-wrap:anywhere] hover:text-fg hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+        >
           {pr.repo}
         </button>
       </div>
@@ -114,16 +123,7 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
       </div>
       <div role="cell" className={cell.activity}>
         {/* The count is a lifetime total and reads the same whether the last comment arrived in March or four minutes ago. The unread dot is a shape rather than a colour, and the accessible name changes with it, so the signal survives both greyscale and a screen reader. */}
-        <Button
-          data-testid="pr-activity"
-          variant="ghost"
-          size="sm"
-          icon={MessageSquare}
-          title={t("viewActivity")}
-          aria-label={followUp?.unread ? t("unreadActivity", { number: pr.number }) : t("viewPRActivity", { number: pr.number })}
-          onClick={(event) => onOpen(event.currentTarget)}
-          className="tabular-nums"
-        >
+        <Button data-testid="pr-activity" variant="ghost" size="sm" icon={MessageSquare} title={t("viewActivity")} aria-label={followUp?.unread ? t("unreadActivity", { number: pr.number }) : t("viewPRActivity", { number: pr.number })} onClick={(event) => onOpen(event.currentTarget)} className="tabular-nums">
           {pr.comments}
           {followUp?.unread && <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent" />}
         </Button>
