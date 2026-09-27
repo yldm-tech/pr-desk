@@ -119,6 +119,7 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
       </div>
       <div role="cell" className={cell.activity}>
         {/* The count is a lifetime total and reads the same whether the last comment arrived in March or four minutes ago. The unread dot is a shape rather than a colour, and the accessible name changes with it, so the signal survives both greyscale and a screen reader. */}
+        {/* The dot is the follow-up's unread flag, which the server raises for any new reason the PR needs you (a review request, a conflict, failing checks), not only for a comment, so the name calls it unread activity: "0 comments, unread" read as a contradiction, an unread comment on a PR with none. The name keeps the visible count as its first word (label in name). */}
         {/* The count leads the accessible name, as it leads what is on screen, and the repository makes the name unique across repositories that reuse a number. The unread dot always has its slot, so the counts line up down the column whether a row is unread or not. */}
         <Button
           data-testid="pr-activity"

@@ -74,7 +74,7 @@ test("the table carries the follow-up state, and reading the thread records it",
   await expect(row.getByTestId("row-follow-up").locator("[data-tone]")).toHaveAttribute("data-tone", "action");
   await expect(row.getByTestId("unread-dot")).toBeVisible();
   const posted = page.waitForRequest((request) => request.url().endsWith("/follow-ups/1") && request.method() === "POST");
-  await row.getByRole("button", { name: "2 comments, unread — fixture/calendar #17" }).click();
+  await row.getByRole("button", { name: "2 comments, unread activity — fixture/calendar #17" }).click();
   expect((await posted).postDataJSON()).toMatchObject({ action: "read" });
   // The decision can be recorded here rather than on a second trip to the Inbox.
   await expect(page.getByRole("button", { name: /^Handled · wait for others/ })).toBeVisible();
