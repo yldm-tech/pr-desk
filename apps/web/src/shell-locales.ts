@@ -147,7 +147,7 @@ export const shellLocales: LocaleNamespace = {
     tabInbox: "Bandeja",
     tabPulls: "PR",
     tabRepos: "Repos",
-    tabInsights: "Datos",
+    tabInsights: "Estadíst.",
     aboutTitle: "Acerca de PR Desk",
     search: "Buscar…",
     syncFresh: "Sincronizado {{time}}",

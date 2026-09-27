@@ -76,3 +76,13 @@ test("source files stay in src/ itself, where the scans above can see them", () 
   walk(src, "");
   assert.deepEqual(nested, []);
 });
+// One word per concept in each language: the palette and the shortcuts sheet describe the same verbs the row buttons carry, so they must use the buttons' own words. A drift here (後で通知 on the button, あとで通知 in the sheet) reads as two different actions.
+test("the palette names the row verbs in the buttons' own words", () => {
+  for (const language of languages) {
+    const bundle = bundles[language];
+    const lower = (value) => value.toLocaleLowerCase(language);
+    assert.ok(lower(bundle["palette.keyHandled"]).includes(lower(bundle["inbox.handledShort"])), `${language}: palette.keyHandled uses inbox.handledShort`);
+    assert.ok(lower(bundle["palette.keySnooze"]).includes(lower(bundle["followup.snooze"])), `${language}: palette.keySnooze uses followup.snooze`);
+    assert.ok(lower(bundle["palette.keySheetVerbs"]).includes(lower(bundle["followup.snooze"])), `${language}: palette.keySheetVerbs uses followup.snooze`);
+  }
+});
