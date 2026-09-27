@@ -13,12 +13,6 @@ const items: { destination: Primary; icon: LucideIcon; nav: string; tab: string 
   { destination: "insights", icon: ChartColumn, nav: "shell.navInsights", tab: "shell.tabInsights" },
 ];
 
-// The Inbox badge's number: action rows by role plus every follow-up, the same sum the server's listFollowUps counts and the Inbox's default view lists, so the badge, the Inbox heading and its groups always agree. followup-view.ts gains inboxSummary() with the same formula; this is the copy the shell carries until it can call that.
-export function inboxBadgeTotal(counts: Record<string, number> | undefined): number | undefined {
-  if (!counts) return undefined;
-  return (counts.authored || 0) + (counts.reviewer || 0) + (counts.follow_up || 0);
-}
-
 // One set of links for both shells. Below `shell` it is the phone tab bar: fixed to the bottom edge, four equal columns, the short `tab*` label under the icon (beside it from `roomy`, and visually hidden on a landscape phone, where the bar is too short for it). From `shell` it is the sidebar list with the full `nav*` label. Only one of the two labels is ever displayed, so the link's accessible name is always the one on screen.
 const linkClass = cx(
   "group/nav relative flex min-h-[var(--tabbar-h)] min-w-0 flex-col items-center justify-center gap-1 px-1 text-fg-muted no-underline transition-colors duration-[var(--dur-fast)] hover:text-fg aria-[current=page]:text-fg",

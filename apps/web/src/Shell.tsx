@@ -11,7 +11,8 @@ import { LanguageSelect } from "./LanguageMenu";
 import { HardRefresh } from "./HardRefresh";
 import { DetailHost } from "./DetailHost";
 import { Banners } from "./Banners";
-import { ShellNav, SettingsLink, inboxBadgeTotal } from "./ShellNav";
+import { ShellNav, SettingsLink } from "./ShellNav";
+import { inboxSummary } from "./followup-view";
 import { SyncStatus, useSyncProgress } from "./SyncProgress";
 import { AccountMenu, ThemeSwitch } from "./UserMenu";
 import { useAuth, useFollowUps, useLogout, useSyncFeedback, useSyncMutation, useSyncPending } from "./queries";
@@ -143,7 +144,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   <Kbd>{isMac ? "⌘K" : "Ctrl K"}</Kbd>
                 </span>
               </button>
-              <ShellNav current={destination} hrefFor={hrefFor} badge={inboxBadgeTotal(followUps.data?.counts)} badgeLoading={authLoading || followUps.isPending} />
+              <ShellNav current={destination} hrefFor={hrefFor} badge={followUps.data ? inboxSummary(followUps.data.data, followUps.data.counts).total : undefined} badgeLoading={authLoading || followUps.isPending} />
               <div className="hidden shell:mt-auto shell:grid shell:gap-0.5 shell:pt-3">{connected && <SettingsLink current={destination} to={hrefFor("settings")} />}</div>
               {connected && (
                 <div className="flex min-w-0 items-center gap-0.5 shell:mt-1 shell:border-t shell:border-line shell:pt-2">
