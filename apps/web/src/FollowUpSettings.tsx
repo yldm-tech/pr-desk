@@ -135,6 +135,8 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const [overrideProblems, setOverrideProblems] = useState<OverrideProblems>({});
   const [timezoneInvalid, setTimezoneInvalid] = useState(false);
   const [focusInvalid, setFocusInvalid] = useState(0);
+  // Whether anything has been edited since the settings were loaded or last saved. The save bar is only on screen while there is something to save, or while a save is being reported.
+  const [dirty, setDirty] = useState(false);
   const zones = useMemo(supportedTimezones, []);
   const repositories = useRepositories(true);
   const suggestions = useMemo(() => (repositories.data || []).map((entry) => entry.repo), [repositories.data]);
@@ -150,6 +152,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const mutation = useMutation({
     mutationFn: (repository_days: Record<string, number>) => ky.post(apiURL + "/api/v1/follow-up-settings", { credentials: "include", retry: 0, json: { timezone: timezone.trim(), digest_time: time, wait_days: days, language, teams: selected, repository_days } }),
     onSuccess: () => {
+      setDirty(false);
       void client.invalidateQueries({ queryKey: ["follow-up-settings"] });
       void client.invalidateQueries({ queryKey: ["follow-ups"] });
     },
@@ -160,6 +163,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   }, [focusInvalid]);
   // Any change after a save clears its outcome, so "Saved" never describes values that have since been edited.
   const edited = () => {
+    setDirty(true);
     if (mutation.isSuccess || mutation.isError) mutation.reset();
   };
   // A saved team stays listed even when GitHub no longer returns it — losing read:org or leaving the team would otherwise hide the subscription while the form kept posting it back, with no way to remove it. The saved ids are captured once so that clearing a checkbox does not remove its own row.
@@ -267,6 +271,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
           onChange={(next) => {
             setOverrides(next);
             edited();
+            edited();
           }}
           problems={overrideProblems}
           onProblemsChange={setOverrideProblems}
@@ -276,23 +281,26 @@ function SettingsForm({ settings }: { settings: Settings }) {
         />
       </SettingsCard>
 
-      {/* Below `pair` the form is taller than the screen, so the save bar rides along the bottom edge, above the tab bar, instead of waiting at the end of the page. */}
-      <div className="sticky bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+8px)] z-10 flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 shadow-1 shell:bottom-2 @pair/dashboard:static @pair/dashboard:border-0 @pair/dashboard:bg-transparent @pair/dashboard:p-0 @pair/dashboard:shadow-none">
-        <Button type="submit" variant="primary" disabled={mutation.isPending}>
-          {mutation.isPending ? t("followup.saving") : t("followup.save")}
-        </Button>
-        {mutation.isError && (
-          <p className="min-w-0 flex-1 text-small text-tone-blocked" role="alert">
-            {t("followup.saveError")}
-          </p>
-        )}
-        {mutation.isSuccess && !mutation.isPending && (
-          <p className="inline-flex items-center gap-1.5 text-small font-medium text-tone-ready" role="status">
-            <Check size={14} aria-hidden="true" />
-            {t("followup.saved")}
-          </p>
-        )}
-      </div>
+      {/* The form is taller than the screen at every width, so while there is something to save the bar rides along the bottom edge (above the tab bar on a phone) instead of waiting below the fold at the end of the page. `data-save-bar` adds its height to the page's scroll padding, so a field focused under it is scrolled clear. */}
+      {(dirty || !mutation.isIdle) && (
+        <div data-save-bar="" className="sticky bottom-[calc(var(--tabbar-h)+env(safe-area-inset-bottom)+8px)] z-10 flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-1 shell:bottom-4">
+          {dirty && !mutation.isPending && !mutation.isError && <span className="mr-auto text-small text-fg-muted">{t("settings.unsaved")}</span>}
+          {mutation.isError && (
+            <p className="mr-auto min-w-0 flex-1 text-small text-tone-blocked" role="alert">
+              {t("followup.saveError")}
+            </p>
+          )}
+          {mutation.isSuccess && !mutation.isPending && (
+            <p className="mr-auto inline-flex items-center gap-1.5 text-small font-medium text-tone-ready" role="status">
+              <Check size={14} aria-hidden="true" />
+              {t("followup.saved")}
+            </p>
+          )}
+          <Button type="submit" variant="primary" disabled={mutation.isPending || !dirty}>
+            {mutation.isPending ? t("followup.saving") : t("followup.save")}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }
@@ -320,7 +328,7 @@ function ReminderSettings() {
       </div>
     );
   // A background refetch that fails leaves the settings in hand: replacing the panel then would throw away a half-filled form along with what it shows.
-  if (query.isError && !query.data) return <ErrorState title={t("settings.unavailable")} error={query.error} onRetry={() => void query.refetch()} />;
+  if (query.isError && !query.data) return <ErrorState title={t("settings.unavailable")} error={query.error} reconnect onRetry={() => void query.refetch()} />;
   return (
     <div className="grid min-w-0 gap-4">
       {query.isError && <StaleNotice onRetry={() => void query.refetch()} />}

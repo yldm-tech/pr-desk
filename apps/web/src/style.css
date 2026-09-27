@@ -411,7 +411,6 @@
       transition-duration: 0.01ms !important;
     }
   }
-
 }
 
 /* Windows high contrast replaces every colour with a small system palette, so status carried by hue alone would disappear. Its own layer, declared after utilities, because every rule here overrides a colour utility (text-tone-*, bg-tone-*, the pressed pill's surface) and a rule in an earlier layer loses to a utility however specific it is. Glyphs and chips keep their shape and take the text colour, control borders take the button border, the list cursor becomes an outline, bar segments are separated by visible gaps, and every selected state (a pressed filter, the current page, the active tab) gets an outline or an underline of its own, because the background and shadow that carry it otherwise are flattened. */

@@ -232,7 +232,8 @@ export function SyncStatus({ progress, auth, pending, onSync, align }: { progres
             )}
           >
             <Icon size={14} strokeWidth={2.25} aria-hidden="true" className={cx("shrink-0", healthTone[health], syncing && "animate-spin")} />
-            <span className="min-w-0 truncate whitespace-nowrap max-roomy:sr-only">{label}</span>
+            {/* Two lines in the sidebar rather than one cut short: the age at the end of the sentence ("… 17 days ago") is the part the label exists for, and in Spanish or at a large font it is exactly what an ellipsis would take. */}
+            <span className="min-w-0 truncate whitespace-nowrap max-roomy:sr-only shell:line-clamp-2 shell:text-left shell:whitespace-normal">{label}</span>
           </button>
         }
       >
@@ -262,9 +263,15 @@ export function SyncStatus({ progress, auth, pending, onSync, align }: { progres
             <div className="grid gap-1 text-small text-fg-muted">
               <p>{data?.status === "idle" && last === null ? t("firstSyncQueued") : t("autoSyncSchedule")}</p>
               {last !== null && <p>{t("lastSynced", { time: formatDateTime(new Date(last), i18n.resolvedLanguage) })}</p>}
+              {/* Stale is several scheduled runs in a row that did not finish: said as a warning, and the manual run becomes the popover's primary action. */}
+              {health === "stale" && last !== null && (
+                <p role="status" className="mt-1 rounded-md bg-tone-action-soft px-2.5 py-2 text-fg">
+                  {t("shell.syncStaleWarning", { date: formatDateTime(new Date(last), i18n.resolvedLanguage) })}
+                </p>
+              )}
             </div>
           )}
-          <Button variant="secondary" icon={RefreshCw} busy={inFlight} onClick={onSync} className="w-full">
+          <Button variant={health === "stale" ? "primary" : "secondary"} icon={RefreshCw} busy={inFlight} onClick={onSync} className="w-full">
             {inFlight ? t("syncing") : t("sync")}
           </Button>
         </div>

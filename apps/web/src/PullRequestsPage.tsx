@@ -22,7 +22,6 @@ const viewOrder: PRView[] = ["open", "review-requested", "changes-requested", "a
 // Merged has no count: /stats counts this month's merges while the view lists every merge, so any number beside it would describe a different set. Changes requested and Approved have no count on /stats at all.
 const countedViews: PRView[] = ["open", "review-requested", "blocked"];
 
-
 // The pull-request list at /prs and /prs/:view. The view is the address, so the pressed pill, the request filter and the document title are all read from the same path.
 export function PullRequestsPage() {
   const { t } = useTranslation();

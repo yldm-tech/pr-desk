@@ -31,7 +31,15 @@ function Count({ value, phrase, tone, to, title, repo }: { value: number; phrase
   if (!to) return <span className={cx(place, numberTone[tone])}>{content}</span>;
   return (
     // Text-sized, so a card's counts read as one compact line of stats rather than a column of tall buttons; on a touch screen the invisible ::before takes the target to 44px without taking the space.
-    <Link to={to} title={title} className={cx(place, numberTone[tone], "relative inline-flex items-center rounded-sm leading-snug font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] @table/dashboard:justify-end")}>
+    <Link
+      to={to}
+      title={title}
+      className={cx(
+        place,
+        numberTone[tone],
+        "relative inline-flex items-center rounded-sm leading-snug font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] @table/dashboard:justify-end",
+      )}
+    >
       {content}
       <span className="sr-only"> · {repo}</span>
     </Link>
@@ -175,7 +183,17 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       />
       {/* Below `pair`: the search on its own full-width line, the owner and the sort side by side under it. */}
       <Toolbar className="@max-pair/dashboard:grid @max-pair/dashboard:grid-cols-2">
-        <SearchField id="pr-search" className="w-full max-w-sm min-w-0 flex-[1_1_14rem] @max-pair/dashboard:col-span-2 @max-pair/dashboard:max-w-none" label={t("searchRepositories")} value={search} onChange={(value) => change("q", value)} mode="live" placeholder={t("repositorySearchPlaceholder")} maxLength={120} kbdHint />
+        <SearchField
+          id="pr-search"
+          className="w-full max-w-sm min-w-0 flex-[1_1_14rem] @max-pair/dashboard:col-span-2 @max-pair/dashboard:max-w-none"
+          label={t("searchRepositories")}
+          value={search}
+          onChange={(value) => change("q", value)}
+          mode="live"
+          placeholder={t("repositorySearchPlaceholder")}
+          maxLength={120}
+          kbdHint
+        />
         <Select label={t("repositoryOwner")} hideLabel="below-pair" value={owner} onChange={(event) => change("owner", event.target.value)} options={ownerOptions} className="@max-pair/dashboard:[&>select]:flex-1" />
         <Select
           label={t("repositorySort")}

@@ -120,7 +120,16 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
       <div role="cell" className={cell.activity}>
         {/* The count is a lifetime total and reads the same whether the last comment arrived in March or four minutes ago. The unread dot is a shape rather than a colour, and the accessible name changes with it, so the signal survives both greyscale and a screen reader. */}
         {/* The count leads the accessible name, as it leads what is on screen, and the repository makes the name unique across repositories that reuse a number. The unread dot always has its slot, so the counts line up down the column whether a row is unread or not. */}
-        <Button data-testid="pr-activity" variant="ghost" size="sm" icon={MessageSquare} title={t("viewActivity")} aria-label={t(followUp?.unread ? "prs.activityUnread" : "prs.activity", { count: pr.comments ?? 0, repo: pr.repo, number: pr.number })} onClick={(event) => onOpen(event.currentTarget)} className="tabular-nums">
+        <Button
+          data-testid="pr-activity"
+          variant="ghost"
+          size="sm"
+          icon={MessageSquare}
+          title={t("viewActivity")}
+          aria-label={t(followUp?.unread ? "prs.activityUnread" : "prs.activity", { count: pr.comments ?? 0, repo: pr.repo, number: pr.number })}
+          onClick={(event) => onOpen(event.currentTarget)}
+          className="tabular-nums"
+        >
           {pr.comments}
           {followUp?.unread ? <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent" /> : <span aria-hidden="true" className="size-1.5 shrink-0" />}
         </Button>

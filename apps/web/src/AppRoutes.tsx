@@ -34,7 +34,6 @@ export function LegacyRedirect({ children }: { children: React.ReactNode }) {
   return children;
 }
 
-
 function PageTitle({ parts }: { parts: string[] }) {
   useDocumentTitle(parts);
   return null;

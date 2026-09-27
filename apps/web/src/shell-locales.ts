@@ -35,6 +35,7 @@ export const shellLocales: LocaleNamespace = {
     errorServer: "Something went wrong on the server. Try again in a moment.",
     errorAuth: "Your GitHub session has ended. Reconnect to continue.",
     errorOffline: "You appear to be offline. Check your connection and try again.",
+    syncStaleWarning: "Background sync hasn’t completed since {{date}}. Run it now to catch up.",
   },
   "zh-CN": {
     navInbox: "待办",
@@ -68,6 +69,7 @@ export const shellLocales: LocaleNamespace = {
     errorServer: "服务器出错了，请稍后重试。",
     errorAuth: "GitHub 会话已结束，请重新连接后继续。",
     errorOffline: "你似乎处于离线状态，请检查网络后重试。",
+    syncStaleWarning: "后台同步自 {{date}} 起未完成。立即同步以获取最新数据。",
   },
   ja: {
     navInbox: "受信トレイ",
@@ -101,6 +103,7 @@ export const shellLocales: LocaleNamespace = {
     errorServer: "サーバーでエラーが発生しました。しばらくしてから再試行してください。",
     errorAuth: "GitHub のセッションが終了しました。再接続して続けてください。",
     errorOffline: "オフラインのようです。接続を確認して再試行してください。",
+    syncStaleWarning: "{{date}} 以降、バックグラウンド同期が完了していません。今すぐ同期して追いつきましょう。",
   },
   ko: {
     navInbox: "수신함",
@@ -134,6 +137,7 @@ export const shellLocales: LocaleNamespace = {
     errorServer: "서버에서 문제가 발생했습니다. 잠시 후 다시 시도하세요.",
     errorAuth: "GitHub 세션이 끝났습니다. 다시 연결해 계속하세요.",
     errorOffline: "오프라인 상태인 것 같습니다. 연결을 확인하고 다시 시도하세요.",
+    syncStaleWarning: "{{date}} 이후 백그라운드 동기화가 완료되지 않았습니다. 지금 동기화해 최신 상태로 만드세요.",
   },
   es: {
     navInbox: "Bandeja",
@@ -167,5 +171,6 @@ export const shellLocales: LocaleNamespace = {
     errorServer: "Algo falló en el servidor. Vuelve a intentarlo en un momento.",
     errorAuth: "Tu sesión de GitHub terminó. Vuelve a conectar para continuar.",
     errorOffline: "Parece que no tienes conexión. Revísala y vuelve a intentarlo.",
+    syncStaleWarning: "La sincronización en segundo plano no se completa desde el {{date}}. Sincroniza ahora para ponerte al día.",
   },
 };

@@ -35,7 +35,6 @@ const waitingAt = (item: FollowUp) => {
   return Number.isNaN(value) ? Number.POSITIVE_INFINITY : value;
 };
 
-
 // The pane's id, for the Show activity buttons that fill it in the split view.
 const PANE_ID = "inbox-detail";
 

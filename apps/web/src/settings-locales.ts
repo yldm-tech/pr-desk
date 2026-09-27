@@ -23,6 +23,7 @@ export const settingsLocales: LocaleNamespace = {
     newDestination: "New destination",
     announceAdded: "Destination added.",
     tokenExpires: "Expires {{date}}",
+    unsaved: "Unsaved changes",
   },
   "zh-CN": {
     unavailable: "无法加载设置。",
@@ -45,6 +46,7 @@ export const settingsLocales: LocaleNamespace = {
     newDestination: "新的通知目标",
     announceAdded: "已添加通知目标。",
     tokenExpires: "{{date}} 到期",
+    unsaved: "有未保存的更改",
   },
   ja: {
     unavailable: "設定を読み込めませんでした。",
@@ -67,6 +69,7 @@ export const settingsLocales: LocaleNamespace = {
     newDestination: "新しい通知先",
     announceAdded: "通知先を追加しました。",
     tokenExpires: "{{date}} に期限切れ",
+    unsaved: "未保存の変更があります",
   },
   ko: {
     unavailable: "설정을 불러올 수 없습니다.",
@@ -89,6 +92,7 @@ export const settingsLocales: LocaleNamespace = {
     newDestination: "새 알림 대상",
     announceAdded: "알림 대상을 추가했습니다.",
     tokenExpires: "{{date}} 만료",
+    unsaved: "저장하지 않은 변경 사항",
   },
   es: {
     unavailable: "No se pudo cargar la configuración.",
@@ -111,5 +115,6 @@ export const settingsLocales: LocaleNamespace = {
     newDestination: "Nuevo destino",
     announceAdded: "Destino añadido.",
     tokenExpires: "Caduca el {{date}}",
+    unsaved: "Cambios sin guardar",
   },
 };

@@ -209,16 +209,7 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       </section>
     );
   return (
-    <Sheet
-      open
-      onClose={detail.close}
-      side="right"
-      labelledBy={nameId}
-      returnFocusTo={detail.opener}
-      closeLabel={t("close")}
-      header={header}
-      footer={followUp && <SheetFollowUp item={followUp} now={now} />}
-    >
+    <Sheet open onClose={detail.close} side="right" labelledBy={nameId} returnFocusTo={detail.opener} closeLabel={t("close")} header={header} footer={followUp && <SheetFollowUp item={followUp} now={now} />}>
       {body}
     </Sheet>
   );

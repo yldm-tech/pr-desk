@@ -102,9 +102,7 @@ export function FollowUpActions({
       </Button>
     ));
   // On a narrow touch row the whole row opens the sheet, so the detail button would only be a fourth icon forcing the line to wrap; from the list's `row` width, and wherever there is a pointer, it stays.
-  const detail = row && onShowActivity && (
-    <IconButton icon={PanelRight} size="sm" label={actionFor(t("inbox.showActivity"))} aria-controls={controls} onClick={(event) => onShowActivity(event.currentTarget)} className={variant === "row" && !hover ? "@max-row/list:hidden" : undefined} />
-  );
+  const detail = row && onShowActivity && <IconButton icon={PanelRight} size="sm" label={actionFor(t("inbox.showActivity"))} aria-controls={controls} onClick={(event) => onShowActivity(event.currentTarget)} className={variant === "row" && !hover ? "@max-row/list:hidden" : undefined} />;
   if (!row)
     return (
       <div ref={group} role="group" aria-label={t("inbox.rowActions")} className="flex min-w-0 flex-wrap items-center gap-2">
