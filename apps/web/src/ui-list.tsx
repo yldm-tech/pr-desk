@@ -4,12 +4,11 @@ import { cx } from "./ui-controls";
 
 // The grid of every list row, by kind. Track counts only ever grow with width, which is what the layout suite's monotonicity sweep checks: a row that loses a column while the window widens has a band in the wrong place.
 // list: an Inbox row. 3 tracks at every width: glyph, body, and a trailing column that holds the age on the title's line. Below its list container's `row` width the verbs sit on a line of their own under the body; from `row` they join the trailing column under the age, so the age and the verbs share one right edge in every row.
-// list-split: the same row in the split view, where the list pane is at least 28rem: always the wide form, with no container query, so the flip into split mode cannot move anything.
+// The split view uses the same `list` row: its form follows the width of the list pane it is in, not whether a pane sits beside it, so a pane that leaves the list under `row` stacks the verbs under the body rather than squeezing the title and meta into what is left beside them.
 // table: a pull-request row. 2 tracks, then 5 from `row`, measured against <main>. The last two are fixed widths rather than `auto`, because each row is its own grid and only a fixed track lines up under its header in every row; 6rem fits the longest Activity header (Japanese アクティビティ).
 // repo: a repository row. 2 tracks, then 3 from `row`, then 6 from `table`.
 export const itemTracks = {
   list: "grid-cols-[20px_minmax(0,1fr)_auto]",
-  "list-split": "grid-cols-[20px_minmax(0,1fr)_auto]",
   table: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_4.5rem_6rem]",
   repo: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] @table/dashboard:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_5rem_auto]",
 } as const;
@@ -117,7 +116,7 @@ export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, aside
     if (window.getSelection()?.toString()) return;
     onBodyClick();
   };
-  const list = tracks === "list" || tracks === "list-split";
+  const list = tracks === "list";
   return (
     <Tag
       ref={ref as Ref<never>}
@@ -142,13 +141,13 @@ export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, aside
       {list ? (
         <>
           <div className="col-start-1 row-start-1 pt-px">{glyph}</div>
-          <div className={cx("col-start-2 row-start-1 grid min-w-0 gap-1", tracks === "list-split" ? "row-end-3" : "@row/list:row-end-3")}>
+          <div className="col-start-2 row-start-1 grid min-w-0 gap-1 @row/list:row-end-3">
             <div className={cx("min-w-0 text-body [overflow-wrap:anywhere]", unread ? "font-semibold" : "font-medium")}>{title}</div>
             {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-fg-muted">{meta}</div>}
             {excerpt}
           </div>
           <div className="col-start-3 row-start-1 min-w-0 justify-self-end pl-2 text-right">{aside}</div>
-          {rail && <div className={cx("row-start-2 flex min-w-0 items-center", tracks === "list-split" ? "col-start-3 justify-self-end pl-2" : "col-start-2 col-end-4 @row/list:col-start-3 @row/list:justify-self-end @row/list:pl-2")}>{rail}</div>}
+          {rail && <div className="col-start-2 col-end-4 row-start-2 flex min-w-0 items-center @row/list:col-start-3 @row/list:justify-self-end @row/list:pl-2">{rail}</div>}
         </>
       ) : (
         <>

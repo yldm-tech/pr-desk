@@ -9,7 +9,7 @@ import { followUpErrorMessage, useFollowUpAction, type FollowUpActionInput } fro
 import { factsSurvive, handledIsUseful, isMuted, isReadyToMerge, reasonTone, waitingLabel, type FollowUp, type FollowUpGroup } from "./followup-view";
 import { reasonIcon, type GlyphKind, type Tone } from "./tone";
 import type { UndoTarget } from "./undo-slot";
-import { Button, cx } from "./ui-controls";
+import { Button } from "./ui-controls";
 import { FactChip, formatAge, formatDate, formatDateTime, StateGlyph } from "./ui-display";
 import { ItemRow } from "./ui-list";
 
@@ -164,7 +164,7 @@ export function InboxRow({
   return (
     <MotionItemRow
       as="article"
-      tracks={split ? "list-split" : "list"}
+      tracks="list"
       data-testid="follow-up-card"
       id={`followup-${item.id}`}
       tabIndex={-1}
@@ -251,7 +251,7 @@ export function InboxRow({
       excerpt={
         <>
           {item.excerpt && (
-            <blockquote className={cx("m-0 min-w-0 border-l-2 border-line pl-2 text-caption text-fg-muted [overflow-wrap:anywhere]", split ? "line-clamp-2" : "line-clamp-1 @row/list:line-clamp-2")}>
+            <blockquote className="m-0 line-clamp-1 min-w-0 border-l-2 border-line pl-2 text-caption text-fg-muted [overflow-wrap:anywhere] @row/list:line-clamp-2">
               <span className="text-fg">“{item.excerpt}”</span>{" "}
               <cite className="text-fg-subtle not-italic">
                 — {item.excerpt_by || t("unknown")}

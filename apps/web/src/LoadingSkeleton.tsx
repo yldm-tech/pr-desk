@@ -21,17 +21,17 @@ function LoadingFrame({ children, className }: { children: ReactNode; className?
 // One list, table or repository row, on the row's own tracks. The widths vary by index so a column of placeholders does not read as a single block.
 function RowShape({ tracks, index }: { tracks: ItemTracks; index: number }) {
   const wide = index % 2 ? "82%" : "64%";
-  if (tracks === "list" || tracks === "list-split")
+  if (tracks === "list")
     return (
       <div className={cx("grid min-h-11 items-start gap-x-1 gap-y-1 border-b border-line px-3 py-2.5 last:border-b-0", itemTracks[tracks])}>
         <Skeleton circle width={16} height={16} containerClassName="block pt-0.5" />
-        <div className={cx("col-start-2 row-start-1 grid min-w-0 gap-1.5", tracks === "list-split" ? "row-end-3" : "@row/list:row-end-3")}>
+        <div className="col-start-2 row-start-1 grid min-w-0 gap-1.5 @row/list:row-end-3">
           <Skeleton width={wide} height={14} />
           <Skeleton width="46%" height={11} />
           <Skeleton width="72%" height={11} />
         </div>
         <Skeleton width={28} height={12} containerClassName="col-start-3 row-start-1 justify-self-end" />
-        <div className={cx("row-start-2 flex gap-2", tracks === "list-split" ? "col-start-3 justify-self-end" : "col-start-2 col-end-4 @row/list:col-start-3 @row/list:justify-self-end")}>
+        <div className="col-start-2 col-end-4 row-start-2 flex gap-2 @row/list:col-start-3 @row/list:justify-self-end">
           <Skeleton width={84} height={28} />
           <Skeleton width={28} height={28} />
         </div>

@@ -20,11 +20,11 @@ export function useSplitMode(ref: RefObject<HTMLElement | null>): boolean {
   return split;
 }
 
-// The list beside its detail. Below the split width the detail is not rendered at all and the list takes the whole row; the page opens a sheet instead. The list gets the larger share, because it is what the reader scans and its rows wrap when squeezed, while the pane is a reading column; 28rem + 24rem and the gap fit the 880px the split starts at. The detail column is sticky so it stays beside whichever row the reader is looking at while the list scrolls. With no detail to show (an empty list) the list takes the whole width even in split mode, so its message is centred on the page.
+// The list beside its detail. Below the split width the detail is not rendered at all and the list takes the whole row; the page opens a sheet instead. The list gets everything the pane does not need, because it is what the reader scans and its rows wrap when squeezed, while the pane is a reading column: a third of the width, never under 20rem (a phone's width, which the detail is already laid out for in the sheet) and never over 30rem. At the 880px the split starts at that leaves the list 544px, where its rows take their stacked form; they return to the one-line form once the list itself reaches `row`. The detail column is sticky so it stays beside whichever row the reader is looking at while the list scrolls. With no detail to show (an empty list) the list takes the whole width even in split mode, so its message is centred on the page.
 export function SplitView({ ref, split, list, detail, className }: { ref: RefObject<HTMLDivElement | null>; split: boolean; list: ReactNode; detail: ReactNode; className?: string }) {
   const paired = split && !!detail;
   return (
-    <div ref={ref} className={cx("grid min-w-0 gap-4", paired && "grid-cols-[minmax(28rem,1.25fr)_minmax(24rem,1fr)] items-start", className)}>
+    <div ref={ref} className={cx("grid min-w-0 gap-4", paired && "grid-cols-[minmax(0,1fr)_clamp(20rem,34%,30rem)] items-start", className)}>
       <div className="min-w-0">{list}</div>
       {paired && detail}
     </div>
