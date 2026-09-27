@@ -1,7 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
-import App, { ErrorBoundary } from "./App";
+import App from "./App";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { SkeletonTheme } from "react-loading-skeleton";
 import { registerServiceWorker } from "./service-worker";
 import "./style.css";
