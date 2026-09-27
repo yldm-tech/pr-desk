@@ -1,44 +1,96 @@
-import { AlertTriangle, ArrowUpRight, Check, FolderGit2, GitPullRequest, Inbox, Search, X } from "lucide-react";
-import { emptyState, linkAction, secondaryAction } from "./action-styles";
-import {
-  repositoryAction,
-  repositoryAttention,
-  repositoryAvatar,
-  repositoryColumns,
-  repositoryConflicts,
-  repositoryControlLabel,
-  repositoryControls,
-  repositoryIdentity,
-  repositoryListCaption,
-  repositoryListPanel,
-  repositoryMobileLabel,
-  repositoryNumber,
-  repositoryNumberLink,
-  repositoryRow,
-  repositoryRows,
-  repositoryScopeNote,
-  repositorySearch,
-  repositorySummary,
-  repositorySummaryItem,
-  repositoryZero,
-} from "./repository-styles";
-import { syncStatusError } from "./status-styles";
-import { useSearchParams, Link } from "react-router-dom";
+import { ArrowRight, FolderGit2, X } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import * as Tabs from "@radix-ui/react-tabs";
 import { RepositorySkeleton } from "./LoadingSkeleton";
 import type { RepositorySummary } from "./pr-model";
+import { paths, prViewPath } from "./routes";
+import type { Tone } from "./tone";
+import { Button, cx, LinkButton, SearchField, Select, SegmentedControl, TextLink } from "./ui-controls";
+import { EmptyState, ErrorState, PageHeader, StaleNotice, StateGlyph, Toolbar } from "./ui-display";
+import { ItemRow, itemTracks } from "./ui-list";
 
+type Scope = "all" | "attention" | "conflicts";
+type Sort = "attention" | "open" | "name";
+
+const numberTone: Record<Tone | "plain", string> = { plain: "text-fg", blocked: "text-tone-blocked", action: "text-tone-action", waiting: "text-tone-waiting", ready: "text-tone-ready", neutral: "text-tone-neutral" };
+
+// One count of a repository row. Below `table` the row is a card and the count reads as a phrase ("4 open PRs"); from `table` up it sits in its own column under a visual header, so only the number is painted and the phrase stays for assistive technology, which never sees the header. A zero is left out of the card, where its absence already says it, and printed as a quiet 0 in the table. A nonzero count that has a list behind it is a link to that list, underlined so it is not told apart by colour alone.
+function Count({ value, phrase, tone, to, title, repo }: { value: number; phrase: string; tone: Tone | "plain"; to?: string; title?: string; repo: string }) {
+  const { i18n } = useTranslation();
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
+  const content = (
+    <>
+      <span aria-hidden="true" className="hidden @table/dashboard:inline">
+        {number}
+      </span>
+      <span className="@table/dashboard:sr-only">{phrase}</span>
+    </>
+  );
+  const place = "min-w-0 tabular-nums @table/dashboard:justify-self-end @table/dashboard:text-right";
+  if (value === 0)
+    return (
+      <span className={cx(place, "hidden text-fg-subtle @table/dashboard:block")}>
+        {content}
+      </span>
+    );
+  if (!to) return <span className={cx(place, numberTone[tone])}>{content}</span>;
+  return (
+    <Link to={to} title={title} className={cx(place, numberTone[tone], "inline-flex items-center rounded-sm font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center @table/dashboard:justify-end")}>
+      {content}
+      <span className="sr-only"> · {repo}</span>
+    </Link>
+  );
+}
+
+function RepositoryRow({ repo }: { repo: RepositorySummary }) {
+  const { t } = useTranslation();
+  const [owner, ...rest] = repo.repo.split("/");
+  const name = rest.join("/");
+  const prs = paths.prs + "?" + new URLSearchParams({ repo: repo.repo });
+  // Attention, Conflicts and Failing all land on the Blocked view: the attention predicate is conflicts OR changes requested OR failing checks (apps/api/main.go), so Blocked is a superset of the other two and the only list that holds exactly the attention set.
+  const blocked = prViewPath("blocked") + "?" + new URLSearchParams({ repo: repo.repo });
+  const glyph = repo.conflicts > 0 || repo.checks_failing > 0 ? <StateGlyph tone="blocked" kind="blocked" /> : repo.needs_attention > 0 ? <StateGlyph tone="action" kind="action" /> : <StateGlyph tone="neutral" kind="ready" />;
+  return (
+    <ItemRow
+      as="li"
+      tracks="repo"
+      glyph={glyph}
+      title={
+        <TextLink href={`https://github.com/${repo.repo}`} tone="muted" external newTabLabel={t("repos.newTab")} title={repo.repo}>
+          <span className="font-normal">{owner}</span>
+          <span className="px-0.5 font-normal text-fg-subtle">/</span>
+          <span className="text-fg">{name}</span>
+        </TextLink>
+      }
+    >
+      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-caption @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
+        <Count value={repo.open} phrase={t("repos.openCount", { count: repo.open })} tone="plain" to={prs} repo={repo.repo} />
+        <Count value={repo.needs_attention} phrase={t("repos.attentionCount", { count: repo.needs_attention })} tone="action" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
+        <Count value={repo.conflicts} phrase={t("repos.conflictsCount", { count: repo.conflicts })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
+        <Count value={repo.checks_failing} phrase={t("repos.failingCount", { count: repo.checks_failing })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
+      </div>
+      <div className="col-start-2 col-end-3 row-start-1 justify-self-end @row/dashboard:col-start-3 @row/dashboard:col-end-4 @table/dashboard:col-start-6 @table/dashboard:col-end-7">
+        <LinkButton to={prs} variant="ghost" size="sm" className="-my-1 whitespace-nowrap">
+          {t("viewRepositoryPRs")}
+          <span className="sr-only"> · {repo.repo}</span>
+          <ArrowRight size={12} aria-hidden="true" className="shrink-0" />
+        </LinkButton>
+      </div>
+    </ItemRow>
+  );
+}
+
+// The authored repositories with open pull requests, narrowed and sorted locally. Every control writes the address with replace, so the list is shareable without every keystroke becoming a history entry.
 export function Repositories({ repositories, loading, error, retry }: { repositories: RepositorySummary[] | undefined; loading: boolean; error: boolean; retry: () => void }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") || "";
   const owner = params.get("owner") || "";
-  const scope = ["attention", "conflicts"].includes(params.get("scope") || "") ? params.get("scope")! : "all";
-  const sort = ["name", "open"].includes(params.get("sort") || "") ? params.get("sort")! : "attention";
-  const all = repositories || [];
+  const scope: Scope = params.get("scope") === "attention" || params.get("scope") === "conflicts" ? (params.get("scope") as Scope) : "all";
+  const sort: Sort = params.get("sort") === "name" || params.get("sort") === "open" ? (params.get("sort") as Sort) : "attention";
+  const all = repositories ?? [];
   const owners = [...new Set(all.map((repo) => repo.repo.split("/")[0]))].sort((a, b) => a.localeCompare(b));
-  const counts = { all: all.length, attention: all.filter((repo) => repo.needs_attention > 0).length, conflicts: all.filter((repo) => repo.conflicts > 0).length };
+  const counts: Record<Scope, number> = { all: all.length, attention: all.filter((repo) => repo.needs_attention > 0).length, conflicts: all.filter((repo) => repo.conflicts > 0).length };
   const change = (key: string, value: string) =>
     setParams(
       (current) => {
@@ -50,8 +102,9 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       },
       { replace: true },
     );
+  const needle = search.trim().toLowerCase();
   const shown = all
-    .filter((repo) => (!owner || repo.repo.split("/")[0] === owner) && repo.repo.toLowerCase().includes(search.trim().toLowerCase()) && (scope === "attention" ? repo.needs_attention > 0 : scope === "conflicts" ? repo.conflicts > 0 : true))
+    .filter((repo) => (!owner || repo.repo.split("/")[0] === owner) && repo.repo.toLowerCase().includes(needle) && (scope === "attention" ? repo.needs_attention > 0 : scope === "conflicts" ? repo.conflicts > 0 : true))
     .sort((a, b) => (sort === "name" ? 0 : sort === "open" ? b.open - a.open : b.needs_attention - a.needs_attention || b.conflicts - a.conflicts) || a.repo.localeCompare(b.repo));
   const filtered = !!search || !!owner || scope !== "all";
   const clear = () =>
@@ -60,166 +113,88 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
       for (const key of ["q", "owner", "scope", "page"]) next.delete(key);
       return next;
     });
-  return (
-    <section id="repositories" className="grid gap-[22px]">
-      <Tabs.Root className="grid gap-5" value={scope} onValueChange={(value) => change("scope", value === "all" ? "" : value)}>
-        <Tabs.List className={repositorySummary} aria-label={t("repositoryScope")}>
-          {(
-            [
-              { value: "all", label: "activeRepositories", icon: FolderGit2 },
-              { value: "attention", label: "attentionRepositories", icon: Inbox },
-              { value: "conflicts", label: "conflictRepositories", icon: AlertTriangle },
-            ] as const
-          ).map(({ value, label, icon: Icon }) => (
-            <Tabs.Trigger key={value} value={value} className={repositorySummaryItem}>
-              <span>
-                <Icon size={17} aria-hidden="true" />
-                {t(label)}
-              </span>
-              <strong>{loading || !repositories ? "—" : counts[value].toLocaleString(i18n.resolvedLanguage)}</strong>
-            </Tabs.Trigger>
+  const known = !loading && !!repositories;
+  const ownerOptions = [{ value: "", label: t("allOwners") }, ...(owner && !owners.includes(owner) ? [{ value: owner, label: owner }] : []), ...owners.map((name) => ({ value: name, label: name }))];
+
+  let body;
+  if (loading) body = <RepositorySkeleton />;
+  else if (error && !repositories) body = <ErrorState title={t("unableRepositories")} onRetry={retry} />;
+  else if (!shown.length)
+    body = (
+      <EmptyState
+        icon={FolderGit2}
+        title={t("emptyResultsTitle")}
+        description={t(filtered ? "emptyResultsDescription" : "noRepos")}
+        action={
+          filtered && (
+            <Button onClick={clear} icon={X}>
+              {t("clearFilters")}
+            </Button>
+          )
+        }
+      />
+    );
+  else
+    body = (
+      <>
+        {/* A visual header for the table band only. Each count also carries its own phrase for assistive technology, so the header is hidden from it rather than left half-attached to a list that is not a table. */}
+        <div aria-hidden="true" className={cx("hidden gap-x-3 border-b border-line px-3 py-2 text-small font-medium text-fg-muted @table/dashboard:grid", itemTracks.repo)}>
+          <span className="truncate pl-7">{t("repository")}</span>
+          <span className="truncate text-right">{t("repos.colOpen")}</span>
+          <span className="truncate text-right">{t("repos.colAttention")}</span>
+          <span className="truncate text-right">{t("conflicts")}</span>
+          <span className="truncate text-right">{t("checksFailing")}</span>
+          <span />
+        </div>
+        <ul aria-label={t("navRepositories")} className="m-0 min-w-0 list-none border-t border-line p-0 @table/dashboard:border-t-0">
+          {shown.map((repo) => (
+            <RepositoryRow key={repo.repo} repo={repo} />
           ))}
-        </Tabs.List>
-        <Tabs.Content value={scope} className={repositoryListPanel}>
-          <div className={repositoryControls}>
-            <label className={repositorySearch}>
-              <Search size={17} aria-hidden="true" />
-              <input id="pr-search" type="search" maxLength={120} aria-label={t("searchRepositories")} placeholder={t("repositorySearchPlaceholder")} value={search} onChange={(event) => change("q", event.target.value)} />
-              {search && (
-                <button aria-label={t("clear")} onClick={() => change("q", "")}>
-                  <X size={15} />
-                </button>
-              )}
-            </label>
-            <label className={repositoryControlLabel}>
-              <span>{t("repositoryOwner")}</span>
-              <select aria-label={t("repositoryOwner")} value={owner} onChange={(event) => change("owner", event.target.value)}>
-                <option value="">{t("allOwners")}</option>
-                {owner && !owners.includes(owner) && <option value={owner}>{owner}</option>}
-                {owners.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={repositoryControlLabel}>
-              <span>{t("repositorySort")}</span>
-              <select aria-label={t("repositorySort")} value={sort} onChange={(event) => change("sort", event.target.value)}>
-                <option value="attention">{t("sortAttention")}</option>
-                <option value="open">{t("sortOpen")}</option>
-                <option value="name">{t("sortName")}</option>
-              </select>
-            </label>
-          </div>
-          <div className={repositoryListCaption}>
-            <span>
-              {repositories ? t("repositoryResults", { count: shown.length }) : "—"}
-              <span className={repositoryScopeNote}> · {t("repositoryOpenScope")}</span>
-            </span>
-            {filtered && (
-              <button onClick={clear}>
-                {t("clearFilters")}
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          {error && repositories && (
-            <div className={syncStatusError} role="status">
-              <span>{t("refreshFailedKeepData")}</span>
-              <button className={linkAction} onClick={retry}>
-                {t("retry")}
-              </button>
-            </div>
-          )}
-          {loading ? (
-            <RepositorySkeleton />
-          ) : error && !repositories ? (
-            <div className={emptyState} role="alert">
-              <AlertTriangle size={28} />
-              <h2>{t("unableRepositories")}</h2>
-              <button className={secondaryAction} onClick={retry}>
-                {t("retry")}
-              </button>
-            </div>
-          ) : !shown.length ? (
-            <div className={emptyState}>
-              <FolderGit2 size={28} />
-              <h2>{t("emptyResultsTitle")}</h2>
-              <p>{t(filtered ? "emptyResultsDescription" : "noRepos")}</p>
-              {filtered && (
-                <button className={secondaryAction} onClick={clear}>
-                  {t("clearFilters")}
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className={repositoryColumns} aria-hidden="true">
-                <span>{t("repositories")}</span>
-                <span>{t("open")}</span>
-                <span>{t("navAttention")}</span>
-                <span>{t("conflicts")}</span>
-                <span>{t("checksFailing")}</span>
-                <span />
-              </div>
-              <ul className={repositoryRows}>
-                {shown.map((repo) => {
-                  const [organization, ...name] = repo.repo.split("/");
-                  const prURL = "/pull-requests?" + new URLSearchParams({ repo: repo.repo });
-                  return (
-                    <li className={repositoryRow} key={repo.repo}>
-                      <div className={repositoryIdentity}>
-                        <span className={repositoryAvatar} aria-hidden="true">
-                          {organization.slice(0, 2).toUpperCase()}
-                        </span>
-                        <a href={`https://github.com/${repo.repo}`} target="_blank" rel="noopener noreferrer" title={repo.repo}>
-                          <span>{organization}</span>
-                          <strong>
-                            {name.join("/")}
-                            <ArrowUpRight size={14} aria-hidden="true" />
-                          </strong>
-                        </a>
-                      </div>
-                      <Link className={repositoryNumberLink} to={prURL} aria-label={t("repositoryOpenLink", { repo: repo.repo, count: repo.open })}>
-                        <span className={repositoryMobileLabel}>
-                          <GitPullRequest size={13} />
-                          {t("open")}
-                        </span>
-                        {repo.open.toLocaleString(i18n.resolvedLanguage)}
-                      </Link>
-                      <div className={repositoryNumber}>
-                        <span className={repositoryMobileLabel}>{t("navAttention")}</span>
-                        {/* Blocked, not the follow-up workspace: needs_attention is a query over stored columns and listPRs?attention=true is the same predicate over the same authored open rows, so the number and its destination cannot disagree. The follow-up state that /attention filters on is moved by read, handled and snooze, and includes reviewer rows this count never had. */}
-                        {repo.needs_attention > 0 ? (
-                          <Link className={repositoryAttention} to={"/blocked?" + new URLSearchParams({ repo: repo.repo })} aria-label={t("repositoryAttentionLink", { repo: repo.repo, count: repo.needs_attention })}>
-                            {repo.needs_attention.toLocaleString(i18n.resolvedLanguage)}
-                          </Link>
-                        ) : (
-                          <span className={repositoryZero}>0</span>
-                        )}
-                      </div>
-                      <div className={repositoryNumber}>
-                        <span className={repositoryMobileLabel}>{t("conflicts")}</span>
-                        <span className={repo.conflicts ? repositoryConflicts : repositoryZero}>{repo.conflicts.toLocaleString(i18n.resolvedLanguage)}</span>
-                      </div>
-                      <div className={repositoryNumber}>
-                        <span className={repositoryMobileLabel}>{t("checksFailing")}</span>
-                        <span className={repo.checks_failing ? repositoryConflicts : repositoryZero}>{repo.checks_failing.toLocaleString(i18n.resolvedLanguage)}</span>
-                      </div>
-                      <Link className={repositoryAction} to={prURL}>
-                        {repo.needs_attention === 0 && <Check size={14} className="opacity-60" aria-hidden="true" />}
-                        <span>{t("viewRepositoryPRs")}</span>
-                        <ArrowUpRight size={14} aria-hidden="true" />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </Tabs.Content>
-      </Tabs.Root>
+        </ul>
+      </>
+    );
+
+  return (
+    <section id="repositories" className="grid min-w-0 gap-4">
+      <PageHeader
+        title={t("navRepositories")}
+        count={known ? all.length : undefined}
+        summary={
+          <SegmentedControl<Scope>
+            label={t("repositoryScope")}
+            value={scope}
+            onChange={(value) => change("scope", value === "all" ? "" : value)}
+            items={(["all", "attention", "conflicts"] as const).map((value) => ({ value, label: t(value === "all" ? "repos.scopeAll" : value === "attention" ? "attentionRepositories" : "conflictRepositories"), count: known ? counts[value] : "—" }))}
+          />
+        }
+      />
+      <Toolbar>
+        <SearchField id="pr-search" className="w-full max-w-sm min-w-0 flex-[1_1_14rem]" label={t("searchRepositories")} value={search} onChange={(value) => change("q", value)} mode="live" placeholder={t("repositorySearchPlaceholder")} maxLength={120} kbdHint />
+        <Select label={t("repositoryOwner")} hideLabel="below-pair" value={owner} onChange={(event) => change("owner", event.target.value)} options={ownerOptions} />
+        <Select
+          label={t("repositorySort")}
+          hideLabel="below-pair"
+          value={sort}
+          onChange={(event) => change("sort", event.target.value)}
+          options={[
+            { value: "attention", label: t("sortAttention") },
+            { value: "open", label: t("sortOpen") },
+            { value: "name", label: t("sortName") },
+          ]}
+        />
+      </Toolbar>
+      <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p aria-live="polite" className="text-small text-fg-muted tabular-nums">
+          {known ? t("repos.results", { count: shown.length }) : "—"}
+        </p>
+        {filtered && (
+          <Button variant="ghost" size="sm" icon={X} onClick={clear}>
+            {t("clearFilters")}
+          </Button>
+        )}
+      </div>
+      {error && repositories && <StaleNotice onRetry={retry} />}
+      <div className="min-w-0">{body}</div>
     </section>
   );
 }

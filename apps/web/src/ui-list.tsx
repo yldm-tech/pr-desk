@@ -147,7 +147,8 @@ export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, rail,
         </>
       ) : (
         <>
-          <div className="flex min-w-0 items-start gap-2">
+          {/* In a role=row the lead is a cell like the others, or a screen reader's table navigation pairs every following cell with the wrong column header. */}
+          <div role={rest.role === "row" ? "cell" : undefined} className="flex min-w-0 items-start gap-2">
             {glyph}
             <div className="grid min-w-0 gap-0.5">
               <div className={cx("min-w-0 text-body [overflow-wrap:anywhere]", unread ? "font-semibold" : "font-medium")}>{title}</div>
