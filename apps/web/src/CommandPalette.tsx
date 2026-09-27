@@ -13,7 +13,7 @@ import { groupOf, reasonTone, type FollowUp } from "./followup-view";
 import { useAuth, useFollowUps, useSyncMutation, useSyncPending } from "./queries";
 import { useSyncInFlight } from "./SyncProgress";
 import { paths, prViewPath, prViews, prViewTitleKeys, type Destination } from "./routes";
-import { overlays, useShortcut } from "./shortcuts";
+import { overlays, setSingleKeyShortcuts, useShortcut, useSingleKeyShortcuts } from "./shortcuts";
 import { useTheme, type ThemePref } from "./theme";
 import type { GlyphKind, Tone } from "./tone";
 import { cx, Kbd } from "./ui-controls";
@@ -122,6 +122,7 @@ function PaletteDialog() {
   // The same condition the sync popover disables its button on: a request from this tab, or a run the server reports.
   const syncing = useSyncInFlight(useSyncPending());
   const theme = useTheme();
+  const singleKeys = useSingleKeyShortcuts();
   // Only an installed window gets "Reload the app", the same display modes HardRefresh.tsx answers to, because a browser tab already has a reload button.
   const installed = useMediaQuery(INSTALLED) || iosStandalone();
   const coarse = useMediaQuery("(pointer: coarse)");
@@ -165,7 +166,8 @@ function PaletteDialog() {
     ...Object.keys(resources).map((code): Entry => ({ id: `language-${code.toLowerCase()}`, context: t("language"), label: t("nativeName", { lng: code }), keywords: `${code} ${names.of(code) ?? ""}`, icon: Languages, current: (i18n.resolvedLanguage || "en") === code, run: act(() => void i18n.changeLanguage(code)) })),
     ...(connected ? [{ id: "install", label: t("palette.installApp"), icon: Building2, run: act(openInstall) }] : []),
     ...(installed ? [{ id: "reload", label: t("hardRefresh"), icon: RotateCw, run: act(() => void hardReload()) }] : []),
-    { id: "shortcuts", label: t("palette.shortcuts"), icon: Keyboard, keys: ["?"], run: act(overlays.openShortcuts) },
+    { id: "shortcuts", label: t("palette.shortcuts"), icon: Keyboard, keys: singleKeys ? ["?"] : undefined, run: act(overlays.openShortcuts) },
+    { id: "single-keys", label: t(singleKeys ? "palette.singleKeysTurnOff" : "palette.singleKeysTurnOn"), icon: Keyboard, run: act(() => setSingleKeyShortcuts(!singleKeys)) },
   ];
 
   const visible = (entries: Entry[]) => entries.filter((entry) => matches(`${entry.context ?? ""} ${entry.label} ${entry.keywords ?? ""}`));

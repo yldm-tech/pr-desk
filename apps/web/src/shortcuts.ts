@@ -11,6 +11,35 @@ export function isShortcutTarget(e: KeyboardEvent): boolean {
 // Sent by the `/` key when the page's search field exists but is folded away (the Inbox below `pair`), so the page can open it before it is focused.
 export const REVEAL_SEARCH_EVENT = "prdesk:reveal-search";
 
+// Whether letter, digit and punctuation keys act as shortcuts (WCAG 2.1.4). On by default and switchable per device, from the shortcuts sheet and the palette, for a speech-input user or anyone who types into the page by accident. Modified keys (⌘K), Enter, Space and Escape are not character-key shortcuts and are never switched off. Kept in localStorage because it belongs to the device, like the theme; storage that throws simply leaves the default on.
+const SINGLE_KEYS_STORAGE_KEY = "prdesk-single-key-shortcuts";
+const readSingleKeys = () => {
+  try {
+    return window.localStorage.getItem(SINGLE_KEYS_STORAGE_KEY) !== "off";
+  } catch {
+    return true;
+  }
+};
+let singleKeys = typeof window === "undefined" ? true : readSingleKeys();
+const singleKeyListeners = new Set<() => void>();
+const subscribeSingleKeys = (listener: () => void) => {
+  singleKeyListeners.add(listener);
+  return () => void singleKeyListeners.delete(listener);
+};
+export function setSingleKeyShortcuts(on: boolean) {
+  singleKeys = on;
+  try {
+    if (on) window.localStorage.removeItem(SINGLE_KEYS_STORAGE_KEY);
+    else window.localStorage.setItem(SINGLE_KEYS_STORAGE_KEY, "off");
+  } catch {
+    // The choice still holds for this page; it just will not survive a reload.
+  }
+  for (const listener of singleKeyListeners) listener();
+}
+export const useSingleKeyShortcuts = () => useSyncExternalStore(subscribeSingleKeys, () => singleKeys);
+// A key the switch covers: one printable character (a letter, a digit, punctuation), which is what a stray keystroke or a speech command produces. Space is left out, as it is a control's own activation key.
+const isCharacterKey = (key: string) => key.length === 1 && key !== " ";
+
 type Stroke = { key: string; at: number };
 // How long the second key of a `g` sequence may follow the first.
 const SEQUENCE_WINDOW_MS = 1000;
@@ -57,6 +86,7 @@ export function useShortcut(keys: string | string[], handler: (e: KeyboardEvent)
         if (latest.current(e) !== false) e.preventDefault();
         return;
       }
+      if (!singleKeys && isCharacterKey(e.key)) return;
       if (scope === "sheet") {
         const target = e.target as HTMLElement | null;
         if (e.metaKey || e.ctrlKey || e.altKey || target?.closest?.("input,textarea,select,[contenteditable=true],[role=combobox]")) return;

@@ -57,6 +57,10 @@ export const paletteLocales: LocaleNamespace = {
     keyClose: "Close the sheet",
     keySheetVerbs: "Handled, remind me later, mark read or cancel the reminder for this item",
     closeShortcuts: "Close keyboard shortcuts",
+    singleKeys: "Single-key shortcuts",
+    singleKeysHelp: "Letter keys such as j, k and e act on the page. Turn them off if you use speech input or press them by accident; ⌘K and Esc keep working.",
+    singleKeysTurnOff: "Turn off single-key shortcuts",
+    singleKeysTurnOn: "Turn on single-key shortcuts",
   },
   "zh-CN": {
     title: "命令面板",
@@ -112,6 +116,10 @@ export const paletteLocales: LocaleNamespace = {
     keyClose: "关闭面板",
     keySheetVerbs: "对此项执行已处理、稍后提醒、标记已读或取消提醒",
     closeShortcuts: "关闭键盘快捷键",
+    singleKeys: "单键快捷键",
+    singleKeysHelp: "j、k、e 等字母键会直接操作页面。如果你使用语音输入或容易误按，可以关闭它们；⌘K 和 Esc 仍然可用。",
+    singleKeysTurnOff: "关闭单键快捷键",
+    singleKeysTurnOn: "开启单键快捷键",
   },
   ja: {
     title: "コマンドパレット",
@@ -167,6 +175,10 @@ export const paletteLocales: LocaleNamespace = {
     keyClose: "シートを閉じる",
     keySheetVerbs: "この項目を対応済み、あとで通知、既読、リマインダー取り消しにする",
     closeShortcuts: "キーボードショートカットを閉じる",
+    singleKeys: "1 キーのショートカット",
+    singleKeysHelp: "j・k・e などの文字キーでページを操作します。音声入力を使う場合や誤って押してしまう場合はオフにしてください。⌘K と Esc は引き続き使えます。",
+    singleKeysTurnOff: "1 キーのショートカットをオフにする",
+    singleKeysTurnOn: "1 キーのショートカットをオンにする",
   },
   ko: {
     title: "명령 팔레트",
@@ -222,6 +234,10 @@ export const paletteLocales: LocaleNamespace = {
     keyClose: "시트 닫기",
     keySheetVerbs: "이 항목을 처리함, 나중에 알림, 읽음 표시 또는 알림 취소",
     closeShortcuts: "키보드 단축키 닫기",
+    singleKeys: "단일 키 단축키",
+    singleKeysHelp: "j, k, e 같은 글자 키로 페이지를 조작합니다. 음성 입력을 쓰거나 실수로 누르는 경우 끄세요. ⌘K와 Esc는 계속 작동합니다.",
+    singleKeysTurnOff: "단일 키 단축키 끄기",
+    singleKeysTurnOn: "단일 키 단축키 켜기",
   },
   es: {
     title: "Paleta de comandos",
@@ -279,5 +295,9 @@ export const paletteLocales: LocaleNamespace = {
     keyClose: "Cerrar el panel",
     keySheetVerbs: "Gestionado, recordármelo más tarde, marcar como leído o cancelar el recordatorio de este elemento",
     closeShortcuts: "Cerrar los atajos de teclado",
+    singleKeys: "Atajos de una tecla",
+    singleKeysHelp: "Las teclas de letra como j, k y e actúan sobre la página. Desactívalas si usas entrada por voz o las pulsas sin querer; ⌘K y Esc siguen funcionando.",
+    singleKeysTurnOff: "Desactivar los atajos de una tecla",
+    singleKeysTurnOn: "Activar los atajos de una tecla",
   },
 };

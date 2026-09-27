@@ -1,7 +1,7 @@
 import { Fragment, useId } from "react";
 import { useTranslation } from "react-i18next";
-import { overlays, useShortcut } from "./shortcuts";
-import { Kbd } from "./ui-controls";
+import { overlays, setSingleKeyShortcuts, useShortcut, useSingleKeyShortcuts } from "./shortcuts";
+import { Checkbox, Kbd } from "./ui-controls";
 import { Sheet } from "./ui-overlay";
 
 // Keycaps and the two joins between them. A keycap is printed as it is engraved, so it is not translated; "then" joins the strokes of a sequence, and alternatives are separated by a slash that is read out as "or", which keeps a four-way choice such as the snooze presets on one short line.
@@ -39,6 +39,7 @@ export function ShortcutsSheet() {
   const { t } = useTranslation();
   const open = overlays.useShortcutsOpen();
   const titleId = useId();
+  const singleKeys = useSingleKeyShortcuts();
   // `?` is a single key and goes through the shared guard, so it is ignored while typing and while any dialog is open, the palette included; the palette has its own "Keyboard shortcuts" entry for that case.
   useShortcut("?", () => overlays.openShortcuts());
   const page = (key: string) => t("palette.keyGoTo", { page: t(key) });
@@ -104,6 +105,7 @@ export function ShortcutsSheet() {
         </div>
       }
     >
+      <Checkbox className="mb-4" label={t("palette.singleKeys")} description={t("palette.singleKeysHelp")} checked={singleKeys} onChange={(event) => setSingleKeyShortcuts(event.target.checked)} />
       <div className="grid gap-6 shell:grid-cols-2 shell:gap-x-8">
         {sections.map((section) => (
           <section key={section.id} aria-labelledby={`${titleId}-${section.id}`} className="min-w-0">
