@@ -109,6 +109,8 @@ test("a reload with no network keeps the offline copy it would otherwise discard
     window.matchMedia = (query: string) => (query.includes("display-mode") ? ({ matches: true, media: query, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false } as MediaQueryList) : real(query));
   });
   await page.goto("/#/inbox");
+  // The button is in the shell once the session check has answered; going offline before then would leave the shell waiting on a check that can no longer complete.
+  await expect(page.getByRole("button", { name: "Reload the app" })).toBeVisible();
   await page.evaluate(() => caches.open("prdesk-shell-v0").then((cache) => cache.put("/stale", new Response("old"))));
 
   await context.setOffline(true);
