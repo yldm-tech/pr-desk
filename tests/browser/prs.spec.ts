@@ -142,7 +142,7 @@ test("the activity sheet asks for the pull request by its id, not its number", a
   await page.goto("/#/prs");
   const row = page.getByRole("row").filter({ hasText: "Review storage migration" });
   const requested = page.waitForRequest((request) => /\/pull-requests\/\d+\/activity$/.test(new URL(request.url()).pathname));
-  await row.getByRole("button", { name: /^0 comments(, unread)? — fixture\/reviewer #24$/ }).click();
+  await row.getByRole("button", { name: /^0 comments(, unread activity)? — fixture\/reviewer #24$/ }).click();
   expect(new URL((await requested).url()).pathname).toMatch(/\/pull-requests\/102\/activity$/);
   const dialog = page.getByRole("dialog", { name: "Comments · fixture/reviewer #24" });
   await expect(dialog).toBeVisible();
@@ -150,7 +150,7 @@ test("the activity sheet asks for the pull request by its id, not its number", a
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(row.getByRole("button", { name: /^0 comments(, unread)? — fixture\/reviewer #24$/ })).toBeFocused();
+  await expect(row.getByRole("button", { name: /^0 comments(, unread activity)? — fixture\/reviewer #24$/ })).toBeFocused();
 });
 
 // j and k walk the table the way they walk the Inbox. Moving the cursor is looking, not reading, so it posts nothing; Enter is the explicit request and opens the activity, which is what records the read.
