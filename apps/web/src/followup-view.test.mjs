@@ -1,6 +1,6 @@
 import { test } from "vite-plus/test";
 import assert from "node:assert/strict";
-import { factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, isMuted, isReadyToMerge, matchesStatus, reasonTone, snoozeBounds, stableOrder, waitingLabel } from "./followup-view.ts";
+import { factsSurvive, followUpSchema, groupItems, groupOf, handledIsUseful, inboxSummary, isMuted, isReadyToMerge, matchesReady, matchesStatus, primaryAction, reasonTone, snoozeBounds, snoozePresets, stableOrder, waitingLabel } from "./followup-view.ts";
 
 const now = Date.parse("2026-09-13T12:00:00Z");
 const day = 86400000;
@@ -155,4 +155,91 @@ test("stableOrder with no remembered order leaves the server's order alone", () 
     [3, 1],
   );
   assert.deepEqual(result.added, []);
+});
+
+const green = { ...pr, review_status: "approved", checks_status: "success", has_conflicts: false };
+const at = new Date(now);
+
+test("the row verbs follow one table, first match wins", () => {
+  const future = new Date(now + day).toISOString();
+  assert.deepEqual(primaryAction(item({ state: "archived", unread: true }), at), { primary: null, secondary: [], markRead: true });
+  assert.deepEqual(primaryAction(item({ state: "waiting", snoozed_until: future }), at), { primary: "unsnooze", secondary: [], markRead: false });
+  // Muted outranks ready: the reader deferred it, so the only verb is taking the deferral back.
+  assert.equal(primaryAction(item({ state: "waiting", snoozed_until: future, pr: green }), at).primary, "unsnooze");
+  assert.deepEqual(primaryAction(item({ state: "follow_up", reasons: ["overdue"], pr: green }), at), { primary: "merge", secondary: ["handled", "snooze"], markRead: false });
+  // Ready but only a new push could clear the reasons: Handled would change nothing, so it is not offered beside the merge link.
+  assert.deepEqual(primaryAction(item({ state: "action", reasons: ["checks_failed"], pr: green }), at).secondary, ["snooze"]);
+  // A waiting row owes nothing, so Handled would only restart someone else's clock.
+  assert.deepEqual(primaryAction(item({ state: "waiting", pr: green }), at), { primary: "merge", secondary: ["snooze"], markRead: false });
+  // Ready is the author's word: a reviewer looking at the same green PR is simply asked to act.
+  assert.equal(primaryAction(item({ state: "action", role: "reviewer", reasons: ["review_requested"], pr: green }), at).primary, "handled");
+  assert.deepEqual(primaryAction(item({ state: "draft" }), at), { primary: null, secondary: ["snooze"], markRead: false });
+  assert.deepEqual(primaryAction(item({ state: "waiting" }), at), { primary: null, secondary: ["snooze"], markRead: false });
+  assert.deepEqual(primaryAction(item({ state: "action", reasons: ["conflict", "checks_failed"], unread: true }), at), { primary: "open", secondary: ["snooze"], markRead: true });
+  assert.deepEqual(primaryAction(item({ state: "action", reasons: ["conflict", "human_feedback"] }), at), { primary: "handled", secondary: ["snooze"], markRead: false });
+  assert.deepEqual(primaryAction(item({ state: "follow_up", reasons: ["overdue"] }), at), { primary: "handled", secondary: ["snooze"], markRead: false });
+});
+
+test("ready to merge excludes finished and deferred rows", () => {
+  assert.equal(matchesReady(item({ state: "follow_up", pr: green }), at), true);
+  assert.equal(matchesReady(item({ state: "archived", pr: green }), at), false);
+  assert.equal(matchesReady(item({ state: "waiting", pr: green, snoozed_until: new Date(now + day).toISOString() }), at), false);
+  assert.equal(matchesReady(item({ state: "follow_up", role: "reviewer", pr: green }), at), false);
+  assert.equal(matchesReady(item({ state: "follow_up", pr: { ...green, has_conflicts: true } }), at), false);
+});
+
+// The payload the browser suite runs against, reduced to what the counts depend on. listFollowUps counts action rows by role plus every follow_up row, which is what the fixture's counts do.
+const payload = [
+  item({ id: 1, state: "action", reasons: ["human_feedback"] }),
+  item({ id: 2, state: "action", role: "reviewer", reasons: ["review_requested"] }),
+  item({ id: 3, state: "follow_up", reasons: ["overdue"], pr: green }),
+  item({ id: 4, state: "waiting", snoozed_until: new Date(now + 7 * day).toISOString() }),
+  item({ id: 5, state: "action", reasons: ["conflict", "checks_failed"] }),
+  item({ id: 6, state: "draft" }),
+  item({ id: 7, state: "archived", pr: green }),
+];
+const payloadCounts = { authored: 2, reviewer: 1, follow_up: 1, recent_merged: 5 };
+
+test("the headline, the badge and the default view are one number", () => {
+  const summary = inboxSummary(payload, payloadCounts, at);
+  const badge = (payloadCounts.authored || 0) + (payloadCounts.reviewer || 0) + (payloadCounts.follow_up || 0);
+  const shown = groupItems(
+    payload.filter((row) => matchesStatus(row, "todo", now)),
+    now,
+  );
+  assert.deepEqual(
+    shown.map((group) => group.group),
+    ["action", "follow_up"],
+  );
+  assert.equal(summary.total, badge);
+  assert.equal(
+    summary.total,
+    shown.reduce((sum, group) => sum + group.items.length, 0),
+  );
+  assert.deepEqual(summary, { total: 4, blocked: 1, authored: 2, reviewer: 1, followUp: 1, ready: 1, recentMerged: 5 });
+  assert.deepEqual(inboxSummary([], {}, at), { total: 0, blocked: 0, authored: 0, reviewer: 0, followUp: 0, ready: 0, recentMerged: 0 });
+});
+
+test("reminder presets land where they say and stay inside the server's window", () => {
+  const [three, seven, tomorrow] = snoozePresets(at, { timezone: "Asia/Tokyo", digest_time: "09:00" });
+  assert.deepEqual([three.key, seven.key, tomorrow.key], ["3d", "7d", "tomorrow"]);
+  assert.equal(three.until.getTime(), now + 3 * day);
+  assert.equal(seven.until.getTime(), now + 7 * day);
+  // 12:00 UTC is 21:00 in Tokyo, so the next morning there is 09:00 JST on the 14th, which is midnight UTC.
+  assert.equal(tomorrow.until.toISOString(), "2026-09-14T00:00:00.000Z");
+  // Across a daylight-saving change the digest hour is still the reader's 09:00: New York moves to EDT on 8 March 2026.
+  assert.equal(snoozePresets(new Date("2026-03-07T20:00:00Z"), { timezone: "America/New_York", digest_time: "09:00" })[2].until.toISOString(), "2026-03-08T13:00:00.000Z");
+  // Late evening in Tokyo is already the next day in UTC terms, which is the case a UTC-only calculation gets wrong.
+  assert.equal(snoozePresets(new Date("2026-09-13T16:30:00Z"), { timezone: "Asia/Tokyo", digest_time: "07:30" })[2].until.toISOString(), "2026-09-14T22:30:00.000Z");
+  // Without settings, or with a zone the browser does not know, it is 09:00 tomorrow on the browser's clock.
+  for (const settings of [undefined, { timezone: "Not/AZone", digest_time: "09:00" }]) {
+    const local = snoozePresets(at, settings)[2].until;
+    const expected = new Date(now);
+    expected.setDate(expected.getDate() + 1);
+    expected.setHours(9, 0, 0, 0);
+    assert.equal(local.getTime(), expected.getTime());
+  }
+  const ceiling = new Date(now);
+  ceiling.setFullYear(ceiling.getFullYear() + 1);
+  for (const preset of snoozePresets(at)) assert.ok(preset.until.getTime() >= now + 60000 && preset.until.getTime() <= ceiling.getTime(), preset.key);
 });

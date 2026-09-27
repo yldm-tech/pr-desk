@@ -38,7 +38,7 @@ test("every legacy address lands on its new home with the query intact", async (
 // A tab strip or a history list shows the title and nothing else, so it names the view as specifically as the page heading does. A page may add a count to its own name ("Inbox (4)"), so that part is optional here.
 test("the document title names the page and the view", async ({ page }) => {
   for (const [route, title] of [
-    ["/#/inbox", /^Inbox( \(\d+\))? · PR Desk$/],
+    ["/#/inbox", /^Inbox \(4\) · PR Desk$/],
     ["/#/prs", /^Pull requests( \(\d+\))? · PR Desk$/],
     ["/#/prs/blocked", /^Blocked( \(\d+\))? · Pull requests · PR Desk$/],
     ["/#/repos", /^Repositories( \(\d+\))? · PR Desk$/],
