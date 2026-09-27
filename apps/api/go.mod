@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
-	github.com/gin-contrib/cors v1.7.8
+	github.com/gin-contrib/cors v1.7.9
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/go-github/v68 v68.0.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
