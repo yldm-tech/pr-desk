@@ -28,29 +28,15 @@ import {
   followUpWorkspace,
 } from "./followup-styles";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, Check, Clock, Inbox, MessageSquare, Search } from "lucide-react";
-import ky from "ky";
-import { apiURL } from "./api-url";
 import { safeGitHubLink } from "./activity-model";
-import { factsSurvive, groupItems, handledIsUseful, isMuted, isReadyToMerge, matchesStatus, reasonTone, responseSchema, snoozeBounds, stableOrder, waitingLabel, type FollowUp, type FollowUpGroup } from "./followup-view";
+import { factsSurvive, groupItems, handledIsUseful, isMuted, isReadyToMerge, matchesStatus, reasonTone, snoozeBounds, stableOrder, waitingLabel, type FollowUp, type FollowUpGroup } from "./followup-view";
 import { followUpErrorMessage, useBulkFollowUpAction, useFollowUpAction } from "./followup-actions";
+import { useFollowUps } from "./queries";
 
-export function useFollowUps(enabled = true) {
-  return useQuery({
-    queryKey: ["follow-ups"],
-    enabled,
-    queryFn: ({ signal }) =>
-      ky
-        .get(apiURL + "/api/v1/follow-ups", { credentials: "include", signal, retry: 0 })
-        .json()
-        .then((data) => responseSchema.parse(data)),
-    staleTime: 15000,
-    // The refetch a returning reader gets is safe because `stableOrder` holds the list still: the flag that used to suppress it was written before the freeze existed and afterwards only cost freshness, on a page with no refresh control where the interval does not run while the tab is hidden. Coming back from the pull request you just fixed is the most common way anyone arrives here.
-    refetchInterval: 60000,
-  });
-}
+// Moved to queries.ts with the other shared queries; re-exported so the existing imports keep working.
+export { useFollowUps } from "./queries";
 
 // What the confirmation needs in order to name the row it would restore. There is one strip and one undo slot for the whole workspace and every action reassigns it, so a bare "Undo" beside a sentence the reader has already looked away from can point at a row they never meant to touch.
 type StripUndo = { id: number; version: number; repo: string; number: number; action: string };
@@ -292,10 +278,10 @@ export function FollowUpSummary() {
   const blocked = todo.filter((item) => item.reasons.some((reason) => reasonTone(reason) === "blocked")).length;
   const tiles = [
     // Named after the rule it counts rather than after the word the PR table's differently-computed tile already uses: these rows are exactly the ones `handledIsUseful` refuses, and two tiles reading "Blocked" over two different numbers is how a reader stops trusting either.
-    { key: "blocked", label: "followup.blockedPushCount", count: blocked, to: "/attention?status=todo&tone=blocked", tone: "blocked" },
-    { key: "authored", label: "followup.authored_action", count: query.data.counts.authored || 0, to: "/attention?role=authored&status=action", tone: undefined },
-    { key: "reviewer", label: "followup.reviewer_action", count: query.data.counts.reviewer || 0, to: "/attention?role=reviewer&status=action", tone: undefined },
-    { key: "follow_up", label: "followup.follow_up", count: query.data.counts.follow_up || 0, to: "/attention?status=follow_up", tone: undefined },
+    { key: "blocked", label: "followup.blockedPushCount", count: blocked, to: "/inbox?status=todo&tone=blocked", tone: "blocked" },
+    { key: "authored", label: "followup.authored_action", count: query.data.counts.authored || 0, to: "/inbox?role=authored&status=action", tone: undefined },
+    { key: "reviewer", label: "followup.reviewer_action", count: query.data.counts.reviewer || 0, to: "/inbox?role=reviewer&status=action", tone: undefined },
+    { key: "follow_up", label: "followup.follow_up", count: query.data.counts.follow_up || 0, to: "/inbox?status=follow_up", tone: undefined },
   ];
   return (
     <section className={followUpSummary} aria-label={t("followup.priority")}>
@@ -320,14 +306,14 @@ export function FollowUpSummary() {
       <div className={panelHeading}>
         <h2>{t("followup.priority")}</h2>
         {/* Five of forty used to read exactly like five of five. */}
-        <Link to="/attention">{t("followup.viewAllCount", { count: todo.length })}</Link>
+        <Link to="/inbox">{t("followup.viewAllCount", { count: todo.length })}</Link>
       </div>
       <ul data-testid="priority-list" className={followUpPriority}>
         {priority.map((item) => {
           const waiting = waitingLabel(item.waiting_since, now);
           return (
             <li key={item.id}>
-              <Link to={`/attention?focus=${item.id}`}>
+              <Link to={`/inbox?focus=${item.id}`}>
                 <span>
                   {item.pr.repo} #{item.pr.number} · {item.pr.title}
                 </span>
@@ -352,12 +338,12 @@ export function FollowUpSummary() {
       {/* The list showed five of forty exactly as it showed five of five. The link above states the total; this states the part that is not on screen, at the end of the list where the reader runs out. */}
       {todo.length > priority.length && (
         <p className={followUpMergedLink}>
-          <Link to="/attention">{t("followup.moreItems", { count: todo.length - priority.length })}</Link>
+          <Link to="/inbox">{t("followup.moreItems", { count: todo.length - priority.length })}</Link>
         </p>
       )}
       {/* Demoted from a tile, not removed: finished work is worth being able to look at, just not at the same weight as work that is waiting. */}
       <p className={followUpMergedLink}>
-        <Link to="/attention?status=archived&merged=1">{t("followup.recent_merged")}</Link>
+        <Link to="/inbox?status=archived&merged=1">{t("followup.recent_merged")}</Link>
         <span>{query.data.counts.recent_merged || 0}</span>
       </p>
     </section>

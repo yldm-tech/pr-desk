@@ -1,0 +1,96 @@
+import { useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
+
+// The one guard every single-key shortcut goes through, moved unchanged from the "/" handler App.tsx used to carry. True means "leave this key alone": a held modifier belongs to the browser or the OS, a key typed into a field or a native picker is text, and while any dialog is open the keys belong to it.
+export function isShortcutTarget(e: KeyboardEvent): boolean {
+  const target = e.target as HTMLElement | null;
+  if (e.metaKey || e.ctrlKey || e.altKey) return true;
+  if (target?.closest?.("input,textarea,select,[contenteditable=true],[role=dialog],dialog,[role=combobox]")) return true;
+  return !!document.querySelector("dialog[open],[data-state=open][role=dialog]");
+}
+
+type Stroke = { key: string; at: number };
+// How long the second key of a `g` sequence may follow the first.
+const SEQUENCE_WINDOW_MS = 1000;
+
+// Pure half of a key sequence such as "g i". The buffer is the strokes still inside the window; a stroke that completes a binding returns it and empties the buffer, one that could still grow into a binding is kept, and anything else is dropped from the front until what is left is a prefix again, so "x g i" still matches "g i".
+export function matchSequence(buffer: Stroke[], key: string, now: number, bindings: string[]): { match: string | null; buffer: Stroke[] } {
+  let strokes = [...buffer.filter((stroke) => now - stroke.at <= SEQUENCE_WINDOW_MS), { key, at: now }];
+  while (strokes.length) {
+    const typed = strokes.map((stroke) => stroke.key).join(" ");
+    if (bindings.includes(typed)) return { match: typed, buffer: [] };
+    if (bindings.some((binding) => binding.startsWith(typed + " "))) return { match: null, buffer: strokes };
+    strokes = strokes.slice(1);
+  }
+  return { match: null, buffer: [] };
+}
+
+// "mod+k" is Command on Apple platforms and Control elsewhere; both are accepted everywhere because a Mac user on a PC keyboard presses Control.
+const isModBinding = (binding: string) => binding.startsWith("mod+");
+const modMatches = (binding: string, e: KeyboardEvent) => (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === binding.slice(4).toLowerCase();
+
+type ShortcutOptions = { enabled?: boolean; scope?: "global" | "sheet"; element?: RefObject<HTMLElement | null>; allowInInputs?: boolean };
+
+// Binds one or more keys: a single key ("j", "/", "?"), a sequence ("g i") or a modified key ("mod+k"). Global bindings listen on the window behind isShortcutTarget. Sheet bindings listen on the sheet element itself, which is the one place a single key is allowed while a dialog is open, and still ignore modifiers and typing in a field. The handler is read through a ref, so an inline arrow does not rebind the listener on every render; a handler that returns false declines the key, which is then left to the browser.
+export function useShortcut(keys: string | string[], handler: (e: KeyboardEvent) => void | boolean, opts: ShortcutOptions = {}): void {
+  const { enabled = true, scope = "global", element, allowInInputs = false } = opts;
+  const latest = useRef(handler);
+  latest.current = handler;
+  const buffer = useRef<Stroke[]>([]);
+  const bindings = Array.isArray(keys) ? keys : [keys];
+  const signature = bindings.join("\u0000");
+  useEffect(() => {
+    if (!enabled) return;
+    const list = signature.split("\u0000");
+    const sequences = list.filter((binding) => binding.includes(" "));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return;
+      const mod = list.find((binding) => isModBinding(binding) && modMatches(binding, e));
+      if (mod) {
+        const target = e.target as HTMLElement | null;
+        if (!allowInInputs && target?.closest?.("input,textarea,select,[contenteditable=true]")) return;
+        if (latest.current(e) !== false) e.preventDefault();
+        return;
+      }
+      if (scope === "sheet") {
+        const target = e.target as HTMLElement | null;
+        if (e.metaKey || e.ctrlKey || e.altKey || target?.closest?.("input,textarea,select,[contenteditable=true],[role=combobox]")) return;
+      } else if (allowInInputs ? e.metaKey || e.ctrlKey || e.altKey : isShortcutTarget(e)) return;
+      if (sequences.length) {
+        const result = matchSequence(buffer.current, e.key, e.timeStamp, sequences);
+        buffer.current = result.buffer;
+        if (result.match) {
+          if (latest.current(e) !== false) e.preventDefault();
+          return;
+        }
+        if (result.buffer.length) return;
+      }
+      if (list.includes(e.key) && latest.current(e) !== false) e.preventDefault();
+    };
+    const target: HTMLElement | Window | null = scope === "sheet" ? (element?.current ?? null) : window;
+    if (!target) return;
+    target.addEventListener("keydown", onKey as EventListener);
+    return () => target.removeEventListener("keydown", onKey as EventListener);
+  }, [enabled, scope, element, allowInInputs, signature]);
+}
+
+// Open state of the two app-wide overlays, so the palette and the shortcuts sheet can be opened from a key, a button or each other without a provider threading them through the tree.
+const overlayState = { palette: false, shortcuts: false };
+const listeners = new Set<() => void>();
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+const set = (key: keyof typeof overlayState, value: boolean) => {
+  if (overlayState[key] === value) return;
+  overlayState[key] = value;
+  for (const listener of listeners) listener();
+};
+
+export const overlays = {
+  openPalette: () => set("palette", true),
+  closePalette: () => set("palette", false),
+  openShortcuts: () => set("shortcuts", true),
+  closeShortcuts: () => set("shortcuts", false),
+  usePaletteOpen: () => useSyncExternalStore(subscribe, () => overlayState.palette),
+  useShortcutsOpen: () => useSyncExternalStore(subscribe, () => overlayState.shortcuts),
+};

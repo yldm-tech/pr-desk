@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { followupLocales } from "./followup-locales";
 import { accessLocales } from "./access-locales";
+import { namespaceResources } from "./locale-namespaces";
 const dir = new URL("./locales/", import.meta.url);
 const src = new URL("./", import.meta.url);
 const languages = ["en", "zh-CN", "ja", "ko", "es"];
 const others = languages.filter((language) => language !== "en");
 const plural = /_(zero|one|two|few|many|other)$/;
-// Mirror the bundles i18n.ts assembles so the nested follow-up and access namespaces are covered by the same checks as the flat files.
+// Mirror the bundles i18n.ts assembles so the nested follow-up and access namespaces, and every namespace locale-namespaces.ts lists, are covered by the same checks as the flat files.
 const flatten = (value, prefix = "") => Object.entries(value).flatMap(([key, item]) => (item && typeof item === "object" ? flatten(item, `${prefix}${key}.`) : [[`${prefix}${key}`, item]]));
-const bundles = Object.fromEntries(languages.map((language) => [language, Object.fromEntries(flatten({ ...JSON.parse(fs.readFileSync(new URL(`${language}.json`, dir))), followup: followupLocales[language], access: accessLocales[language] }))]));
+const bundles = Object.fromEntries(languages.map((language) => [language, Object.fromEntries(flatten({ ...JSON.parse(fs.readFileSync(new URL(`${language}.json`, dir))), followup: followupLocales[language], access: accessLocales[language], ...namespaceResources(language) }))]));
 // Plural suffixes are per language, so compare the stems: English "record"/"records" is one Japanese form and three Spanish ones.
 const stems = (language) => [...new Set(Object.keys(bundles[language]).map((key) => key.replace(plural, "")))].sort();
 const placeholders = (value) => (value.match(/\{\{[^}]+\}\}/g) ?? []).sort();
@@ -60,4 +61,18 @@ test("every component formats numbers and dates through the active language", ()
   for (const file of components) {
     assert.equal(fs.readFileSync(new URL(file, src), "utf8").match(/\.toLocale(String|TimeString|DateString)\(\s*\)/g), null, file);
   }
+});
+// Both scans above read src/ without recursing, so a component moved into a subfolder silently drops out of the key and formatting checks. locales/ holds the JSON bundles and is the one subfolder src/ may have.
+test("source files stay in src/ itself, where the scans above can see them", () => {
+  const nested = [];
+  const walk = (dir, relative) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const path = relative ? `${relative}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (path !== "locales") walk(new URL(`${entry.name}/`, dir), path);
+      } else if (relative && /\.tsx?$/.test(entry.name)) nested.push(path);
+    }
+  };
+  walk(src, "");
+  assert.deepEqual(nested, []);
 });
