@@ -9,6 +9,7 @@ import { oauthBanner } from "./pr-model";
 import { AccountSkeleton } from "./LoadingSkeleton";
 import { LanguageSelect } from "./LanguageMenu";
 import { HardRefresh } from "./HardRefresh";
+import { useMediaQuery } from "./media-query";
 import { DetailHost } from "./DetailHost";
 import { Banners } from "./Banners";
 import { ShellNav, SettingsLink } from "./ShellNav";
@@ -26,20 +27,8 @@ import { ToastRegion } from "./ui-overlay";
 const CommandPalette = React.lazy(() => import("./CommandPalette"));
 const ShortcutsSheet = React.lazy(() => import("./ShortcutsSheet"));
 
-const SHELL_QUERY = "(min-width: 900px)";
-const subscribeShell = (listener: () => void) => {
-  const media = window.matchMedia(SHELL_QUERY);
-  media.addEventListener("change", listener);
-  return () => media.removeEventListener("change", listener);
-};
 // Whether the sidebar is showing. Layout never reads this (CSS does that from the same 900px token); only the popovers do, because a menu anchored at the foot of the sidebar opens from its start edge while one anchored in the top bar's right corner opens from its end.
-function useSidebarShell() {
-  return React.useSyncExternalStore(
-    subscribeShell,
-    () => window.matchMedia(SHELL_QUERY).matches,
-    () => false,
-  );
-}
+const SHELL_QUERY = "(min-width: 900px)";
 
 // The page heading each destination has when its page does not print one of its own. Pages rebuilt on PageHeader carry their own h1, and this one then hides itself (the `:has()` rule on it), so a page is never without a heading and never has two.
 const headingKeys: Record<Destination, string> = { inbox: "shell.navInbox", prs: "shell.navPulls", repos: "shell.navRepos", insights: "shell.navInsights", settings: "followup.settings", about: "shell.aboutTitle" };
@@ -76,7 +65,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { query: progress, running } = useSyncProgress({ connected, pending });
   const followUps = useFollowUps(connected);
   const logoutMutation = useLogout();
-  const sidebar = useSidebarShell();
+  const sidebar = useMediaQuery(SHELL_QUERY);
 
   // The result of a manual sync is reported in the one toast slot. A success floats and goes; an error stays until dismissed. A run the server reports as started clears a result that was about the request, because the run itself is now the news and the pill is telling it.
   const [syncFeedback, setSyncFeedback] = useSyncFeedback();

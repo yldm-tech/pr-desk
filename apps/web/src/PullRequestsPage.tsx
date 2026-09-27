@@ -6,7 +6,7 @@ import { PRListSkeleton } from "./LoadingSkeleton";
 import { PRRow, PRTableHeader } from "./PRRow";
 import { useDetail } from "./detail-context";
 import { useDocumentTitle } from "./page-title";
-import type { PR } from "./pr-model";
+import { prGitHubURL, type PR } from "./pr-model";
 import { useFollowUps, usePRList, useStats } from "./queries";
 import { paths, prViewFromPath, prViewPath, type PRView } from "./routes";
 import { useShortcut } from "./shortcuts";
@@ -22,7 +22,6 @@ const viewOrder: PRView[] = ["open", "review-requested", "changes-requested", "a
 // Merged has no count: /stats counts this month's merges while the view lists every merge, so any number beside it would describe a different set. Changes requested and Approved have no count on /stats at all.
 const countedViews: PRView[] = ["open", "review-requested", "blocked"];
 
-const githubURL = (pr: PR) => pr.url || `https://github.com/${pr.repo}/pull/${pr.number}`;
 
 // The pull-request list at /prs and /prs/:view. The view is the address, so the pressed pill, the request filter and the document title are all read from the same path.
 export function PullRequestsPage() {
@@ -111,7 +110,7 @@ export function PullRequestsPage() {
   });
   useShortcut("o", () => {
     if (!cursorRow) return false;
-    window.open(githubURL(cursorRow), "_blank", "noopener,noreferrer");
+    window.open(prGitHubURL(cursorRow), "_blank", "noopener,noreferrer");
   });
   useShortcut("Escape", () => {
     if (cursor === null) return false;

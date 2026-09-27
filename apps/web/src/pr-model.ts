@@ -2,6 +2,9 @@ import { z } from "zod";
 import { safeGitHubLink } from "./activity-model";
 import type { GlyphKind, Tone } from "./tone";
 
+// A pull request on GitHub: the server's URL when it is a safe github.com link, otherwise the canonical address built from the repository and number. The one builder every surface uses (the row titles, the `o` key, the detail header), so none of them can link somewhere another would refuse.
+export const prGitHubURL = (pr: { url?: string | null; repo: string; number: number }) => safeGitHubLink(pr.url || "") ?? `https://github.com/${pr.repo}/pull/${pr.number}`;
+
 export const PRSchema = z.object({
   id: z.number().int().positive(),
   repo: z.string(),

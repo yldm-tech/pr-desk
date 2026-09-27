@@ -1,14 +1,12 @@
 import { CheckCheck, PanelRight } from "lucide-react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { safeGitHubLink } from "./activity-model";
 import type { FollowUpActionHandle } from "./followup-actions";
 import { primaryAction, type FollowUp, type RowVerb } from "./followup-view";
+import { prGitHubURL } from "./pr-model";
 import { SnoozePopover } from "./SnoozePopover";
 import { Button, cx, IconButton, LinkButton } from "./ui-controls";
 
-// The pull request on GitHub: the server's URL when it is a safe github.com link, otherwise the canonical address built from the repository and number.
-export const gitHubURL = (pr: FollowUp["pr"]) => safeGitHubLink(pr.url || "") ?? `https://github.com/${pr.repo}/pull/${pr.number}`;
 
 // Snooze and Mark read wait behind the row on a mouse until it is hovered, focused or under the cursor, so a list of rows reads as titles rather than as a wall of buttons. Only where hover exists: on a touch screen a control that appears on hover never appears.
 const reveal = "hoverable:opacity-0 hoverable:group-hover:opacity-100 hoverable:group-focus-within:opacity-100 hoverable:group-data-active:opacity-100 hoverable:data-[state=open]:opacity-100 transition-opacity duration-[var(--dur-fast)]";
@@ -45,7 +43,7 @@ export function FollowUpActions({
   const row = variant !== "sheet";
   const size = row ? "sm" : "md";
   const actionFor = (label: string) => t("followup.actionFor", { action: label, repo: item.pr.repo, number: item.pr.number });
-  const link = gitHubURL(item.pr);
+  const link = prGitHubURL(item.pr);
   const render = (verb: RowVerb, primary: boolean) => {
     const variantName = primary && (emphasis || !row) ? "primary" : "secondary";
     if (verb === "handled")

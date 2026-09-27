@@ -4,9 +4,10 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityPanel } from "./ActivityPanel";
 import { useDetail, type DetailTarget } from "./detail-context";
-import { FollowUpActions, gitHubURL } from "./FollowUpActions";
+import { FollowUpActions } from "./FollowUpActions";
+import { prGitHubURL } from "./pr-model";
 import { followUpErrorMessage, useFollowUpAction } from "./followup-actions";
-import { factsSurvive, groupOf, primaryAction, reasonTone, type FollowUp, type FollowUpGroup } from "./followup-view";
+import { factsSurvive, groupOf, handledIsUseful, primaryAction, reasonTone, type FollowUp, type FollowUpGroup } from "./followup-view";
 import { ActivitySkeleton } from "./LoadingSkeleton";
 import { useAuth, useActivity, useFollowUps } from "./queries";
 import { useShortcut } from "./shortcuts";
@@ -110,7 +111,7 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
   const followUp = followUps.data?.data.find((item) => item.pr.id === pr.id) ?? target.followUp;
   const now = new Date();
   const group = followUp ? groupOf(followUp, now.getTime()) : null;
-  const link = followUp ? gitHubURL(followUp.pr) : pr.url || `https://github.com/${pr.repo}/pull/${pr.number}`;
+  const link = prGitHubURL(followUp?.pr ?? pr);
   const comments = activity.data ? (activity.data.conversation?.length ?? 0) + (activity.data.review_comments?.length ?? 0) : pr.comments;
   const waitingSince = followUp && group !== "archived" && group !== "draft" && !Number.isNaN(Date.parse(followUp.waiting_since)) ? followUp.waiting_since : null;
   const excerptAt = followUp?.excerpt_at && !Number.isNaN(Date.parse(followUp.excerpt_at)) ? formatDate(new Date(followUp.excerpt_at), language, now) : null;
@@ -170,7 +171,7 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
           })}
         </ul>
       )}
-      {followUp.reasons.length > 0 && followUp.reasons.every((reason) => reason === "conflict" || reason === "checks_failed") && <p className="text-caption text-fg-muted">{t("followup.blockedByGitHub")}</p>}
+      {!handledIsUseful(followUp) && <p className="text-caption text-fg-muted">{t("followup.blockedByGitHub")}</p>}
       {followUp.excerpt && (
         <blockquote className="m-0 grid gap-1 border-l-2 border-line py-0.5 pl-3">
           <p className="text-body whitespace-pre-wrap text-fg [overflow-wrap:anywhere]">“{followUp.excerpt}”</p>

@@ -3,7 +3,8 @@ import { motion, useIsPresent, useReducedMotion } from "motion/react";
 import { BellOff, Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FollowUpActions, gitHubURL } from "./FollowUpActions";
+import { FollowUpActions } from "./FollowUpActions";
+import { prGitHubURL } from "./pr-model";
 import { followUpErrorMessage, useFollowUpAction, type FollowUpActionInput } from "./followup-actions";
 import { factsSurvive, handledIsUseful, isMuted, isReadyToMerge, reasonTone, waitingLabel, type FollowUp, type FollowUpGroup } from "./followup-view";
 import { reasonIcon, type GlyphKind, type Tone } from "./tone";
@@ -183,7 +184,7 @@ export function InboxRow({
       glyph={<StateGlyph tone={glyph.tone} kind={glyph.kind} unread={item.unread} busy={isBusy} />}
       title={
         <h3 id={titleId} className="m-0 text-[length:inherit] leading-[inherit] font-[inherit]">
-          <a href={gitHubURL(item.pr)} target="_blank" rel="noopener noreferrer" className="text-fg no-underline decoration-fg-subtle underline-offset-2 hover:underline" onClick={() => onTitleRead(item)}>
+          <a href={prGitHubURL(item.pr)} target="_blank" rel="noopener noreferrer" className="text-fg no-underline decoration-fg-subtle underline-offset-2 hover:underline" onClick={() => onTitleRead(item)}>
             {item.pr.title}
             <span className="sr-only"> ({t("inbox.newTab")})</span>
           </a>

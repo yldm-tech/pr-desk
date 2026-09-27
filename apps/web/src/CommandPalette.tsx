@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
@@ -8,6 +8,7 @@ import { resources } from "./i18n";
 import { openInstallPopup } from "./github-access";
 import { hardReload } from "./service-worker";
 import { INSTALLED, iosStandalone } from "./HardRefresh";
+import { useMediaQuery } from "./media-query";
 import { groupOf, reasonTone, type FollowUp } from "./followup-view";
 import { useAuth, useFollowUps, useSyncMutation, useSyncPending } from "./queries";
 import { useSyncInFlight } from "./SyncProgress";
@@ -21,18 +22,6 @@ import { Sheet } from "./ui-overlay";
 
 // The second key of each `g` sequence and where it goes. `n` is Insights because `i` is taken by the Inbox, the destination people reach for most.
 const goKeys: Record<string, Destination> = { i: "inbox", p: "prs", r: "repos", n: "insights", s: "settings" };
-
-function useMediaQuery(query: string): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      const media = window.matchMedia(query);
-      media.addEventListener("change", listener);
-      return () => media.removeEventListener("change", listener);
-    },
-    () => window.matchMedia(query).matches,
-    () => false,
-  );
-}
 
 // The palette's own registration point: ⌘K / Ctrl K toggles it (inside text fields too, which is what makes it reachable from a focused search box), and the `g` sequences jump between destinations. Both are bound here rather than in the shell so the shell never carries keyboard logic of its own. The dialog itself mounts only while open, so every opening starts from an empty query and a fresh selection.
 export function CommandPalette() {

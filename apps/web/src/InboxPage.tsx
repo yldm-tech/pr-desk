@@ -1,16 +1,17 @@
 import { AnimatePresence } from "motion/react";
 import { Inbox, PanelRight, Settings2 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type FocusEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { DetailPane } from "./DetailPane";
 import { useDetail } from "./detail-context";
-import { gitHubURL } from "./FollowUpActions";
 import { groupItems, inboxRoles, inboxStatuses, inboxSummary, isMuted, matchesReady, matchesStatus, primaryAction, reasonTone, stableOrder, type FollowUp, type FollowUpGroup, type InboxRole } from "./followup-view";
 import { InboxRow, type RowCommands, type RowReport } from "./InboxRow";
 import { InboxSummary } from "./InboxSummary";
 import { ItemRowSkeleton, SummarySkeleton } from "./LoadingSkeleton";
+import { useMediaQuery } from "./media-query";
 import { useDocumentTitle } from "./page-title";
+import { prGitHubURL } from "./pr-model";
 import { useFollowUps } from "./queries";
 import { useShortcut } from "./shortcuts";
 import { useReminderSettings } from "./SnoozePopover";
@@ -33,19 +34,6 @@ const waitingAt = (item: FollowUp) => {
   return Number.isNaN(value) ? Number.POSITIVE_INFINITY : value;
 };
 
-// Whether the primary pointer is coarse (touch). On touch there is no cursor to earn the primary style, so the first row of each group takes it instead.
-const coarseQuery = "(pointer: coarse)";
-const subscribeCoarse = (listener: () => void) => {
-  const media = window.matchMedia(coarseQuery);
-  media.addEventListener("change", listener);
-  return () => media.removeEventListener("change", listener);
-};
-const useCoarsePointer = () =>
-  useSyncExternalStore(
-    subscribeCoarse,
-    () => window.matchMedia(coarseQuery).matches,
-    () => false,
-  );
 
 const detailTarget = (item: FollowUp) => ({ pr: { id: item.pr.id, repo: item.pr.repo, number: item.pr.number, title: item.pr.title, url: item.pr.url, comments: item.pr.comments_count }, followUp: item });
 
@@ -57,7 +45,8 @@ export function InboxPage() {
   const settings = useReminderSettings();
   const detail = useDetail();
   const undo = useUndoSlot();
-  const coarse = useCoarsePointer();
+  // Whether the primary pointer is coarse (touch). On touch there is no cursor to earn the primary style, so the first row of each group takes it instead.
+  const coarse = useMediaQuery("(pointer: coarse)");
   const splitRef = useRef<HTMLDivElement>(null);
   const split = useSplitMode(splitRef);
   const region = useRef<HTMLElement>(null);
@@ -277,7 +266,7 @@ export function InboxPage() {
     if (key === "Enter" || key === " ") {
       const row = document.getElementById(`followup-${cursorItem.id}`);
       if (row) openItem(cursorItem, row);
-    } else if (key === "o") window.open(gitHubURL(cursorItem.pr), "_blank", "noopener,noreferrer");
+    } else if (key === "o") window.open(prGitHubURL(cursorItem.pr), "_blank", "noopener,noreferrer");
     else if (!commands || commands.busy()) return;
     else if (key === "e") {
       if (offered.includes("handled")) commands.run({ action: "handled" });

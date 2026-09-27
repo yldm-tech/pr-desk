@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMediaQuery } from "./media-query";
 import { useTranslation } from "react-i18next";
 import { RotateCw } from "lucide-react";
 import { hardReload } from "./service-worker";
@@ -10,20 +11,11 @@ export const INSTALLED = "(display-mode: standalone), (display-mode: minimal-ui)
 // iOS added the display-mode query in 13; older home-screen installs report themselves only through this non-standard flag, and a reader on one of them is exactly the reader with no reload.
 export const iosStandalone = () => (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
-const installed = () => (typeof matchMedia === "function" && matchMedia(INSTALLED).matches) || iosStandalone();
-
 export function HardRefresh({ className }: { className?: string }) {
   const { t } = useTranslation();
-  // Read once for the first paint and then kept current: a window can be installed, or leave standalone for a tab, without the document being reloaded.
-  const [standalone, setStandalone] = useState(installed);
+  // Kept current: a window can be installed, or leave standalone for a tab, without the document being reloaded.
+  const standalone = useMediaQuery(INSTALLED) || iosStandalone();
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (typeof matchMedia !== "function") return;
-    const query = matchMedia(INSTALLED);
-    const update = () => setStandalone(query.matches || iosStandalone());
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
   if (!standalone) return null;
   return (
     <IconButton

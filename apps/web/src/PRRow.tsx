@@ -2,7 +2,7 @@ import { CircleX, Clock, MessageSquare } from "lucide-react";
 import type { Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { groupOf, reasonTone, type FollowUp } from "./followup-view";
-import { checksChip, prTone, statusKey, type PR } from "./pr-model";
+import { checksChip, prGitHubURL, prTone, statusKey, type PR } from "./pr-model";
 import { reasonIcon, type Tone } from "./tone";
 import { Button, cx } from "./ui-controls";
 import { FactChip, StateGlyph, Time } from "./ui-display";
@@ -57,7 +57,7 @@ function followUpTone(item: FollowUp): Tone {
 export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, ref }: { pr: PR; followUp?: FollowUp; now: number; active: boolean; onFilterRepository: (repo: string) => void; onOpen: (opener: HTMLElement | null) => void; ref?: Ref<HTMLElement> }) {
   const { t } = useTranslation();
   const { tone, kind } = prTone(pr);
-  const href = pr.url || `https://github.com/${pr.repo}/pull/${pr.number}`;
+  const href = prGitHubURL(pr);
   const group = followUp ? groupOf(followUp, now) : null;
   // Say it once: a draft follow-up on a draft row, or an archived one on a merged or closed row, repeats the status word beside it.
   const groupChip = followUp && group !== "draft" && group !== "archived";
