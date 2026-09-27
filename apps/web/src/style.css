@@ -365,13 +365,14 @@
   #root :where(h1, h2, h3, p, ul) {
     margin: 0;
   }
+  /* Unitless line height on controls, so a control's intrinsic height grows with its font: under a coarse pointer the 16px rule below makes a field 24px of text, which with the controls' own padding is what reaches the 44px tap floor. */
   button,
   input,
   select,
   textarea {
     font-family: var(--font-ui);
     font-size: var(--text-body);
-    line-height: var(--text-body--line-height);
+    line-height: 1.5;
     color: inherit;
   }
   button {
