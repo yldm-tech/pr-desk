@@ -14,7 +14,7 @@ const cell = {
   repository: "col-start-1 col-end-2 row-start-2 min-w-0 self-center pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-start",
   status: "col-start-1 col-end-3 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1",
   updated: "col-start-2 col-end-3 row-start-1 justify-self-end pt-0.5 text-caption whitespace-nowrap text-fg-muted tabular-nums @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:text-right",
-  activity: "col-start-2 col-end-3 row-start-2 self-center justify-self-end @row/dashboard:col-start-5 @row/dashboard:col-end-6 @row/dashboard:row-start-1 @row/dashboard:self-start @row/dashboard:-mt-1",
+  activity: "col-start-2 col-end-3 row-start-2 self-center justify-self-end pointer-coarse:@max-row/dashboard:-my-2.5 @row/dashboard:col-start-5 @row/dashboard:col-end-6 @row/dashboard:row-start-1 @row/dashboard:self-start @row/dashboard:-mt-1",
 };
 
 // The same visually-hidden recipe ItemList's own header uses: in the accessibility tree at every width, painted only once the columns exist.
@@ -89,7 +89,7 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
           title={pr.repo}
           aria-label={t("filterToRepository", { repo: pr.repo })}
           onClick={() => onFilterRepository(pr.repo)}
-          className="max-w-full cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-caption text-fg-muted [overflow-wrap:anywhere] hover:text-fg hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          className="max-w-full cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left text-caption text-fg-muted [overflow-wrap:anywhere] hover:text-fg hover:underline pointer-coarse:@max-row/dashboard:-my-2.5 pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
         >
           {pr.repo}
         </button>

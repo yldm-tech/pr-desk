@@ -30,7 +30,8 @@ function Count({ value, phrase, tone, to, title, repo }: { value: number; phrase
   if (value === 0) return <span className={cx(place, "hidden text-fg-subtle @table/dashboard:block")}>{content}</span>;
   if (!to) return <span className={cx(place, numberTone[tone])}>{content}</span>;
   return (
-    <Link to={to} title={title} className={cx(place, numberTone[tone], "inline-flex items-center rounded-sm font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center @table/dashboard:justify-end")}>
+    // Text-sized, so a card's counts read as one compact line of stats rather than a column of tall buttons; on a touch screen the invisible ::before takes the target to 44px without taking the space.
+    <Link to={to} title={title} className={cx(place, numberTone[tone], "relative inline-flex items-center rounded-sm leading-snug font-medium underline decoration-current/35 decoration-1 underline-offset-2 hover:decoration-current pointer-coarse:before:absolute pointer-coarse:before:-inset-x-1 pointer-coarse:before:-inset-y-3 pointer-coarse:before:content-[''] @table/dashboard:justify-end")}>
       {content}
       <span className="sr-only"> · {repo}</span>
     </Link>
@@ -58,14 +59,15 @@ function RepositoryRow({ repo }: { repo: RepositorySummary }) {
         </TextLink>
       }
     >
-      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-caption @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
+      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 pl-7 text-caption @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
         <Count value={repo.open} phrase={t("repos.openCount", { count: repo.open })} tone="plain" to={prs} repo={repo.repo} />
         <Count value={repo.needs_attention} phrase={t("repos.attentionCount", { count: repo.needs_attention })} tone="action" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
         <Count value={repo.conflicts} phrase={t("repos.conflictsCount", { count: repo.conflicts })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
         <Count value={repo.checks_failing} phrase={t("repos.failingCount", { count: repo.checks_failing })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
       </div>
       <div className="col-start-2 col-end-3 row-start-1 justify-self-end @row/dashboard:col-start-3 @row/dashboard:col-end-4 @table/dashboard:col-start-6 @table/dashboard:col-end-7">
-        <LinkButton to={prs} variant="ghost" size="sm" className="-my-1 whitespace-nowrap">
+        {/* The negative margin takes the button back to the title's line height (28px and 44px down to 20px), so its label sits on the name's baseline rather than below it. */}
+        <LinkButton to={prs} variant="ghost" size="sm" className="-my-1 whitespace-nowrap pointer-coarse:-my-3">
           {t("viewRepositoryPRs")}
           <span className="sr-only"> · {repo.repo}</span>
           <ArrowRight size={12} aria-hidden="true" className="shrink-0" />
@@ -171,12 +173,14 @@ export function Repositories({ repositories, loading, error, retry }: { reposito
           />
         }
       />
-      <Toolbar>
-        <SearchField id="pr-search" className="w-full max-w-sm min-w-0 flex-[1_1_14rem]" label={t("searchRepositories")} value={search} onChange={(value) => change("q", value)} mode="live" placeholder={t("repositorySearchPlaceholder")} maxLength={120} kbdHint />
-        <Select label={t("repositoryOwner")} hideLabel="below-pair" value={owner} onChange={(event) => change("owner", event.target.value)} options={ownerOptions} />
+      {/* Below `pair`: the search on its own full-width line, the owner and the sort side by side under it. */}
+      <Toolbar className="@max-pair/dashboard:grid @max-pair/dashboard:grid-cols-2">
+        <SearchField id="pr-search" className="w-full max-w-sm min-w-0 flex-[1_1_14rem] @max-pair/dashboard:col-span-2 @max-pair/dashboard:max-w-none" label={t("searchRepositories")} value={search} onChange={(value) => change("q", value)} mode="live" placeholder={t("repositorySearchPlaceholder")} maxLength={120} kbdHint />
+        <Select label={t("repositoryOwner")} hideLabel="below-pair" value={owner} onChange={(event) => change("owner", event.target.value)} options={ownerOptions} className="@max-pair/dashboard:[&>select]:flex-1" />
         <Select
           label={t("repositorySort")}
           hideLabel="below-pair"
+          className="@max-pair/dashboard:[&>select]:flex-1"
           value={sort}
           onChange={(event) => change("sort", event.target.value)}
           options={[
