@@ -1,4 +1,4 @@
-@layer theme, components, utilities;
+@layer theme, components, utilities, forced;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 
@@ -316,6 +316,16 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+  /* Below the shell breakpoint the top bar is sticky and the tab bar fixed, and both sit over the page. Scroll padding is what keeps a control the browser scrolls into view on focus (Tab, a focus() call, a hash link) clear of them rather than underneath (WCAG 2.4.11). The settings save bar rides the same bottom edge, so a page that has one adds its height. From `shell` there is neither bar. */
+  @media (width < 900px) {
+    html {
+      scroll-padding-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 8px);
+      scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px);
+    }
+    html:has([data-save-bar]) {
+      scroll-padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 72px);
+    }
+  }
   body {
     margin: 0;
     font-family: var(--font-ui);
@@ -402,7 +412,10 @@
     }
   }
 
-  /* Windows high contrast replaces every colour with a small system palette, so status carried by hue alone would disappear. Glyphs and chips keep their shape and take the text colour, control borders take the button border, the list cursor becomes an outline, and bar segments ([data-segment] inside [data-segments]) are separated by visible gaps. */
+}
+
+/* Windows high contrast replaces every colour with a small system palette, so status carried by hue alone would disappear. Its own layer, declared after utilities, because every rule here overrides a colour utility (text-tone-*, bg-tone-*, the pressed pill's surface) and a rule in an earlier layer loses to a utility however specific it is. Glyphs and chips keep their shape and take the text colour, control borders take the button border, the list cursor becomes an outline, bar segments are separated by visible gaps, and every selected state (a pressed filter, the current page, the active tab) gets an outline or an underline of its own, because the background and shadow that carry it otherwise are flattened. */
+@layer forced {
   @media (forced-colors: active) {
     [data-glyph],
     [data-tone] {
@@ -423,6 +436,22 @@
     [data-segment] {
       background: CanvasText;
       forced-color-adjust: none;
+    }
+    [aria-pressed="true"] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+    [aria-current="page"],
+    [aria-current="true"] {
+      outline: 2px solid LinkText;
+      outline-offset: -2px;
+      text-decoration: underline;
+    }
+    [role="tablist"] {
+      border-bottom: 1px solid CanvasText;
+    }
+    [role="tab"][data-state="active"] {
+      border-bottom-color: Highlight;
     }
   }
 }

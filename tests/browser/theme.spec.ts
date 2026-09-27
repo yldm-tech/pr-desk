@@ -59,3 +59,19 @@ test("a dark choice survives a reload", async ({ page }) => {
   await expect(page.locator("body")).toHaveCSS("background-color", DARK_BG);
   expect(await metas(page)).toEqual(["#0F0F12", "#0F0F12"]);
 });
+
+// Windows high contrast: the compiled rule has to reach the computed style, not just exist. A chip keeps the system text colour however light the theme the reader picked in the app, and a selected filter and the current page carry an outline, because the surface and shadow that mark them otherwise are flattened.
+test("forced colours give chips the text colour and mark every selected state", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active", colorScheme: "dark" });
+  await page.addInitScript(() => localStorage.setItem("prdesk-theme", "light"));
+  await page.goto("/#/inbox?status=all");
+  const chip = page.getByTestId("follow-up-card").locator("[data-tone]").first();
+  await expect(chip).toBeVisible();
+  const ink = await page.locator("body").evaluate((node) => getComputedStyle(node).color);
+  await expect(chip).toHaveCSS("color", ink);
+  const pressed = page.getByRole("group", { name: "Role" }).getByRole("button", { name: "All" });
+  await expect(pressed).toHaveAttribute("aria-pressed", "true");
+  await expect(pressed).toHaveCSS("outline-style", "solid");
+  await expect(page.getByRole("group", { name: "Role" }).getByRole("button", { name: "My reviews" })).toHaveCSS("outline-style", "none");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /Inbox/ })).toHaveCSS("outline-style", "solid");
+});
