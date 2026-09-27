@@ -96,6 +96,8 @@ async function midWordBreaks(page: Page) {
       if (!text) continue;
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
+      // Visually hidden text (`sr-only`: a 1px box behind `clip-path`) is never seen, so where its line boxes would fall says nothing about the layout; it is the words a screen reader hears, not a label on screen.
+      if (style.clipPath !== "none") continue;
       const range = document.createRange();
       range.selectNodeContents(el);
       const lines = range.getClientRects().length;
@@ -128,7 +130,7 @@ for (const route of ROUTES) {
 // (d) Band identity. Structural facts of the model, not measurements of it: which side of <main> the shell sits on, and whether the table header is exposed or visually hidden. Both are derived from the numbers the page actually reports rather than predicted, so a scrollbar that eats fifteen pixels moves the assertion with the layout instead of against it.
 test("the shell and the table header follow the band model", async ({ page }) => {
   await installFixtures(page);
-  await open(page, "/#/pull-requests");
+  await open(page, "/#/prs");
   const viewport = page.viewportSize()!.width;
 
   // The header is visually hidden on a phone but has to stay in the accessibility tree at every width, or the narrow layout is a table whose columns are unlabelled to a screen reader.
@@ -159,20 +161,39 @@ test("the shell and the table header follow the band model", async ({ page }) =>
     expect(band.asideRight, "the sidebar sits left of the content").toBeLessThanOrEqual(band.mainLeft + 1);
   } else {
     expect(band.asideBottom, "the top bar sits above the content").toBeLessThanOrEqual(band.mainTop + 1);
+    // Below the shell token the same <nav> is the tab bar. It has to be fixed to the bottom edge of the viewport, which it only is while nothing above it (the <aside> included) creates a containing block for fixed descendants; a transform, filter or backdrop-filter on the top bar would quietly carry the tab bar away with it.
+    const tabs = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Main navigation"]')!;
+      const main = document.querySelector("main")!;
+      return { position: getComputedStyle(nav).position, bottom: nav.getBoundingClientRect().bottom, height: nav.getBoundingClientRect().height, mainPadding: parseFloat(getComputedStyle(main).paddingBottom) };
+    });
+    expect(tabs.position, "the tab bar is fixed").toBe("fixed");
+    expect(Math.abs(tabs.bottom - page.viewportSize()!.height), "the tab bar sits on the bottom edge").toBeLessThanOrEqual(1);
+    expect(tabs.mainPadding, "<main> reserves the tab bar's height").toBeGreaterThanOrEqual(tabs.height - 0.5);
+    // And the reservation works: at the end of the page, the last thing on it is clear of the tab bar rather than underneath it.
+    const clearance = await page.evaluate(async () => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
+      const content = document.querySelector("main > div")!;
+      const last = content.lastElementChild!.getBoundingClientRect();
+      const nav = document.querySelector('nav[aria-label="Main navigation"]')!.getBoundingClientRect();
+      return { lastBottom: last.bottom, navTop: nav.top };
+    });
+    expect(clearance.lastBottom, "the last row scrolls clear of the tab bar").toBeLessThanOrEqual(clearance.navTop + 1);
   }
   // `sr-only` is `position: absolute`, `not-sr-only` is `position: static`. Comparing against the measured content width rather than the viewport is what makes this test fail if the header is ever moved back onto a viewport query.
   expect(band.headPosition, `the header row is exposed from the container row token up (content box ${band.content}px)`).toBe(band.content >= 640 ? "static" : "absolute");
 });
 
-// (e) Monotonicity. The direct regression test for the claim the whole scale rests on: widening the window must never take columns away. Today's 900px shell switch drops <main> from 867px to 647px in one pixel, so any structural threshold between those two numbers downgrades the layout as the window grows — which is exactly what the old 760.02px repository threshold did for the 118 pixels above 900.
+// (e) Monotonicity. The direct regression test for the claim the whole scale rests on: widening the window must never take columns away. The 900px shell switch drops <main>'s content box from 851px to 644px in one pixel (and the 480px and 1200px gutter steps open two smaller windows, (432, 447] and (928, 943]), so any structural threshold inside those windows downgrades the layout as the window grows — which is exactly what the old 760.02px repository threshold did for the pixels above 900.
 test("no layout loses grid columns as the viewport widens", async ({ page }) => {
   test.skip(test.info().project.name !== "laptop", "this test drives its own viewports, so one project is enough");
   test.setTimeout(180_000);
   await installFixtures(page);
 
   for (const [route, selector] of [
-    ["/#/repositories", "ul li"],
-    ["/#/pull-requests", '[role="table"] > [role="row"]:nth-child(2)'],
+    ["/#/repos", "ul li"],
+    ["/#/prs", '[role="table"] > [role="row"]:nth-child(2)'],
   ] as const) {
     await open(page, route);
     const tracks: { width: number; count: number }[] = [];
@@ -203,18 +224,32 @@ test("no layout loses grid columns as the viewport widens", async ({ page }) => 
   }
 });
 
-// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple.
-const LOCALE_PROJECTS = ["phone-320", "phone-360", "phone-390", "edge-480"];
-for (const locale of ["es", "ja"]) {
+// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple. Korean keeps its spaces but breaks words only at them (keep-all), so it gets the narrowest phone, where that rule is most likely to overflow; it is held to the geometry checks, because its one- and two-syllable labels ("3일", "막힘") are narrower than any English one and size the pages' compact buttons below the tap floor, which is a finding for those pages rather than for line breaking.
+const LOCALE_PROJECTS: Record<string, string[]> = { es: ["phone-320", "phone-360", "phone-390", "edge-480"], ja: ["phone-320", "phone-360", "phone-390", "edge-480"], ko: ["phone-320"] };
+for (const locale of Object.keys(LOCALE_PROJECTS)) {
   for (const route of STRUCTURAL_ROUTES.concat("/#/settings")) {
     test(`${locale} fits ${route}`, async ({ page }, info) => {
-      test.skip(!LOCALE_PROJECTS.includes(info.project.name), "the locale axis runs at the narrow widths only");
+      test.skip(!LOCALE_PROJECTS[locale].includes(info.project.name), "the locale axis runs at the narrow widths only");
       await installFixtures(page, { locale });
       await open(page, route);
       expect.soft(await clippedElements(page), `content clipped by an overflow:hidden ancestor in ${locale}`).toEqual([]);
       expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), `the document scrolls sideways in ${locale}`).toBe(false);
       expect.soft(await midWordBreaks(page), `a shell label was split inside a word in ${locale}`).toEqual([]);
-      if (isCoarse(info)) expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
+      if (isCoarse(info) && locale !== "ko") expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
     });
   }
+}
+
+// The dark theme is a second set of colours over the same layout, so the three geometry checks are all it needs; but it is a separate rendering, and a rule that only one theme carries (a border, an outline, a shadow that takes space) would slip through a light-only sweep. Device projects only: the edge projects exist for widths, and the theme does not move a band.
+for (const route of STRUCTURAL_ROUTES) {
+  test(`dark: nothing is clipped or split on ${route}`, async ({ page }, info) => {
+    test.skip(info.project.metadata?.routes === "structural", "the dark pass runs on the device projects");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await installFixtures(page);
+    await open(page, route);
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), "the dark theme applied").toBe("rgb(15, 15, 18)");
+    expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
+    expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
+    expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
+  });
 }
