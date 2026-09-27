@@ -39,7 +39,7 @@ test("insights names its report and opens what it counts", async ({ page }) => {
   await expect(page).toHaveURL(/#\/prs\/merged$/);
 });
 
-// The donut and its pointer-dependent click are gone: the breakdown is a table, the name opens that repository's pull requests inside the app, and GitHub is a separate, labelled way out.
+// The breakdown is a table beside the ring, and the donut's old pointer-dependent click is gone: the name opens that repository's pull requests inside the app, and GitHub is a separate, labelled way out.
 test("the repository breakdown is a table whose rows open the repository's pull requests", async ({ page }) => {
   await installFixtures(page);
   await page.goto("/#/insights");
@@ -63,6 +63,53 @@ test("the stat strip and the outcomes print every value", async ({ page }) => {
   await expect(page.getByText("10 merges in this period")).toBeVisible();
   // The chart covers the server's thirteen-month period, with the quiet months drawn as zero rather than dropped.
   await expect(page.getByText(/Sep 2025 – Sep 2026 · UTC/)).toBeVisible();
+});
+
+// Every chart is asserted by what it draws, not by the text around it: the redesign once shipped with two of the three charts gone while every check on this page stayed green.
+test("the outcomes, the months and the repositories are each drawn as a chart", async ({ page }) => {
+  await installFixtures(page);
+  await page.goto("/#/insights");
+  const charts = { Outcomes: 'svg[aria-label="Outcomes"]', "Merge activity": 'svg[aria-label^="Merge activity"]', "By repository": 'svg[aria-label="By repository"]' };
+  for (const [name, selector] of Object.entries(charts)) {
+    const chart = page.locator(selector);
+    await expect(chart, `${name} is drawn`).toBeVisible();
+    const box = (await chart.boundingBox())!;
+    expect(box.width, `${name} has a width`).toBeGreaterThan(100);
+    expect(box.height, `${name} has a height`).toBeGreaterThan(100);
+    expect(await chart.locator("path, rect").count(), `${name} draws marks`).toBeGreaterThan(0);
+  }
+});
+
+// Five repositories get a colour each and the rest share one slice, so a sixth repository never gets a hue no one checked; every row wears its slice's swatch, which is the ring's legend.
+test("the repository ring folds a sixth repository and beyond into one slice", async ({ page }) => {
+  await installFixtures(page);
+  const repositories = Array.from({ length: 7 }, (_, index) => ({ repo: `fixture/repo-${index + 1}`, total: 7 - index, merged: 7 - index }));
+  const total = repositories.reduce((sum, item) => sum + item.total, 0);
+  await page.route("**/api/v1/overview**", (route) =>
+    route.fulfill({
+      json: {
+        visibility_counts: { public: total, private: 0, unknown: 0, public_repositories: 7, private_repositories: 0, unknown_repositories: 0 },
+        history_complete: true,
+        history_total: total,
+        year: 2026,
+        years: [2026],
+        summary: { total, merged: total, open: 0, closed: 0, repositories: 7 },
+        repositories,
+        months: [{ month: "2026-09", merged: total }],
+      },
+    }),
+  );
+  await page.goto("/#/insights");
+  const table = page.locator("table#repository-breakdown");
+  await expect(table.getByRole("row")).toHaveCount(8);
+  const swatches = await table.locator("tbody tr").evaluateAll((rows) => rows.map((row) => getComputedStyle(row.querySelector("span[aria-hidden='true'][style]")!).backgroundColor));
+  expect(new Set(swatches.slice(0, 5)).size, "the first five repositories have five colours").toBe(5);
+  expect(swatches[5], "the sixth shares the other slot").toBe(swatches[6]);
+  expect(swatches.slice(0, 5), "and that slot is none of the five").not.toContain(swatches[5]);
+  const ring = page.locator('svg[aria-label="By repository"]');
+  await expect(ring).toBeVisible();
+  const fills = await ring.locator("path").evaluateAll((paths) => [...new Set(paths.map((path) => path.getAttribute("fill")).filter(Boolean))]);
+  expect(fills, "five repositories and one other slice").toHaveLength(6);
 });
 
 // The visibility scope is a set of pressed toggles, not tabs: the only tabs on the page are the years.
