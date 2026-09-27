@@ -337,10 +337,10 @@
     letter-spacing: 0;
   }
   /* auto-phrase keeps Japanese phrases whole where Chromium can find them and is ignored elsewhere; Korean has spaces between words, so keep-all is enough. */
-  :lang(ja) :is(h1, h2, h3, button, label, [data-tone]) {
+  :lang(ja) :is(h1, h2, h3, button, label, [data-tone], [data-stat-label]) {
     word-break: auto-phrase;
   }
-  :lang(ko) :is(h1, h2, h3, button, label) {
+  :lang(ko) :is(h1, h2, h3, button, label, [data-stat-label]) {
     word-break: keep-all;
   }
 

@@ -112,7 +112,7 @@ export default function Overview() {
         data && (
           <>
             {query.isError && <StaleNotice onRetry={() => query.refetch()} />}
-            <Tabs value={String(year)} onValueChange={(value) => changeScope("year", value)} label={t("yearSelect")} className="pointer-coarse:[&_[role=tab]]:min-w-11 pointer-coarse:[&_[role=tab]]:justify-center" items={years.map((value) => ({ value: String(value), label: String(value) }))}>
+            <Tabs value={String(year)} onValueChange={(value) => changeScope("year", value)} label={t("yearSelect")} items={years.map((value) => ({ value: String(value), label: String(value) }))}>
               {(value) => (value !== String(year) ? null : query.isPlaceholderData ? <OverviewSkeleton /> : <Report data={data} visibility={visibility} />)}
             </Tabs>
           </>

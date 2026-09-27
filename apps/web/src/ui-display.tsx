@@ -115,7 +115,7 @@ export function Stat({ value, label, className }: { value: string; label: string
   return (
     <div className={cx("grid min-w-0 gap-0.5", className)}>
       <span className="text-display font-semibold text-fg tabular-nums">{value}</span>
-      <span className="text-small text-fg-muted">{label}</span>
+      <span data-stat-label="" className="text-small text-fg-muted">{label}</span>
     </div>
   );
 }

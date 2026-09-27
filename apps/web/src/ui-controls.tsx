@@ -161,7 +161,7 @@ export function Tabs({ value, onValueChange, label, items, children, className, 
           <RadixTabs.Trigger
             key={item.value}
             value={item.value}
-            className="-mb-px inline-flex min-h-9 items-center border-0 border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11"
+            className="-mb-px inline-flex min-h-9 items-center border-0 border-b-2 border-solid border-transparent bg-transparent px-0.5 text-body font-medium text-fg-muted transition-colors duration-[var(--dur-fast)] hover:text-fg data-[state=active]:border-accent data-[state=active]:text-fg pointer-coarse:min-h-11 pointer-coarse:min-w-11 pointer-coarse:justify-center"
           >
             {item.label}
           </RadixTabs.Trigger>

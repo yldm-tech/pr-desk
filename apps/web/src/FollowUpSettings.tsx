@@ -634,7 +634,7 @@ export function FollowUpSettings() {
       <PageHeader title={t("followup.settings")} />
       {/* A two-character label ("通知") is narrower than a fingertip, and the primitive only raises a tab's height on a coarse pointer, so the width floor is set here. */}
       {/* Radix carries the roving tab order and the arrow keys; the Tabs primitive keeps a visited panel mounted and hidden, so a half-filled form survives a trip to another tab while a tab never opened costs no request. */}
-      <Tabs className="pointer-coarse:[&_[role=tab]]:min-w-11 pointer-coarse:[&_[role=tab]]:justify-center" value={active} onValueChange={select} label={t("followup.settings")} items={settingsTabs.map((tab) => ({ value: tab, label: t(tabLabels[tab]) }))} panelClassName="min-w-0 gap-4 data-[state=active]:grid">
+      <Tabs value={active} onValueChange={select} label={t("followup.settings")} items={settingsTabs.map((tab) => ({ value: tab, label: t(tabLabels[tab]) }))} panelClassName="min-w-0 gap-4 data-[state=active]:grid">
         {(tab) => (tab === "schedule" ? <ReminderSettings /> : tab === "notifications" ? <NotificationDestinations /> : tab === "github" ? <GitHubAccessPanel variant="full" /> : <AccessSettings />)}
       </Tabs>
     </div>

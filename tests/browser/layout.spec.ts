@@ -194,6 +194,8 @@ test("no layout loses grid columns as the viewport widens", async ({ page }) => 
   for (const [route, selector] of [
     ["/#/repos", "ul li"],
     ["/#/prs", '[role="table"] > [role="row"]:nth-child(2)'],
+    // The Inbox row passes through the split flip at 880px of content, where its list pane narrows; the row's track count must not drop there either.
+    ["/#/inbox", '[data-testid="follow-up-card"]'],
   ] as const) {
     await open(page, route);
     const tracks: { width: number; count: number }[] = [];
@@ -224,7 +226,7 @@ test("no layout loses grid columns as the viewport widens", async ({ page }) => 
   }
 });
 
-// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple. Korean keeps its spaces but breaks words only at them (keep-all), so it gets the narrowest phone, where that rule is most likely to overflow; it is held to the geometry checks, because its one- and two-syllable labels ("3일", "막힘") are narrower than any English one and size the pages' compact buttons below the tap floor, which is a finding for those pages rather than for line breaking.
+// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple. Korean keeps its spaces but breaks words only at them (keep-all), so it gets the narrowest phone, where that rule is most likely to overflow. Its one- and two-syllable labels ("3일", "막힘") are narrower than any English one, so it is also the locale that proves every compact control keeps its tap floor.
 const LOCALE_PROJECTS: Record<string, string[]> = { es: ["phone-320", "phone-360", "phone-390", "edge-480"], ja: ["phone-320", "phone-360", "phone-390", "edge-480"], ko: ["phone-320"] };
 for (const locale of Object.keys(LOCALE_PROJECTS)) {
   for (const route of STRUCTURAL_ROUTES.concat("/#/settings")) {
@@ -235,7 +237,7 @@ for (const locale of Object.keys(LOCALE_PROJECTS)) {
       expect.soft(await clippedElements(page), `content clipped by an overflow:hidden ancestor in ${locale}`).toEqual([]);
       expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), `the document scrolls sideways in ${locale}`).toBe(false);
       expect.soft(await midWordBreaks(page), `a shell label was split inside a word in ${locale}`).toEqual([]);
-      if (isCoarse(info) && locale !== "ko") expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
+      if (isCoarse(info)) expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
     });
   }
 }
