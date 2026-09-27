@@ -92,3 +92,38 @@ test("repository filtering composes with attention, search and pagination", asyn
   assert.equal(params.get("offset"), "100");
   assert.equal(new URLSearchParams(listParameters("All", 0)).has("repo"), false);
 });
+
+test("a pull request's glyph puts outcomes first, then what only the author can clear", async () => {
+  const { prTone } = await import("./pr-model.ts");
+  const base = { merged_at: null, state: "open", draft: false, conflict: false, checks_status: "success", review_status: "pending" };
+  assert.deepEqual(prTone({ ...base, merged_at: "2026-01-01T00:00:00Z", conflict: true }), { tone: "neutral", kind: "merged" });
+  assert.deepEqual(prTone({ ...base, state: "closed", checks_status: "failure" }), { tone: "neutral", kind: "closed" });
+  assert.deepEqual(prTone({ ...base, conflict: true, review_status: "approved" }), { tone: "blocked", kind: "blocked" });
+  assert.deepEqual(prTone({ ...base, checks_status: "error" }), { tone: "blocked", kind: "blocked" });
+  assert.deepEqual(prTone({ ...base, draft: true, checks_status: "failure" }), { tone: "blocked", kind: "blocked" });
+  assert.deepEqual(prTone({ ...base, draft: true, review_status: "review_requested" }), { tone: "neutral", kind: "draft" });
+  assert.deepEqual(prTone({ ...base, review_status: "changes_requested" }), { tone: "action", kind: "action" });
+  assert.deepEqual(prTone({ ...base, review_status: "review_requested" }), { tone: "waiting", kind: "waiting" });
+  assert.deepEqual(prTone({ ...base, review_status: "approved" }), { tone: "ready", kind: "ready" });
+  // Only a failure withholds ready: a run still in progress is not a verdict against the change.
+  assert.deepEqual(prTone({ ...base, review_status: "approved", checks_status: "pending" }), { tone: "ready", kind: "ready" });
+  assert.deepEqual(prTone(base), { tone: "neutral", kind: "open" });
+});
+
+test("only a failing or running check earns a chip", async () => {
+  const { checksChip } = await import("./pr-model.ts");
+  assert.equal(checksChip("failure"), "failing");
+  assert.equal(checksChip("error"), "failing");
+  assert.equal(checksChip("pending"), "pending");
+  for (const quiet of ["success", "inconclusive", "unknown", undefined]) assert.equal(checksChip(quiet), null);
+});
+
+test("every status label parsePRList produces has a translation key", async () => {
+  const { statusKey } = await import("./pr-model.ts");
+  const rows = [{}, { review_status: "review_requested" }, { review_status: "changes_requested" }, { review_status: "approved" }, { review_status: "pending" }, { draft: true }, { state: "closed" }, { merged_at: "2026-01-01T00:00:00Z" }];
+  for (const extra of rows) {
+    const [pr] = parsePRList({ data: [{ ...row, ...extra }], total: 1 });
+    assert.notEqual(statusKey(pr.status), pr.status, pr.status);
+  }
+  assert.equal(statusKey("Something new"), "Something new");
+});

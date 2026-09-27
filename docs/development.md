@@ -25,6 +25,14 @@ The built frontend is a PWA: `apps/web/public/manifest.webmanifest` makes it ins
 
 The worker never answers `/api`, `/swagger`, cross-origin or non-GET requests, so authentication and every mutation reach the server unchanged and an offline dashboard shows its normal network errors rather than stale data. Hashed assets are cached permanently and trimmed to the most recent 200 entries; the document is fetched from the network on every load and falls back to the cached copy only when the network fails, so a deployed build is picked up by the next page load without an update prompt. Registration is skipped outside production builds, so `bun run dev` is unaffected and no worker is ever installed on a development origin.
 
+The shell cache is `prdesk-shell-v2` and the asset cache `prdesk-assets-v1`; on activation the worker deletes every other cache whose name starts with `prdesk-`, which is also the prefix the in-app "Reload the app" button clears. Besides the document, the shell cache holds `apps/web/public/theme-init.js`, served network-first like the document, so an offline launch still applies the reader's theme.
+
+## Theme
+
+The interface has a light and a dark theme. Every colour is a custom property on `:root` in `apps/web/src/style.css`; the dark values are written twice with identical bodies, once under `@media (prefers-color-scheme: dark)` for readers who have not chosen and once under `:root[data-theme="dark"]` for an explicit choice, and `tokens.test.mjs` fails if the two copies drift apart or if any text, border or focus pair drops below its WCAG AA ratio. Components use the mapped utilities (`bg-bg`, `text-fg-muted`, `border-line-strong`, `text-tone-blocked` and so on) and never a `dark:` variant or a literal colour; `bun run lint:responsive` refuses both.
+
+The reader's choice (System, Light or Dark) is stored in `localStorage["prdesk-theme"]` by `apps/web/src/theme.ts`. `apps/web/public/theme-init.js` is a classic script loaded synchronously from `index.html` that sets `data-theme` and the two `theme-color` metas before the first paint; it is a file rather than inline because the API's `Content-Security-Policy` is `default-src 'self'`. The system font stack is used for the same reason: the policy allows no web fonts.
+
 ## Token storage
 
 Tokens use AES-256-GCM with random nonces. Startup rejects missing, incorrectly sized, and example keys. Encryption, decryption, and database write failures do not produce successful connection responses. Existing AES-GCM records retain the same encoding. Legacy plaintext records and records encrypted with a different key require reconnecting GitHub; they are never sent to GitHub as bearer tokens.

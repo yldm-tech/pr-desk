@@ -26,9 +26,7 @@ export type FollowUp = z.infer<typeof followUpSchema>;
 export type FollowUpResponse = z.infer<typeof responseSchema>;
 export type FollowUpPR = FollowUp["pr"];
 
-// Reasons are grouped by what the reader has to do about them: a blocked PR
-// needs a fix, an action is waiting on the reader, and the timing reasons only
-// say that the clock ran out.
+// Reasons are grouped by what the reader has to do about them: a blocked PR needs a fix, an action is waiting on the reader, and the timing reasons only say that the clock ran out.
 // `changes_requested` and `author_updated` are now reachable: presentation() records the reason that actually raised the confirmation instead of guessing one from the role, so a reviewer whose approval was dismissed no longer reads "Review requested" when nobody requested anything. Both ask the reader to do something, so both take the action tone.
 export const reasonTones: Record<string, string> = { conflict: "blocked", checks_failed: "blocked", review_requested: "action", human_feedback: "action", changes_requested: "action", author_updated: "action", approval_revoked: "action", overdue: "waiting", snooze_due: "waiting" };
 export const reasonTone = (reason: string) => reasonTones[reason] || "neutral";
@@ -37,6 +35,7 @@ export type FollowUpGroup = "action" | "follow_up" | "muted" | "waiting" | "draf
 
 // Rank order is the server's own (followup_store.go sorts action, follow_up, waiting, draft, archived) with the muted split out of waiting, so the headings the reader sees are the order the payload already arrived in.
 const groupRank: FollowUpGroup[] = ["action", "follow_up", "muted", "waiting", "draft", "archived"];
+export const followUpGroups: readonly FollowUpGroup[] = groupRank;
 
 export function isMuted(item: Pick<FollowUp, "snoozed_until">, now: number): boolean {
   if (!item.snoozed_until) return false;
@@ -117,4 +116,97 @@ export function stableOrder(items: FollowUp[], order: number[]): { items: Follow
   const added = items.filter((item) => !rank.has(item.id)).map((item) => item.id);
   const sorted = [...items].sort((a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   return { items: sorted, added };
+}
+
+// ---- Inbox decisions ----
+
+// The Inbox's filter values, in the order the controls list them. Their labels are the `followup.<value>` words, which i18n-dynamic-keys.test.mjs checks exist for every entry.
+export const inboxStatuses = ["todo", "all", "action", "follow_up", "muted", "waiting", "draft", "archived"] as const;
+export type InboxStatus = (typeof inboxStatuses)[number];
+export const inboxRoles = ["all", "authored", "reviewer"] as const;
+export type InboxRole = (typeof inboxRoles)[number];
+
+// The verbs a row can offer, named after the CLI and MCP verbs they post (handled, snooze, unsnooze) or, for the two that leave for GitHub, after where they go. `open` and `merge` are links with no API call: the product cannot merge or push, so on a row only GitHub can move it says where to go instead of offering a button that would change nothing.
+export type RowVerb = "handled" | "snooze" | "unsnooze" | "open" | "merge";
+
+// Shippable and still on the list: the ready chip, the ready=1 filter and the summary's "ready to merge" count all read this one rule. A muted row is out of it because the reader has already deferred it, and an archived one because it has been merged or closed already.
+export function matchesReady(item: FollowUp, now: Date = new Date()): boolean {
+  return isReadyToMerge(item.pr, item.role) && item.state !== "archived" && !isMuted(item, now.getTime());
+}
+
+// The one table that decides what a row offers, read by the row, the sheet footer and the e / s / u / o keys alike, so none of them can offer a verb another withholds. The first matching rule wins. Handled is only ever offered on a row the reader still owes something (action or follow_up): on a waiting row it would restart a clock that is already running on someone else.
+export function primaryAction(item: FollowUp, now: Date = new Date()): { primary: RowVerb | null; secondary: RowVerb[]; markRead: boolean } {
+  const markRead = item.unread;
+  if (item.state === "archived") return { primary: null, secondary: [], markRead };
+  if (isMuted(item, now.getTime())) return { primary: "unsnooze", secondary: [], markRead };
+  const owed = item.state === "action" || item.state === "follow_up";
+  if (isReadyToMerge(item.pr, item.role)) return { primary: "merge", secondary: owed && handledIsUseful(item) ? ["handled", "snooze"] : ["snooze"], markRead };
+  if (item.state === "draft" || item.state === "waiting") return { primary: null, secondary: ["snooze"], markRead };
+  if (!handledIsUseful(item)) return { primary: "open", secondary: ["snooze"], markRead };
+  return { primary: "handled", secondary: ["snooze"], markRead };
+}
+
+export type InboxSummary = { total: number; blocked: number; authored: number; reviewer: number; followUp: number; ready: number; recentMerged: number };
+
+// The numbers the Inbox header states. `total` is the badge's formula (authored + reviewer + follow_up, which is what listFollowUps counts), so the headline, the nav badge and the default view's group headings are one number; followup-view.test.mjs holds the three together. `blocked` is derived from the rows because the server does not count it: to-do rows carrying a reason only a new push clears.
+export function inboxSummary(items: FollowUp[], counts: Record<string, number>, now: Date = new Date()): InboxSummary {
+  const authored = counts.authored || 0;
+  const reviewer = counts.reviewer || 0;
+  const followUp = counts.follow_up || 0;
+  const todo = items.filter((item) => item.state === "action" || item.state === "follow_up");
+  return { total: authored + reviewer + followUp, blocked: todo.filter((item) => item.reasons.some((reason) => reasonTone(reason) === "blocked")).length, authored, reviewer, followUp, ready: items.filter((item) => matchesReady(item, now)).length, recentMerged: counts.recent_merged || 0 };
+}
+
+const DAY_MS = 86400000;
+
+// The wall-clock fields of an instant in an IANA zone, read through Intl because the browser has no other way to ask what time it is somewhere else.
+function zonedParts(at: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }).formatToParts(at);
+  const field = (type: string) => Number(parts.find((part) => part.type === type)?.value);
+  return { year: field("year"), month: field("month"), day: field("day"), hour: field("hour"), minute: field("minute"), second: field("second") };
+}
+
+// The UTC instant at which a zone's clock reads the given wall time. The offset is measured at a first guess and then again at the answer, which is what lands a time on the far side of a DST change on the right hour.
+function zonedInstant(year: number, month: number, day: number, hour: number, minute: number, timeZone: string) {
+  const wall = Date.UTC(year, month - 1, day, hour, minute);
+  const offset = (at: number) => {
+    const p = zonedParts(at, timeZone);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(at / 1000) * 1000;
+  };
+  return wall - offset(wall - offset(wall));
+}
+
+const digestClock = /^(\d{1,2}):(\d{2})/;
+
+// The three one-tap reminders. "Tomorrow morning" is the next calendar day at the reader's own digest time in their own timezone once the settings have loaded — the moment the digest would bring the row back anyway — and 09:00 on the browser's clock until then. Every preset is clamped to the window the server accepts (snoozeBounds: a minute from now to a year from now), so none of them can come back as a save error.
+export function snoozePresets(now: Date, settings?: { timezone: string; digest_time: string }): { key: "3d" | "7d" | "tomorrow"; until: Date }[] {
+  const at = now.getTime();
+  const min = at + 60000;
+  const max = new Date(at);
+  max.setFullYear(max.getFullYear() + 1);
+  const clamp = (value: number) => new Date(Math.min(Math.max(value, min), max.getTime()));
+  let tomorrow: number | undefined;
+  const clock = settings ? digestClock.exec(settings.digest_time) : null;
+  if (settings && clock) {
+    try {
+      const today = zonedParts(at, settings.timezone);
+      // Date.UTC normalises day 32 into the next month, so "the next calendar day" needs no month arithmetic of its own.
+      const next = new Date(Date.UTC(today.year, today.month - 1, today.day + 1));
+      tomorrow = zonedInstant(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), Number(clock[1]), Number(clock[2]), settings.timezone);
+    } catch {
+      // An unknown zone name throws a RangeError; the browser's own morning is the honest fallback.
+      tomorrow = undefined;
+    }
+  }
+  if (tomorrow === undefined || Number.isNaN(tomorrow)) {
+    const local = new Date(at);
+    local.setDate(local.getDate() + 1);
+    local.setHours(9, 0, 0, 0);
+    tomorrow = local.getTime();
+  }
+  return [
+    { key: "3d", until: clamp(at + 3 * DAY_MS) },
+    { key: "7d", until: clamp(at + 7 * DAY_MS) },
+    { key: "tomorrow", until: clamp(tomorrow) },
+  ];
 }

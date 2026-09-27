@@ -8,12 +8,14 @@ import ko from "./locales/ko.json";
 import es from "./locales/es.json";
 import { followupLocales } from "./followup-locales";
 import { accessLocales } from "./access-locales";
+import { namespaceResources } from "./locale-namespaces";
+// The per-page namespaces are spread after the frozen files, so a namespace key always means the namespace object.
 export const resources = {
-  en: { translation: { ...en, followup: followupLocales.en, access: accessLocales.en } },
-  "zh-CN": { translation: { ...zh, followup: followupLocales["zh-CN"], access: accessLocales["zh-CN"] } },
-  ja: { translation: { ...ja, followup: followupLocales.ja, access: accessLocales.ja } },
-  ko: { translation: { ...ko, followup: followupLocales.ko, access: accessLocales.ko } },
-  es: { translation: { ...es, followup: followupLocales.es, access: accessLocales.es } },
+  en: { translation: { ...en, followup: followupLocales.en, access: accessLocales.en, ...namespaceResources("en") } },
+  "zh-CN": { translation: { ...zh, followup: followupLocales["zh-CN"], access: accessLocales["zh-CN"], ...namespaceResources("zh-CN") } },
+  ja: { translation: { ...ja, followup: followupLocales.ja, access: accessLocales.ja, ...namespaceResources("ja") } },
+  ko: { translation: { ...ko, followup: followupLocales.ko, access: accessLocales.ko, ...namespaceResources("ko") } },
+  es: { translation: { ...es, followup: followupLocales.es, access: accessLocales.es, ...namespaceResources("es") } },
 } as const;
 void i18n
   .use(LanguageDetector)

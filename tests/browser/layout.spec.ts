@@ -11,6 +11,7 @@ import { installFixtures, ROUTES, STRUCTURAL_ROUTES } from "./fixtures";
 const routesFor = (info: TestInfo) => (info.project.metadata?.routes === "structural" ? STRUCTURAL_ROUTES : ROUTES);
 const isCoarse = (info: TestInfo) => Boolean(info.project.use.hasTouch);
 
+// Sideways scrolling is measured against the configured viewport, not innerWidth: on a mobile-emulated project the browser zooms out to fit a page that is too wide, innerWidth grows with it, and a comparison against innerWidth passes for exactly the page it should fail.
 // Renders a route and waits for it to stop moving: the loading skeletons have to be gone, because a skeleton's geometry is a placeholder's and not the content's; the web fonts have to be resolved, because a fallback font measures differently; and transitions have to be frozen, because a reading taken mid-transition is an interpolated value that differs between two runs of the same page.
 async function open(page: Page, route: string) {
   await page.goto(route);
@@ -28,7 +29,8 @@ async function clippedElements(page: Page) {
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
       if (!["hidden", "clip"].includes(style.overflowX)) continue;
-      if (style.textOverflow === "ellipsis" || style.webkitLineClamp !== "none") continue;
+      // Except inside a status chip ([data-tone]): a chip is two or three words that carry the row's state, and one cut to "Waiting pe…" says nothing, so a chip that does not fit has to wrap onto a line of its own rather than announce its truncation.
+      if ((style.textOverflow === "ellipsis" || style.webkitLineClamp !== "none") && !el.closest("[data-tone]")) continue;
       // `sr-only` is the one place in the codebase that clips on purpose, and it is `clip-path: inset(50%)` over a 1px box. Its padding survives, so the box measures 24px wide rather than 1px on the table header — the clip path, not the width, is what identifies it.
       if (style.clipPath !== "none" || el.clientWidth <= 1) continue;
       if (el.scrollWidth <= el.clientWidth + 1) continue;
@@ -96,6 +98,8 @@ async function midWordBreaks(page: Page) {
       if (!text) continue;
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
+      // Visually hidden text (`sr-only`: a 1px box behind `clip-path`) is never seen, so where its line boxes would fall says nothing about the layout; it is the words a screen reader hears, not a label on screen.
+      if (style.clipPath !== "none") continue;
       const range = document.createRange();
       range.selectNodeContents(el);
       const lines = range.getClientRects().length;
@@ -116,7 +120,7 @@ for (const route of ROUTES) {
 
     // Soft throughout: with four sweeps over nine routes at twenty-four viewports, a run that stops at the first offender costs a full matrix to find the second one. Soft failures still fail the test.
     expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
-    expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
+    expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), "the document scrolls sideways").toBe(false);
     expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
     if (isCoarse(info)) {
       expect.soft(await smallTargets(page), "tap targets under 44px on a coarse pointer").toEqual([]);
@@ -128,7 +132,7 @@ for (const route of ROUTES) {
 // (d) Band identity. Structural facts of the model, not measurements of it: which side of <main> the shell sits on, and whether the table header is exposed or visually hidden. Both are derived from the numbers the page actually reports rather than predicted, so a scrollbar that eats fifteen pixels moves the assertion with the layout instead of against it.
 test("the shell and the table header follow the band model", async ({ page }) => {
   await installFixtures(page);
-  await open(page, "/#/pull-requests");
+  await open(page, "/#/prs");
   const viewport = page.viewportSize()!.width;
 
   // The header is visually hidden on a phone but has to stay in the accessibility tree at every width, or the narrow layout is a table whose columns are unlabelled to a screen reader.
@@ -159,20 +163,41 @@ test("the shell and the table header follow the band model", async ({ page }) =>
     expect(band.asideRight, "the sidebar sits left of the content").toBeLessThanOrEqual(band.mainLeft + 1);
   } else {
     expect(band.asideBottom, "the top bar sits above the content").toBeLessThanOrEqual(band.mainTop + 1);
+    // Below the shell token the same <nav> is the tab bar. It has to be fixed to the bottom edge of the viewport, which it only is while nothing above it (the <aside> included) creates a containing block for fixed descendants; a transform, filter or backdrop-filter on the top bar would quietly carry the tab bar away with it.
+    const tabs = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Main navigation"]')!;
+      const main = document.querySelector("main")!;
+      return { position: getComputedStyle(nav).position, bottom: nav.getBoundingClientRect().bottom, height: nav.getBoundingClientRect().height, mainPadding: parseFloat(getComputedStyle(main).paddingBottom) };
+    });
+    expect(tabs.position, "the tab bar is fixed").toBe("fixed");
+    expect(Math.abs(tabs.bottom - page.viewportSize()!.height), "the tab bar sits on the bottom edge").toBeLessThanOrEqual(1);
+    expect(tabs.mainPadding, "<main> reserves the tab bar's height").toBeGreaterThanOrEqual(tabs.height - 0.5);
+    // And the reservation works: at the end of the page, the last thing on it is clear of the tab bar rather than underneath it.
+    const clearance = await page.evaluate(async () => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
+      const content = document.querySelector("main > div")!;
+      const last = content.lastElementChild!.getBoundingClientRect();
+      const nav = document.querySelector('nav[aria-label="Main navigation"]')!.getBoundingClientRect();
+      return { lastBottom: last.bottom, navTop: nav.top };
+    });
+    expect(clearance.lastBottom, "the last row scrolls clear of the tab bar").toBeLessThanOrEqual(clearance.navTop + 1);
   }
   // `sr-only` is `position: absolute`, `not-sr-only` is `position: static`. Comparing against the measured content width rather than the viewport is what makes this test fail if the header is ever moved back onto a viewport query.
   expect(band.headPosition, `the header row is exposed from the container row token up (content box ${band.content}px)`).toBe(band.content >= 640 ? "static" : "absolute");
 });
 
-// (e) Monotonicity. The direct regression test for the claim the whole scale rests on: widening the window must never take columns away. Today's 900px shell switch drops <main> from 867px to 647px in one pixel, so any structural threshold between those two numbers downgrades the layout as the window grows — which is exactly what the old 760.02px repository threshold did for the 118 pixels above 900.
+// (e) Monotonicity. The direct regression test for the claim the whole scale rests on: widening the window must never take columns away. The 900px shell switch drops <main>'s content box from 851px to 644px in one pixel (and the 480px and 1200px gutter steps open two smaller windows, (432, 447] and (928, 943]), so any structural threshold inside those windows downgrades the layout as the window grows — which is exactly what the old 760.02px repository threshold did for the pixels above 900.
 test("no layout loses grid columns as the viewport widens", async ({ page }) => {
   test.skip(test.info().project.name !== "laptop", "this test drives its own viewports, so one project is enough");
   test.setTimeout(180_000);
   await installFixtures(page);
 
   for (const [route, selector] of [
-    ["/#/repositories", "ul li"],
-    ["/#/pull-requests", '[role="table"] > [role="row"]:nth-child(2)'],
+    ["/#/repos", "ul li"],
+    ["/#/prs", '[role="table"] > [role="row"]:nth-child(2)'],
+    // The Inbox row passes through the split flip at 880px of content, where its list pane narrows; the row's track count must not drop there either.
+    ["/#/inbox", '[data-testid="follow-up-card"]'],
   ] as const) {
     await open(page, route);
     const tracks: { width: number; count: number }[] = [];
@@ -203,18 +228,106 @@ test("no layout loses grid columns as the viewport widens", async ({ page }) => 
   }
 });
 
-// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple.
-const LOCALE_PROJECTS = ["phone-320", "phone-360", "phone-390", "edge-480"];
-for (const locale of ["es", "ja"]) {
+// The width axis is only half of it. Spanish is the worst case for the shell's labels and Japanese for line breaking, and before this the suite rendered neither at any width. Kept to the three phone widths plus the `roomy` edge, which is where a label first gets enough room to be a label, so the matrix does not triple. Korean keeps its spaces but breaks words only at them (keep-all), so it gets the narrowest phone, where that rule is most likely to overflow. Its one- and two-syllable labels ("3일", "막힘") are narrower than any English one, so it is also the locale that proves every compact control keeps its tap floor.
+// Simplified Chinese breaks between characters like Japanese but has its own punctuation rules, so it gets the two commonest phone widths; Japanese also runs at the laptop width, where its long katakana column headers ("アクティビティ") meet the fixed table tracks.
+const LOCALE_PROJECTS: Record<string, string[]> = { es: ["phone-320", "phone-360", "phone-390", "edge-480"], ja: ["phone-320", "phone-360", "phone-390", "edge-480", "laptop"], ko: ["phone-320"], "zh-CN": ["phone-320", "phone-390"] };
+for (const locale of Object.keys(LOCALE_PROJECTS)) {
   for (const route of STRUCTURAL_ROUTES.concat("/#/settings")) {
     test(`${locale} fits ${route}`, async ({ page }, info) => {
-      test.skip(!LOCALE_PROJECTS.includes(info.project.name), "the locale axis runs at the narrow widths only");
+      test.skip(!LOCALE_PROJECTS[locale].includes(info.project.name), "the locale axis runs at the narrow widths only");
       await installFixtures(page, { locale });
       await open(page, route);
       expect.soft(await clippedElements(page), `content clipped by an overflow:hidden ancestor in ${locale}`).toEqual([]);
-      expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), `the document scrolls sideways in ${locale}`).toBe(false);
+      expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), `the document scrolls sideways in ${locale}`).toBe(false);
       expect.soft(await midWordBreaks(page), `a shell label was split inside a word in ${locale}`).toEqual([]);
       if (isCoarse(info)) expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
     });
   }
 }
+
+// The dark theme is a second set of colours over the same layout, so the three geometry checks are all it needs; but it is a separate rendering, and a rule that only one theme carries (a border, an outline, a shadow that takes space) would slip through a light-only sweep. Device projects only: the edge projects exist for widths, and the theme does not move a band.
+for (const route of STRUCTURAL_ROUTES) {
+  test(`dark: nothing is clipped or split on ${route}`, async ({ page }, info) => {
+    test.skip(info.project.metadata?.routes === "structural", "the dark pass runs on the device projects");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await installFixtures(page);
+    await open(page, route);
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), "the dark theme applied").toBe("rgb(15, 15, 18)");
+    expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
+    expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), "the document scrolls sideways").toBe(false);
+    expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
+  });
+}
+
+// (f) Focus not obscured (WCAG 2.4.11). Below the shell breakpoint the top bar is sticky and the tab bar fixed, both over the page, and nothing in the sweeps above moves focus. This one tabs through each route and asks the browser what is on top at the centre of every control that takes focus: it has to be that control (or something inside it), not a bar. Run where the bars exist and a keyboard is plausible: the narrowest phone, a phone with a hardware keyboard, and a laptop at 200% zoom.
+const FOCUS_PROJECTS = ["phone-320", "phone-390", "zoom-200"];
+for (const route of ROUTES) {
+  test(`focus is never hidden under the bars on ${route}`, async ({ page }, info) => {
+    test.skip(!FOCUS_PROJECTS.includes(info.project.name), "the focus sweep runs where the fixed bars are");
+    await installFixtures(page);
+    await open(page, route);
+    const hidden: string[] = [];
+    for (let stop = 0; stop < 80; stop += 1) {
+      await page.keyboard.press("Tab");
+      const report = await page.evaluate(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))));
+        const el = document.activeElement as HTMLElement | null;
+        if (!el || el === document.body) return null;
+        const style = getComputedStyle(el);
+        const box = el.getBoundingClientRect();
+        const name = `${el.tagName.toLowerCase()}[${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}]`;
+        // Tab order wraps round to the top of the page; the first control reached twice ends the walk.
+        if (el.dataset.focusSwept) return { name, covered: false, again: true };
+        el.dataset.focusSwept = "";
+        // Visually hidden on purpose (the skip link parked above the top edge, sr-only text) or inside a dialog, which sits above both bars.
+        if (style.clipPath !== "none" || box.width <= 1 || box.bottom <= 0 || el.closest("dialog")) return { name, covered: false, again: false };
+        // The first line box rather than the bounding box: the centre of a link that wraps onto two lines can fall between its words, on the text around it.
+        const line = el.getClientRects()[0] ?? box;
+        const hit = document.elementFromPoint(line.left + line.width / 2, line.top + line.height / 2);
+        return { name, covered: !!hit && hit !== el && !el.contains(hit), again: false, hit: hit ? `${hit.tagName.toLowerCase()}.${String(hit.className).slice(0, 50)}` : "", at: [Math.round(line.left), Math.round(line.top), Math.round(line.width)] };
+      });
+      if (!report) continue;
+      if (report.again) break;
+      if (report.covered) hidden.push(`${report.name} under ${"hit" in report ? report.hit : ""} at ${"at" in report && report.at ? report.at.join(",") : ""}`);
+    }
+    expect(hidden, "focused controls covered by the top bar or the tab bar").toEqual([]);
+  });
+}
+
+// (g) The phone Inbox header, where three regressions met. The role filter shared a line with the status select and was cut to "All / My PRs / My…" (in Spanish, two of the three), which the clip sweep cannot see because a strip that scrolls is a scroller and not a clip; the top bar's palette search and the page's own search were the same magnifier 64px apart; and the header pushed the first row below the fold. So: every role reads whole inside its track without scrolling, there is one magnifier on the page, and the first row starts inside a bound on the two widths the design was checked at, in English, Spanish (the longest labels) and Japanese (the widest glyphs, which needed the tighter touch padding to fit at 320px).
+const PHONE_PROJECTS: Record<string, number | undefined> = { "phone-320": 340, "phone-360": undefined, "phone-390": 320, "phone-412": undefined };
+for (const locale of ["en", "es", "ja"]) {
+  test(`the phone Inbox shows every role whole, one search and its first row in view in ${locale}`, async ({ page }, info) => {
+    test.skip(!(info.project.name in PHONE_PROJECTS), "the phone header runs at the phone widths");
+    await installFixtures(page, { locale });
+    await open(page, "/#/inbox");
+    const geometry = await page.evaluate(() => {
+      const group = document.querySelector<HTMLElement>('main [role="group"]:has(> button[aria-pressed])')!;
+      const track = group.getBoundingClientRect();
+      const cut = [...group.querySelectorAll<HTMLElement>("button[aria-pressed]")].filter((item) => {
+        const box = item.getBoundingClientRect();
+        return box.left < track.left - 1 || box.right > track.right + 1 || item.scrollWidth > item.clientWidth + 1;
+      });
+      const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+      const magnifiers = [...document.querySelectorAll("button svg.lucide-search, a svg.lucide-search")].filter(visible).map((svg) => svg.closest("button, a")!.getAttribute("aria-label") ?? svg.closest("button, a")!.textContent);
+      return { items: group.querySelectorAll("button[aria-pressed]").length, scrolls: group.scrollWidth > group.clientWidth + 1, cut: cut.map((item) => item.textContent), magnifiers, firstRow: document.querySelector("[data-testid='follow-up-card']")!.getBoundingClientRect().top };
+    });
+    expect(geometry.items, "the role filter has its three items").toBe(3);
+    expect.soft(geometry.cut, "role items cut off at the edge of their track").toEqual([]);
+    expect.soft(geometry.scrolls, "the role filter has to scroll to show every item").toBe(false);
+    expect.soft(geometry.magnifiers, "exactly one search button wears the magnifier").toHaveLength(1);
+    const bound = PHONE_PROJECTS[info.project.name];
+    if (bound !== undefined) expect.soft(geometry.firstRow, `the first row starts within ${bound}px of the top`).toBeLessThanOrEqual(bound);
+  });
+}
+
+// The palette trigger is named for what it does. A touch screen has no key to press, so neither its name nor its visible text may carry the ⌘K / Ctrl K hint there.
+test("the palette trigger never names a shortcut on a touch screen", async ({ page }, info) => {
+  test.skip(!isCoarse(info) || info.project.metadata?.routes === "structural", "the touch projects only");
+  await installFixtures(page);
+  await open(page, "/#/inbox");
+  const trigger = page.locator("aside button[aria-keyshortcuts]");
+  await expect(trigger).toHaveAccessibleName(/^Search/);
+  await expect(trigger).not.toHaveAccessibleName(/⌘|Ctrl/);
+  expect(await trigger.evaluate((el) => (el as HTMLElement).innerText)).not.toMatch(/⌘|Ctrl/);
+});

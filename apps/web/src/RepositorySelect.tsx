@@ -12,7 +12,7 @@ export function RepositorySelect({ repositories, value, onChange, loading }: { r
     <Select.Root value={value || "all"} onValueChange={(next) => onChange(next === "all" ? "" : next)}>
       {/* A Radix Select gives a phone no system picker to compensate for a short trigger, so the whole interaction is this button plus the popover; the height follows the pointer rather than the width. */}
       <Select.Trigger
-        className="inline-flex h-10 w-[280px] max-w-full items-center gap-[9px] rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[length:0.8125rem] text-[var(--foreground)] pointer-coarse:h-11 [&>span:first-of-type]:flex-1 [&>span:first-of-type]:overflow-hidden [&>span:first-of-type]:text-left [&>span:first-of-type]:text-ellipsis [&>span:first-of-type]:whitespace-nowrap"
+        className="inline-flex h-10 w-[280px] max-w-full items-center gap-[9px] rounded-lg border border-line bg-surface px-3 text-[length:0.8125rem] text-fg pointer-coarse:h-11 [&>span:first-of-type]:flex-1 [&>span:first-of-type]:overflow-hidden [&>span:first-of-type]:text-left [&>span:first-of-type]:text-ellipsis [&>span:first-of-type]:whitespace-nowrap"
         aria-label={t("filterRepository")}
         disabled={loading}
       >
@@ -33,11 +33,11 @@ export function RepositorySelect({ repositories, value, onChange, loading }: { r
             </Select.Item>
             {Array.from(groups, ([owner, repos]) => (
               <Select.Group key={owner}>
-                <Select.Label className="px-3 pb-1 pt-3 text-xs font-medium text-[var(--muted)]">{owner}</Select.Label>
+                <Select.Label className="px-3 pb-1 pt-3 text-xs font-medium text-fg-muted">{owner}</Select.Label>
                 {repos.map((repo) => (
                   <Select.Item key={repo.repo} value={repo.repo} className={`${selectOption} gap-3 [overflow-wrap:anywhere] whitespace-normal`}>
                     <Select.ItemText>{repo.repo}</Select.ItemText>
-                    <span className="ml-auto text-xs tabular-nums text-[var(--muted)]">{repo.needs_attention}</span>
+                    <span className="ml-auto text-xs tabular-nums text-fg-muted">{repo.needs_attention}</span>
                     <Select.ItemIndicator>
                       <Check size={15} />
                     </Select.ItemIndicator>
