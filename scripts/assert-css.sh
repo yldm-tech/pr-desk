@@ -42,6 +42,8 @@ require "no @max-split/ container utilities — the narrow branch of the panels 
 require "no dashboard container declared, so every @container dashboard query has no ancestor to measure and silently matches nothing" 'container(-name)?: ?dashboard'
 require "no chart container declared, so the @pair/chart queries measure nothing" 'container(-name)?: ?chart'
 require "no overview container declared, so the @row/overview queries measure nothing" 'container(-name)?: ?overview'
+require "no list container declared, so the Inbox row's @row/list tracks measure nothing and it never becomes a three-column row" 'container(-name)?: ?list'
+require "no @row/list utilities — the Inbox row's three-track form compiled to nothing" '\\@row\\/list'
 
 # Capability variants carry the touch and landscape work. If one compiles away the desktop value simply stays in place, which no viewport matrix can detect.
 require "no .pointer-coarse\\: utilities — every 44px tap-target floor compiled to nothing" '\.pointer-coarse\\:'
@@ -56,10 +58,12 @@ require "no safe-area inset in the output while index.html asks for viewport-fit
 require "no [data-theme=dark] rule — an explicit dark choice from the account menu would change nothing" '\[data-theme="?dark"?\]'
 require "no (prefers-color-scheme: dark) rule — the system dark theme compiled away" 'prefers-color-scheme: ?dark'
 require "no prefers-reduced-motion rule — animations would run for readers who turned motion off" 'prefers-reduced-motion'
+require "no forced-colors rule — glyphs, chips and the active row lose their system colours in Windows high-contrast mode" 'forced-colors: ?active'
 
 # Negative checks: shapes the migration removed, which must not come back.
 refuse "a .02 container threshold is back; those were the non-monotonic bounds the named scale replaced" '(760|480|800)\.02'
 refuse "a maximum-scale or user-scalable lock reached the output; pinch-zoom is the only text-scaling lever this app offers on mobile Safari" 'user-scalable|maximum-scale'
+refuse "a retired pre-redesign colour name is read again; it is no longer declared, so the rule would silently lose its colour in both themes" 'var\(--(canvas|surface-muted|foreground|muted|border|border-subtle|accent-soft|accent-border|success|success-soft|success-border|warning|warning-soft|warning-border|danger|danger-soft|info|hero|hero-muted|hero-text|hero-border|chart-[1-5]|chart-other|select-chevron|shadow|text-heading)\)'
 
 if [ "$fail" -ne 0 ]; then
   echo "assert:css: the source may look correct — in Tailwind v4 an unrecognised variant emits no rule and no error, which is exactly what this check exists to catch"

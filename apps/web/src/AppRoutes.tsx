@@ -1,12 +1,8 @@
 import React from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { About } from "./About";
 import { Welcome } from "./Welcome";
-import { Repositories } from "./Repositories";
-import { FollowUpSettings } from "./FollowUpSettings";
 import { InboxPage } from "./InboxPage";
-import { PullRequestsPage } from "./PullRequestsPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OverviewSkeleton, PageSkeleton } from "./LoadingSkeleton";
 import { ErrorState } from "./ui-display";
@@ -15,6 +11,20 @@ import { destinationOf, legacyRedirect, paths, prViewFromPath, prViewTitleKeys, 
 import { useDocumentTitle } from "./page-title";
 
 const Overview = React.lazy(() => import("./Overview"));
+// The Inbox is the home page and stays in the first chunk; every other destination loads its own on first visit, so the code a reader waits for on launch is the shell and the page they land on.
+const PullRequestsPage = React.lazy(() => import("./PullRequestsPage").then((module) => ({ default: module.PullRequestsPage })));
+const Repositories = React.lazy(() => import("./Repositories").then((module) => ({ default: module.Repositories })));
+const FollowUpSettings = React.lazy(() => import("./FollowUpSettings").then((module) => ({ default: module.FollowUpSettings })));
+const About = React.lazy(() => import("./About").then((module) => ({ default: module.About })));
+
+// A lazily loaded page behind the same skeleton the session check shows, and behind the crash boundary, which reloads once when a deploy has replaced the chunk the old page asked for.
+function Lazy({ page, children }: { page: Destination; children: React.ReactNode }) {
+  return (
+    <ErrorBoundary>
+      <React.Suspense fallback={<PageSkeleton page={skeletonPage[page]} />}>{children}</React.Suspense>
+    </ErrorBoundary>
+  );
+}
 
 // Rewrites an address that is not canonical before anything renders under it, so a page never reads the parameters of the route it is about to leave and the shell never paints a heading for an address that is going away. `replace` keeps the old entry out of history, so Back still leaves the app rather than bouncing between the old address and the new one.
 export function LegacyRedirect({ children }: { children: React.ReactNode }) {
@@ -51,7 +61,11 @@ function Connected() {
 
 function RepositoriesRoute() {
   const { data, isLoading, isError, refetch } = useRepositories(true);
-  return <Repositories repositories={data} loading={isLoading} error={isError} retry={() => void refetch()} />;
+  return (
+    <Lazy page="repos">
+      <Repositories repositories={data} loading={isLoading} error={isError} retry={() => void refetch()} />
+    </Lazy>
+  );
 }
 
 // The full sync a newly granted installation needs is started by useRepositoryAccess inside the page, once per grant however many pages read the access check.
@@ -82,14 +96,35 @@ export function AppRoutes() {
   useRouteTitle();
   return (
     <Routes>
-      <Route path={paths.about} element={<About />} />
+      <Route
+        path={paths.about}
+        element={
+          <Lazy page="about">
+            <About />
+          </Lazy>
+        }
+      />
       <Route element={<Connected />}>
         <Route path={paths.inbox} element={<InboxPage />} />
         {/* One route with an optional segment rather than two, so moving between views keeps the page mounted and the list's previous rows on screen while the next view loads. */}
-        <Route path={`${paths.prs}/:view?`} element={<PullRequestsPage />} />
+        <Route
+          path={`${paths.prs}/:view?`}
+          element={
+            <Lazy page="prs">
+              <PullRequestsPage />
+            </Lazy>
+          }
+        />
         <Route path={paths.repos} element={<RepositoriesRoute />} />
         <Route path={paths.insights} element={<InsightsRoute />} />
-        <Route path={paths.settings} element={<FollowUpSettings />} />
+        <Route
+          path={paths.settings}
+          element={
+            <Lazy page="settings">
+              <FollowUpSettings />
+            </Lazy>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to={paths.inbox} replace />} />
     </Routes>
