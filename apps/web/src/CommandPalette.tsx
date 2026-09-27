@@ -10,6 +10,7 @@ import { hardReload } from "./service-worker";
 import { INSTALLED, iosStandalone } from "./HardRefresh";
 import { groupOf, reasonTone, type FollowUp } from "./followup-view";
 import { useAuth, useFollowUps, useSyncMutation, useSyncPending } from "./queries";
+import { useSyncInFlight } from "./SyncProgress";
 import { paths, prViewPath, prViews, prViewTitleKeys, type Destination } from "./routes";
 import { overlays, useShortcut } from "./shortcuts";
 import { useTheme, type ThemePref } from "./theme";
@@ -129,7 +130,8 @@ function PaletteDialog() {
   const connected = !!auth.data?.connected;
   const followUps = useFollowUps(connected);
   const sync = useSyncMutation();
-  const syncing = useSyncPending();
+  // The same condition the sync popover disables its button on: a request from this tab, or a run the server reports.
+  const syncing = useSyncInFlight(useSyncPending());
   const theme = useTheme();
   // Only an installed window gets "Reload the app", the same display modes HardRefresh.tsx answers to, because a browser tab already has a reload button.
   const installed = useMediaQuery(INSTALLED) || iosStandalone();

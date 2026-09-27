@@ -31,18 +31,27 @@ const progressSchema = z.object({
 export type SyncProgressData = z.infer<typeof progressSchema>;
 export type SyncProgressQuery = UseQueryResult<SyncProgressData>;
 
+const syncProgressKey = ["sync-progress"];
+const fetchSyncProgress = ({ signal }: { signal: AbortSignal }) =>
+  ky
+    .get(apiURL + "/api/v1/sync/progress", { credentials: "include", signal, retry: 0 })
+    .json()
+    .then((value) => progressSchema.parse(value));
+
+// Whether a sync is in flight from anywhere: a request this tab sent, or a run the server reports as queued or running, whoever started it. It is the one condition every "Sync now" is disabled on, so no surface can post a second run the server would refuse with a 409. It reads the shell's poll from the cache and never fetches on its own.
+export function useSyncInFlight(pending: boolean): boolean {
+  const { data } = useQuery({ queryKey: syncProgressKey, queryFn: fetchSyncProgress, enabled: false });
+  return syncRunInFlight(pending, data?.status);
+}
+
 // The poll behind every sync surface, mounted once by the shell on every route so the invalidation below keeps running whichever page is open. The query options, the poll interval and the invalidation rules are the ones the old inline progress line had, unchanged; it stays idle while signed out, as before. `running` is a run the server reports as queued or running, whoever started it.
 export function useSyncProgress({ connected, pending }: { connected: boolean; pending: boolean }): { query: SyncProgressQuery; running: boolean } {
   const client = useQueryClient();
   const previous = useRef<SyncSnapshot | undefined>(undefined);
   const query = useQuery({
-    queryKey: ["sync-progress"],
+    queryKey: syncProgressKey,
     enabled: connected,
-    queryFn: ({ signal }) =>
-      ky
-        .get(apiURL + "/api/v1/sync/progress", { credentials: "include", signal, retry: 0 })
-        .json()
-        .then((value) => progressSchema.parse(value)),
+    queryFn: fetchSyncProgress,
     refetchInterval: (q) => syncPollInterval(pending, q.state.data?.status),
     // A hidden tab still has to follow a run it is showing progress for, because the invalidation timer below keeps firing while it does. Idle polling stops instead.
     refetchIntervalInBackground: syncRunInFlight(pending, previous.current?.status),
@@ -197,6 +206,8 @@ export function SyncStatus({ progress, auth, pending, onSync, align }: { progres
   if (progress.isPending && !pending) return <SyncStatusSkeleton />;
   const Icon = healthIcon[health];
   const syncing = health === "syncing";
+  // Separate from the health glyph: a failed or paused state wins the pill, but a run still in flight (a retry this tab just sent, or one the server has queued) must keep the button disabled all the same.
+  const inFlight = syncRunInFlight(pending, data?.status);
   const last = lastSyncedAt(data, auth);
   const failed = data?.status === "failed" || data?.status === "interrupted";
   return (
@@ -253,8 +264,8 @@ export function SyncStatus({ progress, auth, pending, onSync, align }: { progres
               {last !== null && <p>{t("lastSynced", { time: formatDateTime(new Date(last), i18n.resolvedLanguage) })}</p>}
             </div>
           )}
-          <Button variant="secondary" icon={RefreshCw} busy={syncing} onClick={onSync} className="w-full">
-            {syncing ? t("syncing") : t("sync")}
+          <Button variant="secondary" icon={RefreshCw} busy={inFlight} onClick={onSync} className="w-full">
+            {inFlight ? t("syncing") : t("sync")}
           </Button>
         </div>
       </Popover>
