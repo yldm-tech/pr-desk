@@ -22,7 +22,7 @@
     "motion": "13.3.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-i18next": "17.0.13",
+    "react-i18next": "17.0.14",
     "react-loading-skeleton": "^3.5.0",
     "react-router-dom": "^7.18.3",
     "zod": "4.6.5"
