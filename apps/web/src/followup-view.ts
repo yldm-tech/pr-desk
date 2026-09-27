@@ -37,6 +37,7 @@ export type FollowUpGroup = "action" | "follow_up" | "muted" | "waiting" | "draf
 
 // Rank order is the server's own (followup_store.go sorts action, follow_up, waiting, draft, archived) with the muted split out of waiting, so the headings the reader sees are the order the payload already arrived in.
 const groupRank: FollowUpGroup[] = ["action", "follow_up", "muted", "waiting", "draft", "archived"];
+export const followUpGroups: readonly FollowUpGroup[] = groupRank;
 
 export function isMuted(item: Pick<FollowUp, "snoozed_until">, now: number): boolean {
   if (!item.snoozed_until) return false;
@@ -120,6 +121,12 @@ export function stableOrder(items: FollowUp[], order: number[]): { items: Follow
 }
 
 // ---- Inbox decisions ----
+
+// The Inbox's filter values, in the order the controls list them. Their labels are the `followup.<value>` words, which i18n-dynamic-keys.test.mjs checks exist for every entry.
+export const inboxStatuses = ["todo", "all", "action", "follow_up", "muted", "waiting", "draft", "archived"] as const;
+export type InboxStatus = (typeof inboxStatuses)[number];
+export const inboxRoles = ["all", "authored", "reviewer"] as const;
+export type InboxRole = (typeof inboxRoles)[number];
 
 // The verbs a row can offer, named after the CLI and MCP verbs they post (handled, snooze, unsnooze) or, for the two that leave for GitHub, after where they go. `open` and `merge` are links with no API call: the product cannot merge or push, so on a row only GitHub can move it says where to go instead of offering a button that would change nothing.
 export type RowVerb = "handled" | "snooze" | "unsnooze" | "open" | "merge";
