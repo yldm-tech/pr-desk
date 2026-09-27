@@ -124,10 +124,7 @@ test("a card action is announced and does not strand the focus", async ({ page }
 // The badge promised a small, finite amount of work and opened a page that showed the entire inventory, so the number it nagged with could not be cleared in one pass and nothing on screen said where the urgent items stopped. These two things are now the same set by construction on both sides — the server counts action and follow_up, the default filter selects action and follow_up — and this is the assertion that keeps them that way.
 test("the default workspace shows exactly what the sidebar badge counts", async ({ page }) => {
   await page.goto("/#/inbox");
-  const badge = page
-    .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: /Inbox/ })
-    .locator("b");
+  const badge = page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: /Inbox/ }).locator("b");
   await expect(badge).toHaveText("4");
   // The group heading and the card title are both level 3, so the headings are picked out by the count only a group heading carries.
   const headings = page.getByRole("heading", { level: 3 }).filter({ hasText: /\(\d+\)$/ });

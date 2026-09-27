@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 import { Building2, CalendarDays, ChevronsUpDown, Info, LogOut, MapPin, Monitor, Moon, Settings2, Sun, type LucideIcon } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
@@ -41,12 +42,13 @@ function MenuRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const menuLink = "flex min-h-8 items-center gap-2 rounded-md px-2 text-body text-fg no-underline hover:bg-bg-muted pointer-coarse:min-h-11";
+const menuLink = "flex min-h-8 items-center gap-2 rounded-md px-2 text-body text-fg no-underline hover:bg-bg-muted aria-[current=page]:bg-bg-muted aria-[current=page]:font-medium pointer-coarse:min-h-11";
 
 // The account menu behind the avatar: who is signed in, the two preferences that belong to the reader rather than to a page (theme and language), the routes that are not destinations (Settings, About), and Disconnect. The profile is fetched only while the menu is open, since nothing else on screen needs it.
 export function AccountMenu({ username, onDisconnect, disconnecting, disconnectError, align }: { username?: string; onDisconnect: () => void; disconnecting: boolean; disconnectError: boolean; align: "start" | "end" }) {
   const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
   const profile = useQuery({
     queryKey: ["profile", username],
     enabled: open,
@@ -151,11 +153,11 @@ export function AccountMenu({ username, onDisconnect, disconnecting, disconnectE
         <LanguageSelect className="flex w-full flex-wrap justify-between" />
       </div>
       <div className="grid border-t border-line pt-2">
-        <TextLink to={paths.settings} className={menuLink} onClick={close}>
+        <TextLink to={paths.settings} aria-current={pathname === paths.settings ? "page" : undefined} className={menuLink} onClick={close}>
           <Settings2 size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
           {t("followup.settings")}
         </TextLink>
-        <TextLink to={paths.about} className={menuLink} onClick={close}>
+        <TextLink to={paths.about} aria-current={pathname === paths.about ? "page" : undefined} className={menuLink} onClick={close}>
           <Info size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
           {t("shell.aboutTitle")}
         </TextLink>
