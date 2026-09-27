@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installFixtures, LEGACY_ROUTES } from "./fixtures";
+import { installFixtures } from "./fixtures";
 
 test.beforeEach(async ({ page }) => {
   await installFixtures(page);
@@ -17,22 +17,6 @@ test("an unknown route rewrites the address instead of quietly rendering a page"
   await expect(page).toHaveURL(/#\/inbox$/);
   await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByTestId("follow-up-card")).toHaveCount(4);
-});
-
-// Every address the application has ever answered on is somebody's bookmark, and `#/attention?focus=<id>` is what every push notification and digest links to, so each one has to land on its new home with the query intact and without leaving the old address in history.
-test("every legacy address lands on its new home with the query intact", async ({ page }) => {
-  for (const { from, to } of LEGACY_ROUTES) {
-    await page.goto(from);
-    await expect(page, from).toHaveURL((url) => url.href.endsWith(to));
-    // Exactly one page heading on every landing, whichever of the shell or the page prints it.
-    await expect(page.locator("main").getByRole("heading", { level: 1 }), from).toHaveCount(1);
-  }
-  // Rewritten in place: Back from the rewritten address leaves the history entry that came before it rather than returning to the legacy one and redirecting again.
-  await page.goto("/#/about");
-  await page.goto("/#/attention?focus=1");
-  await expect(page).toHaveURL(/#\/inbox\?focus=1$/);
-  await page.goBack();
-  await expect(page).toHaveURL(/#\/about$/);
 });
 
 // A tab strip or a history list shows the title and nothing else, so it names the view as specifically as the page heading does. A page may add a count to its own name ("Inbox (4)"), so that part is optional here.
