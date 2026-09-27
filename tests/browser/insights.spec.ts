@@ -18,7 +18,7 @@ test("insights switches the contribution year from its tab", async ({ page }, te
 // The outcome legend counted sets the interface had no way to open; each count it can open is a link to the list that holds it.
 test("insights names its report and opens what it counts", async ({ page }) => {
   await page.goto("/#/insights");
-  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Insights" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Contribution overview" })).toBeVisible();
   await page.getByRole("link", { name: "Merged", exact: true }).click();
   await expect(page).toHaveURL(/#\/prs\/merged$/);

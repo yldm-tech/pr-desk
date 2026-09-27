@@ -209,6 +209,7 @@ export function SyncStatus({ progress, auth, pending, onSync, align }: { progres
         onOpenChange={setOpen}
         align={align}
         label={t("shell.syncStatus")}
+        className="[&_p]:m-0"
         trigger={
           <button
             type="button"

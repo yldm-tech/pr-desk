@@ -22,22 +22,26 @@ export default defineConfig({
     layout("zoom-200", 640, 400, false),
     layout("laptop", 1280, 800, false),
     layout("wide", 1920, 1080, false),
-    // One pixel either side of every token in the scale, plus the viewports that straddle the container tokens through the shell. These are the widths the design is most fragile at and the only ones a dead zone or a non-monotonic band shows up in.
+    // One pixel either side of every token in the scale, at the viewports where <main>'s content box crosses a container token. These are the widths the design is most fragile at and the only ones a dead window or a non-monotonic band shows up in.
+    // `roomy`: the gutter grows from 16px to 24px, which opens the (432, 447] dead window just below it.
     layout("edge-479", 479, 800, false, "structural"),
     layout("edge-480", 480, 800, false, "structural"),
-    layout("edge-639", 639, 800, false, "structural"),
-    layout("edge-640", 640, 800, false, "structural"),
-    // Container `row`: <main>'s content box is 640px at a 672px viewport while the top bar is in use.
-    layout("edge-671", 671, 800, false, "structural"),
-    layout("edge-672", 672, 800, false, "structural"),
-    layout("edge-879", 879, 800, false, "structural"),
-    layout("edge-880", 880, 800, false, "structural"),
-    // The shell switch, and the old 900/901 hole where neither `max-[900px]:` nor `min-[901px]:` matched.
+    // Container `split` (480): the content box is V - 48 with the top bar.
+    layout("edge-527", 527, 800, false, "structural"),
+    layout("edge-528", 528, 800, false, "structural"),
+    // Container `pair` (560).
+    layout("edge-607", 607, 800, false, "structural"),
+    layout("edge-608", 608, 800, false, "structural"),
+    // Container `row` (640).
+    layout("edge-687", 687, 800, false, "structural"),
+    layout("edge-688", 688, 800, false, "structural"),
+    // The shell switch: the content box falls from 851px to 644px across this pixel, the (644, 851] window no threshold may sit in.
     layout("edge-899", 899, 800, false, "structural"),
     layout("edge-900", 900, 800, false, "structural"),
-    // Container `table`: 0.95V - 208 crosses 880px between these two viewports.
-    layout("edge-1145", 1145, 800, false, "structural"),
-    layout("edge-1146", 1146, 800, false, "structural"),
+    // Container `table` (880) through the sidebar, V - 256, and with it the Inbox split view.
+    layout("edge-1135", 1135, 800, false, "structural"),
+    layout("edge-1136", 1136, 800, false, "structural"),
+    // `wide`: the gutter grows from 24px to 32px, which opens the (928, 943] window below it.
     layout("edge-1199", 1199, 800, false, "structural"),
     layout("edge-1200", 1200, 800, false, "structural"),
   ],

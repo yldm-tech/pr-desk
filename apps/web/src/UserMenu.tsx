@@ -69,7 +69,7 @@ export function AccountMenu({ username, onDisconnect, disconnecting, disconnectE
       onOpenChange={setOpen}
       align={align}
       label={t("personalProfile")}
-      className="grid w-[min(320px,calc(100vw-32px))] gap-3 p-3"
+      className="grid w-[min(320px,calc(100vw-32px))] gap-3 p-3 [&_h2]:m-0 [&_p]:m-0"
       trigger={
         <button
           type="button"

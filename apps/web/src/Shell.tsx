@@ -102,7 +102,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <MotionConfig reducedMotion="user">
       <div className={cx("min-h-dvh bg-bg text-fg", !signedOut && "shell:flex")}>
         <a
-          className="fixed top-[max(12px,env(safe-area-inset-top))] left-[max(12px,env(safe-area-inset-left))] z-50 rounded-md bg-accent px-4 py-2.5 text-body font-medium text-accent-fg no-underline shadow-1 [transform:translateY(-160%)] focus:[transform:translateY(0)]"
+          className="fixed top-[max(12px,env(safe-area-inset-top))] left-[max(12px,env(safe-area-inset-left))] z-50 rounded-md bg-accent px-4 py-2.5 text-body font-medium text-accent-fg no-underline shadow-1 [transform:translateY(calc(-100%-48px))] focus:[transform:translateY(0)]"
           href="#main-content"
           onClick={(event) => {
             event.preventDefault();
@@ -113,7 +113,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </a>
         <aside className={cx(bar, !signedOut && column)}>
           {/* Below `roomy` only the mark is shown: the wordmark would not fit beside the controls on a 320px phone. The aria-label keeps the link named once the text is gone, and the product name is not translated anywhere. */}
-          <a href={"#" + paths.inbox} aria-label="PR Desk" className="inline-flex min-h-8 min-w-8 shrink-0 items-center gap-2 rounded-md px-1 text-body font-semibold text-fg no-underline pointer-coarse:min-h-11 pointer-coarse:min-w-11 shell:self-start shell:px-2">
+          <a href={"#" + paths.inbox} aria-label="PR Desk" className={cx("inline-flex min-h-8 min-w-8 shrink-0 items-center gap-2 rounded-md px-1 text-body font-semibold text-fg no-underline pointer-coarse:min-h-11 pointer-coarse:min-w-11", !signedOut && "shell:self-start shell:px-2")}>
             <img className="size-5 shrink-0" src="/favicon.svg" alt="" />
             <span className="hidden roomy:inline">PR Desk</span>
             {!signedOut && <span className="hidden text-caption font-normal text-fg-subtle tabular-nums shell:inline">{projectVersion}</span>}

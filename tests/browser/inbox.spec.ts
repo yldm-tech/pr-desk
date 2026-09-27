@@ -126,7 +126,7 @@ test("the default workspace shows exactly what the sidebar badge counts", async 
   await page.goto("/#/inbox");
   const badge = page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("button", { name: /Needs attention/ })
+    .getByRole("link", { name: /Inbox/ })
     .locator("b");
   await expect(badge).toHaveText("4");
   // The group heading and the card title are both level 3, so the headings are picked out by the count only a group heading carries.
