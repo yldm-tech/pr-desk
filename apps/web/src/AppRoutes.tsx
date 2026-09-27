@@ -1,7 +1,6 @@
 import React from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle } from "lucide-react";
 import { About } from "./About";
 import { Welcome } from "./Welcome";
 import { Repositories } from "./Repositories";
@@ -10,7 +9,7 @@ import { InboxPage } from "./InboxPage";
 import { PullRequestsPage } from "./PullRequestsPage";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OverviewSkeleton, PageSkeleton } from "./LoadingSkeleton";
-import { emptyState, secondaryAction } from "./action-styles";
+import { ErrorState } from "./ui-display";
 import { useAuth, useRepositories } from "./queries";
 import { destinationOf, legacyRedirect, paths, prViewFromPath, prViewTitleKeys, type Destination } from "./routes";
 import { useDocumentTitle } from "./page-title";
@@ -39,16 +38,7 @@ function Connected() {
   const { pathname } = useLocation();
   const { data: auth, isPending, isError, refetch } = useAuth();
   if (isPending) return <PageSkeleton page={skeletonPage[destinationOf(pathname) ?? "inbox"]} />;
-  if (isError && !auth)
-    return (
-      <section className={emptyState} role="alert">
-        <AlertTriangle size={28} />
-        <h2>{t("apiUnavailable")}</h2>
-        <button className={secondaryAction} onClick={() => refetch()}>
-          {t("retry")}
-        </button>
-      </section>
-    );
+  if (isError && !auth) return <ErrorState title={t("apiUnavailable")} onRetry={() => void refetch()} />;
   if (!auth?.connected)
     return (
       <>

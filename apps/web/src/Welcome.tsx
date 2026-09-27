@@ -1,7 +1,6 @@
 import { ArrowRight, ChartColumn, CircleDot, GitPullRequest, RefreshCw, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { apiURL } from "./api-url";
-import { LanguageSelect } from "./LanguageMenu";
 import { paths } from "./routes";
 import { LinkButton, TextLink } from "./ui-controls";
 
@@ -48,8 +47,6 @@ export function Welcome() {
           </li>
         ))}
       </ul>
-      {/* The only language switch a signed-out visitor needs on this page, as a native select: it is what every platform does best. */}
-      <LanguageSelect className="mt-2" />
     </section>
   );
 }

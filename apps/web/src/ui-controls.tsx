@@ -1,6 +1,6 @@
 import * as RadixTabs from "@radix-ui/react-tabs";
 import { ArrowUpRight, LoaderCircle, Search, X, type LucideIcon } from "lucide-react";
-import { cloneElement, isValidElement, useEffect, useId, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type AnchorHTMLAttributes, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactElement, type ReactNode, type Ref, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { toneText, type Tone } from "./tone";
@@ -278,12 +278,28 @@ export function SearchField({
   const fallback = useId();
   const inputId = id ?? fallback;
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
-  const text = mode === "live" ? value : draft;
-  const update = (next: string) => (mode === "live" ? onChange(next) : setDraft(next));
+  // In live mode the field shows its own draft and reports every keystroke. The value it gets back usually lags behind (a URL-backed value arrives a render or more later), so an echo of something this field already reported must not overwrite what has been typed since; only a value it never sent, such as a filter reset elsewhere on the page, replaces the draft.
+  const sent = useRef<string[]>([]);
+  useEffect(() => {
+    const echo = sent.current.indexOf(value);
+    if (echo >= 0) sent.current = sent.current.slice(echo + 1);
+    else {
+      sent.current = [];
+      setDraft(value);
+    }
+  }, [value]);
+  const text = draft;
+  const report = (next: string) => {
+    if (mode === "live") sent.current.push(next);
+    onChange(next);
+  };
+  const update = (next: string) => {
+    setDraft(next);
+    if (mode === "live") report(next);
+  };
   const clear = () => {
     setDraft("");
-    onChange("");
+    report("");
     if (mode === "submit") onSubmit?.("");
     document.getElementById(inputId)?.focus();
   };

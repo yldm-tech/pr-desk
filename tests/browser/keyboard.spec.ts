@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 // Loaded means the follow-ups have arrived and the lazy palette chunk has registered its keys: the palette's only trace on a closed page is its binding, so the Inbox rows stand in for "the app is up" and the first ⌘K is retried until the chunk answers.
 async function openInbox(page: Page, route = "/#/inbox") {
   await page.goto(route);
-  await expect(page.locator("main h1")).toBeVisible();
+  await expect(page.locator("main").getByRole("heading", { level: 1 })).toBeVisible();
   if (route.startsWith("/#/inbox")) await expect(page.getByTestId("follow-up-card").first()).toBeVisible();
 }
 
@@ -33,7 +33,8 @@ test("keys typed into the search field stay text", async ({ page }) => {
   await page.keyboard.type("?");
   await expect(search).toHaveValue("jgp?");
   await expect(page.locator("[data-testid=follow-up-card][data-active]")).toHaveCount(0);
-  await expect(page).toHaveURL(/#\/inbox$/);
+  // The Inbox search is live and lives in the URL, so the only change to the address is the query itself.
+  await expect(page).toHaveURL(/#\/inbox\?q=jgp%3F$/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
