@@ -57,6 +57,8 @@ export function useShortcut(keys: string | string[], handler: (e: KeyboardEvent)
       if (scope === "sheet") {
         const target = e.target as HTMLElement | null;
         if (e.metaKey || e.ctrlKey || e.altKey || target?.closest?.("input,textarea,select,[contenteditable=true],[role=combobox]")) return;
+        // A popover open inside the sheet (the Remind me later menu) owns the keys while it is open, exactly as the global guard stands down for one on the page: `e` pressed in the reminder menu must not mark the row handled behind it.
+        if (element?.current?.querySelector("[role=dialog][data-state=open]")) return;
       } else if (allowInInputs ? e.metaKey || e.ctrlKey || e.altKey : isShortcutTarget(e)) return;
       if (sequences.length) {
         const result = matchSequence(buffer.current, e.key, e.timeStamp, sequences);
