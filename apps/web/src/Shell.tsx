@@ -47,6 +47,10 @@ import { useAuth, useFollowUps, useLogout, useSyncFeedback, useSyncMutation, use
 import { destinationOf, paths, prViewFromPath, prViewTitleKeys, type Destination } from "./routes";
 import { useShortcut } from "./shortcuts";
 
+// Lazy, so cmdk and the palette's code stay out of the index chunk; each registers its own keys once its chunk has loaded.
+const CommandPalette = React.lazy(() => import("./CommandPalette"));
+const ShortcutsSheet = React.lazy(() => import("./ShortcutsSheet"));
+
 // The chrome around every page — skip link, sidebar or top bar, page header, sync status and banners — moved out of App.tsx unchanged. The page itself arrives as `children` from the route table.
 export function Shell({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -228,6 +232,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <DetailHost />
+      <React.Suspense fallback={null}>
+        <CommandPalette />
+        <ShortcutsSheet />
+      </React.Suspense>
     </div>
   );
 }

@@ -30,6 +30,9 @@ const modMatches = (binding: string, e: KeyboardEvent) => (e.metaKey || e.ctrlKe
 
 type ShortcutOptions = { enabled?: boolean; scope?: "global" | "sheet"; element?: RefObject<HTMLElement | null>; allowInInputs?: boolean };
 
+// When the first key of a still-open global sequence was pressed. Every binding is its own window listener and they run in registration order, so without this the Inbox's `s` (snooze) or `r` (mark read) would also fire on the second key of `g s` or `g r` whenever the page registered before the palette did. A single-key global binding stands down while a sequence is open; the sequence listener closes it on a match, on a miss, or once the window has run out.
+let sequenceOpenedAt = Number.NEGATIVE_INFINITY;
+
 // Binds one or more keys: a single key ("j", "/", "?"), a sequence ("g i") or a modified key ("mod+k"). Global bindings listen on the window behind isShortcutTarget. Sheet bindings listen on the sheet element itself, which is the one place a single key is allowed while a dialog is open, and still ignore modifiers and typing in a field. The handler is read through a ref, so an inline arrow does not rebind the listener on every render; a handler that returns false declines the key, which is then left to the browser.
 export function useShortcut(keys: string | string[], handler: (e: KeyboardEvent) => void | boolean, opts: ShortcutOptions = {}): void {
   const { enabled = true, scope = "global", element, allowInInputs = false } = opts;
@@ -58,12 +61,13 @@ export function useShortcut(keys: string | string[], handler: (e: KeyboardEvent)
       if (sequences.length) {
         const result = matchSequence(buffer.current, e.key, e.timeStamp, sequences);
         buffer.current = result.buffer;
+        if (scope === "global") sequenceOpenedAt = result.buffer.length ? result.buffer[0].at : Number.NEGATIVE_INFINITY;
         if (result.match) {
           if (latest.current(e) !== false) e.preventDefault();
           return;
         }
         if (result.buffer.length) return;
-      }
+      } else if (scope === "global" && e.timeStamp - sequenceOpenedAt <= SEQUENCE_WINDOW_MS) return;
       if (list.includes(e.key) && latest.current(e) !== false) e.preventDefault();
     };
     const target: HTMLElement | Window | null = scope === "sheet" ? (element?.current ?? null) : window;
