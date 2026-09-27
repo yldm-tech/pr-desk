@@ -179,10 +179,14 @@ export function InboxPage() {
     detail.open(detailTarget(item), opener);
   };
 
-  // The pane follows the cursor, a beat behind it.
+  // The pane follows the cursor, a beat behind it, so walking the list does not load every row's activity on the way.
   const [paneId, setPaneId] = useState<number | null>(null);
   useEffect(() => {
-    if (cursor === null) return;
+    // No cursor, no detail: Esc, a new filter or an emptied list put the pane back to its prompt rather than leaving a row the list no longer points at.
+    if (cursor === null) {
+      setPaneId(null);
+      return;
+    }
     if (paneId === null) {
       setPaneId(cursor);
       return;

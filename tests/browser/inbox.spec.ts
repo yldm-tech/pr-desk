@@ -303,6 +303,11 @@ test("j and k walk the list; Enter opens the row they land on", async ({ page })
   await expect.poll(() => posts).toEqual([{ id: 1, body: { action: "read", version: 1 } }]);
   // Beside the list the pane carries no verbs: the row next to it has them, and two buttons with one name would be one too many.
   await expect(pane.getByRole("button", { name: /^Handled/ })).toHaveCount(0);
+  // Esc lets go of the row, and the pane goes back to asking for one.
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-active]")).toHaveCount(0);
+  await expect(pane).toHaveCount(0);
+  await expect(page.getByText("Select an item to see its activity")).toBeVisible();
 });
 
 // The keys drive the same verbs as the buttons on the row under the cursor, and say why when a verb is not offered.

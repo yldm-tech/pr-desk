@@ -39,7 +39,8 @@ export function useUndoSlot(): { target: UndoTarget | null; set(t: UndoTarget | 
       if (!slot) return resolve();
       // Emptied before the request, not after: the step is spent the moment it is asked for, and a second press while it is in flight must not post a second undo that the server would answer by restoring nothing.
       setTarget(null);
-      bulk.run({ items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } }, { onSettled: () => resolve() });
+      // A failed undo leaves the step on the server, so the slot is handed back and the reader can try again.
+      bulk.run({ items: [{ id: slot.id, version: slot.version }], action: { action: "undo" } }, { onSuccess: (outcome) => outcome.failed.length > 0 && setTarget(current ?? slot), onSettled: () => resolve() });
     });
   return { target, set: setTarget, run, busy: bulk.isBusy };
 }
