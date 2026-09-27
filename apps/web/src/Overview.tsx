@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import Skeleton from "react-loading-skeleton";
 import { CircleAlert, GitMerge, Info, RefreshCw } from "lucide-react";
 import ky from "ky";
 import { z } from "zod";
@@ -150,11 +150,9 @@ function VisibilityFeedback({ visibility, data, placeholder, access }: { visibil
     );
   } else if (access.isPending)
     message = (
-      <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)">
-        <span role="img" aria-label={t("checkingAccess")}>
-          <Skeleton width={180} height={12} inline />
-        </span>
-      </SkeletonTheme>
+      <span role="img" aria-label={t("checkingAccess")}>
+        <Skeleton width={180} height={12} inline />
+      </span>
     );
   else if (access.isError) {
     message = t("accessCheckFailed");

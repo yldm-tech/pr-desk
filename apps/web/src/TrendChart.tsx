@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import Skeleton from "react-loading-skeleton";
 import { Chart } from "@tanstack/charts/react";
 import { barY, defineChart, tickY } from "@tanstack/charts";
 import { scaleBand } from "@tanstack/charts/scales/band";
@@ -101,19 +101,17 @@ export function TrendChart({ months, loading, error, onRetry, controls }: { mont
           <p className="text-caption text-fg-subtle">
             {range}
             {range && " · "}
-            {loading ? <Skeleton width={80} inline baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)" /> : <span className="tabular-nums">{t("insights.periodMerged", { count: total })}</span>}
+            {loading ? <Skeleton width={80} inline /> : <span className="tabular-nums">{t("insights.periodMerged", { count: total })}</span>}
           </p>
         </div>
         {controls}
       </div>
       {loading ? (
-        <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)">
-          <div role="status" aria-label={t("loading")}>
-            <div aria-hidden="true">
-              <Skeleton height={240} />
-            </div>
+        <div role="status" aria-label={t("loading")}>
+          <div aria-hidden="true">
+            <Skeleton height={240} />
           </div>
-        </SkeletonTheme>
+        </div>
       ) : error ? (
         <div role="alert" className="grid min-h-60 place-content-center justify-items-center gap-2 rounded-lg border border-dashed border-line p-4 text-center">
           <p className="text-body text-fg-muted">{t("overviewError")}</p>

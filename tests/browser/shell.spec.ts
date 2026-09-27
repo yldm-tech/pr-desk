@@ -41,7 +41,7 @@ test("the document title names the page and the view", async ({ page }) => {
     ["/#/prs", "My pull requests · PR Desk"],
     ["/#/prs/blocked", "Blocked · My pull requests · PR Desk"],
     ["/#/repos", "Repositories · PR Desk"],
-    ["/#/insights", "Overview · PR Desk"],
+    ["/#/insights", "Insights · PR Desk"],
     ["/#/settings?tab=access", "Settings · PR Desk"],
     ["/#/about", "About · PR Desk"],
   ]) {

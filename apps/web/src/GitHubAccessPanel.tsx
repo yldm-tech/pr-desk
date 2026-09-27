@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
-import Skeleton, { SkeletonTheme } from "react-loading-skeleton";
+import Skeleton from "react-loading-skeleton";
 import { Building2, CircleCheck, OctagonAlert, RefreshCw } from "lucide-react";
 import { installHref, openInstallPopup, privateAccessMissing, useRepositoryAccess, type Installation } from "./github-access";
 import { Button, LinkButton, TextLink } from "./ui-controls";
@@ -42,19 +42,17 @@ function InstallationList({ installations, labelledBy, label }: { installations:
 function AccessLoading({ rows }: { rows: number }) {
   const { t } = useTranslation();
   return (
-    <SkeletonTheme baseColor="var(--skeleton-base)" highlightColor="var(--skeleton-highlight)">
-      <div role="status" aria-label={t("checkingAccess")}>
-        <div aria-hidden="true" className="grid">
-          {Array.from({ length: rows }, (_, index) => (
-            <div key={index} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
-              <Skeleton circle width={24} height={24} />
-              <Skeleton width={index % 2 ? 96 : 128} height={14} />
-              <Skeleton width={150} height={20} />
-            </div>
-          ))}
-        </div>
+    <div role="status" aria-label={t("checkingAccess")}>
+      <div aria-hidden="true" className="grid">
+        {Array.from({ length: rows }, (_, index) => (
+          <div key={index} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
+            <Skeleton circle width={24} height={24} />
+            <Skeleton width={index % 2 ? 96 : 128} height={14} />
+            <Skeleton width={150} height={20} />
+          </div>
+        ))}
       </div>
-    </SkeletonTheme>
+    </div>
   );
 }
 
