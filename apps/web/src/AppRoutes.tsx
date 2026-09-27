@@ -21,7 +21,7 @@ const About = React.lazy(() => import("./About").then((module) => ({ default: mo
 function Lazy({ page, children }: { page: Destination; children: React.ReactNode }) {
   return (
     <ErrorBoundary>
-      <React.Suspense fallback={<PageSkeleton page={skeletonPage[page]} />}>{children}</React.Suspense>
+      <React.Suspense fallback={<PageSkeleton page={page} />}>{children}</React.Suspense>
     </ErrorBoundary>
   );
 }
@@ -34,8 +34,6 @@ export function LegacyRedirect({ children }: { children: React.ReactNode }) {
   return children;
 }
 
-// The skeleton each destination has always shown while the session is being checked, keyed by the page names LoadingSkeleton was written against.
-const skeletonPage: Record<Destination, string> = { inbox: "Needs attention", prs: "All", repos: "Repositories", insights: "Overview", settings: "Settings", about: "About" };
 
 function PageTitle({ parts }: { parts: string[] }) {
   useDocumentTitle(parts);
@@ -47,7 +45,7 @@ function Connected() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: auth, isPending, isError, error, refetch } = useAuth();
-  if (isPending) return <PageSkeleton page={skeletonPage[destinationOf(pathname) ?? "inbox"]} />;
+  if (isPending) return <PageSkeleton page={destinationOf(pathname) ?? "inbox"} />;
   if (isError && !auth) return <ErrorState title={t("apiUnavailable")} error={error} onRetry={() => void refetch()} />;
   if (!auth?.connected)
     return (

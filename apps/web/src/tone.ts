@@ -16,4 +16,3 @@ export const reasonIcon: Record<Tone, LucideIcon> = { blocked: OctagonAlert, act
 // Class strings per tone, spelled out in full so Tailwind's scanner sees every one of them.
 export const toneText: Record<Tone, string> = { blocked: "text-tone-blocked", action: "text-tone-action", waiting: "text-tone-waiting", ready: "text-tone-ready", neutral: "text-tone-neutral" };
 export const toneBorder: Record<Tone, string> = { blocked: "border-tone-blocked-line", action: "border-tone-action-line", waiting: "border-tone-waiting-line", ready: "border-tone-ready-line", neutral: "border-tone-neutral-line" };
-export const toneFill: Record<Tone, string> = { blocked: "bg-tone-blocked", action: "bg-tone-action", waiting: "bg-tone-waiting", ready: "bg-tone-ready", neutral: "bg-tone-neutral" };
