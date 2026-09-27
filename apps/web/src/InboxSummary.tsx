@@ -46,9 +46,9 @@ export function InboxSummary({ summary }: { summary: Summary }) {
   const shownChips = chips.filter((chip) => chip.count > 0);
   // One flowing line: the counts, then the two chips. No separators between the parts: a middle dot always ends up at the start or the end of a wrapped line in some language, so the gap alone separates them and the first part's weight says where the sentence starts.
   return (
-    <nav aria-label={t("inbox.summaryLabel")} className="grid min-w-0 gap-2.5">
+    <nav aria-label={t("inbox.summaryLabel")} className="grid min-w-0 gap-2.5 @max-pair/dashboard:gap-2">
       {(shown.length > 0 || shownChips.length > 0) && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-body text-fg-muted">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 text-body text-fg-muted @max-pair/dashboard:gap-y-1">
           {shown.map((part, index) => (
             <Link
               key={part.key}
@@ -65,7 +65,7 @@ export function InboxSummary({ summary }: { summary: Summary }) {
             // The link is the bare text box and the pill is drawn inside it, so the chip stays text-sized beside the sentence; on a touch screen the invisible ::before stretches the target to 44px without growing the pill.
             return (
               <Link key={chip.key} to={chip.to} aria-current={current(chip.params) ? "true" : undefined} className="group/chip relative rounded-full no-underline pointer-coarse:before:absolute pointer-coarse:before:-inset-y-2.5 pointer-coarse:before:-inset-x-1 pointer-coarse:before:content-['']">
-                <span className={cx("inline-flex min-h-6 items-center gap-1.5 rounded-full border bg-transparent px-2.5 text-caption font-medium group-hover/chip:bg-bg-muted group-aria-[current=true]/chip:bg-bg-muted", chip.tone)}>
+                <span className={cx("inline-flex min-h-6 items-center gap-1.5 rounded-full border bg-transparent px-2.5 text-caption font-medium @max-pair/dashboard:min-h-5 @max-pair/dashboard:px-2 group-hover/chip:bg-bg-muted group-aria-[current=true]/chip:bg-bg-muted", chip.tone)}>
                   <Icon size={12} strokeWidth={2.25} aria-hidden="true" className="shrink-0" />
                   <span aria-hidden="true">{chip.visible}</span>
                   <span className="sr-only">{chip.name}</span>

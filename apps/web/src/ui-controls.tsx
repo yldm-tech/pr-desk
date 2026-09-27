@@ -168,10 +168,11 @@ const stripScroll = "flex-nowrap overflow-x-auto overscroll-x-contain [scrollbar
 export type SegmentItem<T extends string> = { value: T; label: string; count?: number | string; testId?: string };
 
 // A set of mutually exclusive filters that each change the view, not a tab set: pressed toggle buttons (aria-pressed) in a group, so each keeps its own name and the tests and screen readers can address it directly. The track stays one pill high: when it does not fit it scrolls sideways, fades at the edge that has more, and brings the pressed item into view.
-export function SegmentedControl<T extends string>({ label, value, onChange, items, size = "md", className }: { label: string; value: T; onChange: (value: T) => void; items: SegmentItem<T>[]; size?: Size; className?: string }) {
+// `fill: "below-pair"` makes the track a full-width row of equal items while the content box is narrower than `pair`, for a toolbar that gives the control a line of its own there; each item still keeps at least its own text's width, so a long label takes more than its share instead of being cut.
+export function SegmentedControl<T extends string>({ label, value, onChange, items, size = "md", fill, className }: { label: string; value: T; onChange: (value: T) => void; items: SegmentItem<T>[]; size?: Size; fill?: "below-pair"; className?: string }) {
   const { strip, edges } = useScrollStrip(value);
   return (
-    <div ref={strip} role="group" aria-label={label} data-edges={edges} className={cx("inline-flex max-w-full gap-0.5 rounded-2xl bg-bg-muted p-0.5 pointer-coarse:rounded-3xl", stripScroll, stripFade, className)}>
+    <div ref={strip} role="group" aria-label={label} data-edges={edges} className={cx("inline-flex max-w-full gap-0.5 rounded-2xl bg-bg-muted p-0.5 pointer-coarse:rounded-3xl", fill && "@max-pair/dashboard:flex @max-pair/dashboard:w-full", stripScroll, stripFade, className)}>
       {items.map((item) => {
         const pressed = item.value === value;
         return (
@@ -183,6 +184,7 @@ export function SegmentedControl<T extends string>({ label, value, onChange, ite
             onClick={() => onChange(item.value)}
             className={cx(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 font-medium whitespace-nowrap transition-[color,background-color,box-shadow] duration-[var(--dur-fast)] ease-out pointer-coarse:min-h-11 pointer-coarse:px-4",
+              fill && "@max-pair/dashboard:flex-1 @max-pair/dashboard:justify-center",
               size === "md" ? "min-h-7 px-3 text-body" : "min-h-6 px-2.5 text-small",
               pressed ? "bg-surface text-fg shadow-1" : "bg-transparent text-fg-muted hover:text-fg",
             )}

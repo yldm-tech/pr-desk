@@ -293,3 +293,41 @@ for (const route of ROUTES) {
     expect(hidden, "focused controls covered by the top bar or the tab bar").toEqual([]);
   });
 }
+
+// (g) The phone Inbox header, where three regressions met. The role filter shared a line with the status select and was cut to "All / My PRs / My…" (in Spanish, two of the three), which the clip sweep cannot see because a strip that scrolls is a scroller and not a clip; the top bar's palette search and the page's own search were the same magnifier 64px apart; and the header pushed the first row below the fold. So: every role reads whole inside its track without scrolling, there is one magnifier on the page, and the first row starts inside a bound on the two widths the design was checked at.
+const PHONE_PROJECTS: Record<string, number | undefined> = { "phone-320": 340, "phone-360": undefined, "phone-390": 320, "phone-412": undefined };
+for (const locale of ["en", "es"]) {
+  test(`the phone Inbox shows every role whole, one search and its first row in view in ${locale}`, async ({ page }, info) => {
+    test.skip(!(info.project.name in PHONE_PROJECTS), "the phone header runs at the phone widths");
+    await installFixtures(page, { locale });
+    await open(page, "/#/inbox");
+    const geometry = await page.evaluate(() => {
+      const group = document.querySelector<HTMLElement>('main [role="group"]:has(> button[aria-pressed])')!;
+      const track = group.getBoundingClientRect();
+      const cut = [...group.querySelectorAll<HTMLElement>("button[aria-pressed]")].filter((item) => {
+        const box = item.getBoundingClientRect();
+        return box.left < track.left - 1 || box.right > track.right + 1 || item.scrollWidth > item.clientWidth + 1;
+      });
+      const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
+      const magnifiers = [...document.querySelectorAll("button svg.lucide-search, a svg.lucide-search")].filter(visible).map((svg) => svg.closest("button, a")!.getAttribute("aria-label") ?? svg.closest("button, a")!.textContent);
+      return { items: group.querySelectorAll("button[aria-pressed]").length, scrolls: group.scrollWidth > group.clientWidth + 1, cut: cut.map((item) => item.textContent), magnifiers, firstRow: document.querySelector("[data-testid='follow-up-card']")!.getBoundingClientRect().top };
+    });
+    expect(geometry.items, "the role filter has its three items").toBe(3);
+    expect.soft(geometry.cut, "role items cut off at the edge of their track").toEqual([]);
+    expect.soft(geometry.scrolls, "the role filter has to scroll to show every item").toBe(false);
+    expect.soft(geometry.magnifiers, "exactly one search button wears the magnifier").toHaveLength(1);
+    const bound = PHONE_PROJECTS[info.project.name];
+    if (bound !== undefined) expect.soft(geometry.firstRow, `the first row starts within ${bound}px of the top`).toBeLessThanOrEqual(bound);
+  });
+}
+
+// The palette trigger is named for what it does. A touch screen has no key to press, so neither its name nor its visible text may carry the ⌘K / Ctrl K hint there.
+test("the palette trigger never names a shortcut on a touch screen", async ({ page }, info) => {
+  test.skip(!isCoarse(info) || info.project.metadata?.routes === "structural", "the touch projects only");
+  await installFixtures(page);
+  await open(page, "/#/inbox");
+  const trigger = page.locator("aside button[aria-keyshortcuts]");
+  await expect(trigger).toHaveAccessibleName(/^Search/);
+  await expect(trigger).not.toHaveAccessibleName(/⌘|Ctrl/);
+  expect(await trigger.evaluate((el) => (el as HTMLElement).innerText)).not.toMatch(/⌘|Ctrl/);
+});

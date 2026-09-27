@@ -1,5 +1,5 @@
 import { AnimatePresence } from "motion/react";
-import { Inbox, PanelRight, Search, Settings2 } from "lucide-react";
+import { Check, Inbox, ListFilter, PanelRight, Search, Settings2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type FocusEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -21,6 +21,7 @@ import { useUndoSlot } from "./undo-slot";
 import { REVEAL_SEARCH_EVENT } from "./shortcuts";
 import { Button, cx, IconButton, Kbd, LinkButton, SearchField, SegmentedControl, Select } from "./ui-controls";
 import { EmptyState, ErrorState, FilterChip, Notice, PageHeader, StaleNotice, Toolbar } from "./ui-display";
+import { Popover } from "./ui-overlay";
 import { ItemList, ListSection } from "./ui-list";
 
 const DAY = 86400000;
@@ -303,6 +304,11 @@ export function InboxPage() {
   const date = new Intl.DateTimeFormat(i18n.resolvedLanguage, { weekday: "short", month: "short", day: "numeric" }).format(now);
   const reminderSettings = settings.data ? { timezone: settings.data.timezone, digest_time: settings.data.digest_time } : undefined;
 
+  const statusOptions = inboxStatuses.map((value) => ({ value, label: t(`followup.${value}`) }));
+  const statusName = statusOptions.find((option) => option.value === status)?.label ?? status;
+  const chooseStatus = (value: string) => change("status", value === "todo" ? "" : value);
+  const [statusOpen, setStatusOpen] = useState(false);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const focusSearch = useRef(false);
   const revealSearch = () => {
@@ -336,7 +342,7 @@ export function InboxPage() {
           {[0, 1].map((section) => (
             <div key={section} className="grid gap-1">
               <SummarySkeleton />
-              <ItemRowSkeleton tracks={split ? "list-split" : "list"} count={3} />
+              <ItemRowSkeleton tracks="list" count={3} />
             </div>
           ))}
         </div>
@@ -453,15 +459,47 @@ export function InboxPage() {
   // The search field is always there from `pair` up. Below it the header has no room for a fourth row of controls, so the field waits behind the search button in the title row and opens under the toolbar, focused; it stays open while it holds a query.
   const searchShown = searchOpen || !!q;
   return (
-    <div className="grid min-w-0 gap-4">
+    // Below `pair` every gap is a step tighter, so on a phone the first row is in view under the header without scrolling.
+    <div className="grid min-w-0 gap-4 @max-pair/dashboard:gap-3">
       <PageHeader
         title={t("inbox.title")}
         count={summary?.total}
         caption={date}
         captionClassName="@max-pair/dashboard:hidden"
+        className="@max-pair/dashboard:gap-2"
         actions={
           <>
             <IconButton icon={Search} label={t("inbox.search")} aria-expanded={searchShown} aria-controls="inbox-search" className="@pair/dashboard:hidden" onClick={() => (searchShown && !q ? setSearchOpen(false) : revealSearch())} />
+            {/* Below `pair` the status is chosen here rather than in the toolbar, so the role filter gets the toolbar's whole line and the list starts one control higher. The button is named by the status it holds and tinted while it holds anything but the default. */}
+            <Popover
+              open={statusOpen}
+              onOpenChange={setStatusOpen}
+              label={t("status")}
+              align="end"
+              className="w-[min(240px,calc(100vw-32px))] p-1"
+              trigger={<IconButton icon={ListFilter} label={t("inbox.statusButton", { status: statusName })} data-narrowed={status !== "todo" || undefined} className="@pair/dashboard:hidden data-narrowed:bg-accent-subtle data-narrowed:text-accent-text" />}
+            >
+              <p aria-hidden="true" className="px-2.5 pt-1 pb-1.5 text-caption font-medium text-fg-subtle">
+                {t("status")}
+              </p>
+              <div role="group" aria-label={t("status")} className="grid gap-0.5">
+                {statusOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={option.value === status}
+                    onClick={() => {
+                      chooseStatus(option.value);
+                      setStatusOpen(false);
+                    }}
+                    className="flex min-h-8 items-center justify-between gap-3 rounded-md border-0 bg-transparent px-2.5 text-left text-body text-fg hover:bg-bg-muted aria-pressed:font-medium pointer-coarse:min-h-11"
+                  >
+                    {option.label}
+                    {option.value === status && <Check size={16} aria-hidden="true" className="shrink-0 text-accent-text" />}
+                  </button>
+                ))}
+              </div>
+            </Popover>
             <LinkButton variant="ghost" icon={Settings2} to="/settings" title={t("followup.goSettings")} className="@max-pair/dashboard:size-8 @max-pair/dashboard:px-0 pointer-coarse:@max-pair/dashboard:size-11">
               <span className="@max-pair/dashboard:sr-only">{t("followup.goSettings")}</span>
             </LinkButton>
@@ -476,11 +514,11 @@ export function InboxPage() {
       )}
       {query.isError && data && <StaleNotice onRetry={() => void query.refetch()} />}
       <div className="grid min-w-0 gap-2">
-        {/* Below `pair`: the role filter and the status on one line (the role pills scroll if they must), and the search, when it is open, on the line under them. */}
-        <Toolbar className="@max-pair/dashboard:grid @max-pair/dashboard:grid-cols-[minmax(0,1fr)_auto]">
-          <SegmentedControl label={t("inbox.role")} value={role} onChange={(value) => change("role", value === "all" ? "" : value)} items={inboxRoles.map((value) => ({ value, label: t(`followup.${value}`) }))} className="min-w-0" />
-          <Select label={t("status")} hideLabel="below-pair" value={status} onChange={(event) => change("status", event.target.value === "todo" ? "" : event.target.value)} options={inboxStatuses.map((value) => ({ value, label: t(`followup.${value}`) }))} className="shrink-0" />
-          <div id="inbox-search" className={cx("min-w-48 flex-1 basis-56 @max-pair/dashboard:col-span-2 @max-pair/dashboard:min-w-0", !searchShown && "@max-pair/dashboard:hidden")}>
+        {/* Below `pair`: the role filter alone on the line, its items sharing the width so every one of them is read whole, the status behind the header's filter button, and the search, when it is open, on the line under the roles. */}
+        <Toolbar>
+          <SegmentedControl label={t("inbox.role")} value={role} onChange={(value) => change("role", value === "all" ? "" : value)} items={inboxRoles.map((value) => ({ value, label: t(`followup.${value}`) }))} fill="below-pair" className="min-w-0" />
+          <Select label={t("status")} value={status} onChange={(event) => chooseStatus(event.target.value)} options={statusOptions} className="shrink-0 @max-pair/dashboard:hidden" />
+          <div id="inbox-search" className={cx("min-w-48 flex-1 basis-56 @max-pair/dashboard:min-w-0 @max-pair/dashboard:basis-full", !searchShown && "@max-pair/dashboard:hidden")}>
             <SearchField id="pr-search" label={t("inbox.search")} value={q} onChange={setSearch} mode="live" placeholder={t("searchPlaceholder")} maxLength={120} kbdHint />
           </div>
         </Toolbar>

@@ -2,7 +2,7 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { MotionConfig } from "motion/react";
-import { Search } from "lucide-react";
+import { Command, Search } from "lucide-react";
 import { apiURL } from "./api-url";
 import { projectVersion } from "./project";
 import { oauthBanner } from "./pr-model";
@@ -123,16 +123,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           ) : (
             <>
+              {/* The palette's trigger. In the top bar it is an icon beside a page that may have a search of its own (the Inbox's follow-up search), so there it wears the command glyph rather than a second magnifier and is named for what it searches, everything; in the sidebar it is the labelled field with its shortcut. The shortcut is never part of the name: it is shown only where there is a keyboard to press it, and said by aria-keyshortcuts. */}
               <button
                 type="button"
                 onClick={overlays.openPalette}
                 aria-keyshortcuts="Meta+K Control+K"
-                title={t("shell.search")}
+                title={t("shell.searchEverything")}
                 className="ml-auto inline-grid size-8 shrink-0 place-items-center rounded-md border border-transparent bg-transparent p-0 text-fg-muted transition-colors duration-[var(--dur-fast)] hover:bg-bg-muted hover:text-fg pointer-coarse:size-11 shell:mt-3 shell:ml-0 shell:flex shell:size-auto shell:min-h-8 shell:items-center shell:gap-2 shell:border-line shell:bg-bg shell:px-2 shell:text-fg-subtle pointer-coarse:shell:min-h-11"
               >
-                <Search size={16} aria-hidden="true" className="shrink-0" />
-                <span className="sr-only text-small shell:not-sr-only shell:flex-1 shell:text-left">{t("shell.search")}</span>
-                <span aria-hidden="true" className="hidden shell:inline-flex">
+                <Command size={16} aria-hidden="true" className="shrink-0 shell:hidden" />
+                <Search size={16} aria-hidden="true" className="hidden shrink-0 shell:block" />
+                <span className="sr-only shell:hidden">{t("shell.searchEverything")}</span>
+                <span className="hidden text-small shell:inline shell:flex-1 shell:text-left">{t("shell.search")}</span>
+                <span aria-hidden="true" className="hidden pointer-fine:shell:inline-flex">
                   <Kbd>{isMac ? "⌘K" : "Ctrl K"}</Kbd>
                 </span>
               </button>
