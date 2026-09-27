@@ -22,10 +22,7 @@ export const settingsLocales: LocaleNamespace = {
     addDestination: "Add destination",
     newDestination: "New destination",
     announceAdded: "Destination added.",
-    githubTitle: "GitHub App access",
-    githubHelp: "PR Desk reads pull requests through its GitHub App. Install it on each account or organization you work in, and choose which repositories it may read.",
     tokenExpires: "Expires {{date}}",
-    newTab: "opens in a new tab",
   },
   "zh-CN": {
     unavailable: "无法加载设置。",
@@ -47,10 +44,7 @@ export const settingsLocales: LocaleNamespace = {
     addDestination: "添加通知目标",
     newDestination: "新的通知目标",
     announceAdded: "已添加通知目标。",
-    githubTitle: "GitHub App 访问权限",
-    githubHelp: "PR Desk 通过自己的 GitHub App 读取拉取请求。请在你参与的每个账号或组织上安装它，并选择允许它读取的仓库。",
     tokenExpires: "{{date}} 到期",
-    newTab: "在新标签页中打开",
   },
   ja: {
     unavailable: "設定を読み込めませんでした。",
@@ -72,10 +66,7 @@ export const settingsLocales: LocaleNamespace = {
     addDestination: "通知先を追加",
     newDestination: "新しい通知先",
     announceAdded: "通知先を追加しました。",
-    githubTitle: "GitHub App のアクセス権",
-    githubHelp: "PR Desk は専用の GitHub App を通じてプルリクエストを読み取ります。利用するアカウントや組織ごとにインストールし、読み取りを許可するリポジトリを選んでください。",
     tokenExpires: "{{date}} に期限切れ",
-    newTab: "新しいタブで開きます",
   },
   ko: {
     unavailable: "설정을 불러올 수 없습니다.",
@@ -97,10 +88,7 @@ export const settingsLocales: LocaleNamespace = {
     addDestination: "알림 대상 추가",
     newDestination: "새 알림 대상",
     announceAdded: "알림 대상을 추가했습니다.",
-    githubTitle: "GitHub App 접근 권한",
-    githubHelp: "PR Desk는 전용 GitHub App을 통해 풀 리퀘스트를 읽습니다. 사용하는 계정이나 조직마다 설치하고, 읽을 수 있는 저장소를 선택하세요.",
     tokenExpires: "{{date}} 만료",
-    newTab: "새 탭에서 열림",
   },
   es: {
     unavailable: "No se pudo cargar la configuración.",
@@ -122,9 +110,6 @@ export const settingsLocales: LocaleNamespace = {
     addDestination: "Añadir destino",
     newDestination: "Nuevo destino",
     announceAdded: "Destino añadido.",
-    githubTitle: "Acceso de la GitHub App",
-    githubHelp: "PR Desk lee los pull requests a través de su propia GitHub App. Instálala en cada cuenta u organización en la que trabajes y elige qué repositorios puede leer.",
     tokenExpires: "Caduca el {{date}}",
-    newTab: "se abre en una pestaña nueva",
   },
 };
