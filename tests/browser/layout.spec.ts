@@ -11,6 +11,7 @@ import { installFixtures, ROUTES, STRUCTURAL_ROUTES } from "./fixtures";
 const routesFor = (info: TestInfo) => (info.project.metadata?.routes === "structural" ? STRUCTURAL_ROUTES : ROUTES);
 const isCoarse = (info: TestInfo) => Boolean(info.project.use.hasTouch);
 
+// Sideways scrolling is measured against the configured viewport, not innerWidth: on a mobile-emulated project the browser zooms out to fit a page that is too wide, innerWidth grows with it, and a comparison against innerWidth passes for exactly the page it should fail.
 // Renders a route and waits for it to stop moving: the loading skeletons have to be gone, because a skeleton's geometry is a placeholder's and not the content's; the web fonts have to be resolved, because a fallback font measures differently; and transitions have to be frozen, because a reading taken mid-transition is an interpolated value that differs between two runs of the same page.
 async function open(page: Page, route: string) {
   await page.goto(route);
@@ -119,7 +120,7 @@ for (const route of ROUTES) {
 
     // Soft throughout: with four sweeps over nine routes at twenty-four viewports, a run that stops at the first offender costs a full matrix to find the second one. Soft failures still fail the test.
     expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
-    expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
+    expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), "the document scrolls sideways").toBe(false);
     expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
     if (isCoarse(info)) {
       expect.soft(await smallTargets(page), "tap targets under 44px on a coarse pointer").toEqual([]);
@@ -237,7 +238,7 @@ for (const locale of Object.keys(LOCALE_PROJECTS)) {
       await installFixtures(page, { locale });
       await open(page, route);
       expect.soft(await clippedElements(page), `content clipped by an overflow:hidden ancestor in ${locale}`).toEqual([]);
-      expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), `the document scrolls sideways in ${locale}`).toBe(false);
+      expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), `the document scrolls sideways in ${locale}`).toBe(false);
       expect.soft(await midWordBreaks(page), `a shell label was split inside a word in ${locale}`).toEqual([]);
       if (isCoarse(info)) expect.soft(await smallTargets(page), `tap targets under 44px in ${locale}`).toEqual([]);
     });
@@ -253,7 +254,7 @@ for (const route of STRUCTURAL_ROUTES) {
     await open(page, route);
     expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor), "the dark theme applied").toBe("rgb(15, 15, 18)");
     expect.soft(await clippedElements(page), "content clipped by an overflow:hidden ancestor").toEqual([]);
-    expect.soft(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), "the document scrolls sideways").toBe(false);
+    expect.soft(await page.evaluate((width) => document.documentElement.scrollWidth > width + 1, page.viewportSize()!.width), "the document scrolls sideways").toBe(false);
     expect.soft(await midWordBreaks(page), "a shell label was split inside a word").toEqual([]);
   });
 }

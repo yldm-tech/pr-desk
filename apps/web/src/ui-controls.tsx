@@ -206,14 +206,14 @@ function TabStrip({ label, value, children }: { label: string; value: string; ch
   );
 }
 
-// Radix tabs with an underline. A panel mounts on its first visit and then stays mounted and hidden, so a half-filled form survives a trip to another tab.
+// Radix tabs with an underline. The root is min-w-0 because a grid or flex item otherwise takes its tab list's full one-line width as its minimum, and the page grows sideways instead of the list scrolling. A panel mounts on its first visit and then stays mounted and hidden, so a half-filled form survives a trip to another tab.
 export function Tabs({ value, onValueChange, label, items, children, className, panelClassName }: { value: string; onValueChange: (value: string) => void; label: string; items: { value: string; label: string }[]; children: (value: string) => ReactNode; className?: string; panelClassName?: string }) {
   const [visited, setVisited] = useState(() => new Set([value]));
   useEffect(() => {
     setVisited((previous) => (previous.has(value) ? previous : new Set(previous).add(value)));
   }, [value]);
   return (
-    <RadixTabs.Root value={value} onValueChange={onValueChange} className={className}>
+    <RadixTabs.Root value={value} onValueChange={onValueChange} className={cx("min-w-0", className)}>
       <TabStrip label={label} value={value}>
         {items.map((item) => (
           <RadixTabs.Trigger
