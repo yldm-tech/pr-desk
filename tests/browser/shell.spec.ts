@@ -15,7 +15,7 @@ test("the sync dismiss button is not named after the activity panel", async ({ p
 test("an unknown route rewrites the address instead of quietly rendering a page", async ({ page }) => {
   await page.goto("/#/follow-ups");
   await expect(page).toHaveURL(/#\/inbox$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Needs attention" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   await expect(page.getByTestId("follow-up-card")).toHaveCount(4);
 });
 
@@ -37,7 +37,7 @@ test("every legacy address lands on its new home with the query intact", async (
 // A tab strip or a history list shows the title and nothing else, so it names the view as specifically as the page heading does.
 test("the document title names the page and the view", async ({ page }) => {
   for (const [route, title] of [
-    ["/#/inbox", "Needs attention · PR Desk"],
+    ["/#/inbox", "Inbox (4) · PR Desk"],
     ["/#/prs", "My pull requests · PR Desk"],
     ["/#/prs/blocked", "Blocked · My pull requests · PR Desk"],
     ["/#/repos", "Repositories · PR Desk"],
@@ -87,7 +87,7 @@ test("the reload button belongs to the installed window and sweeps the caches it
   const reloaded = page.waitForEvent("load");
   await button.click();
   await reloaded;
-  await expect(page.getByRole("heading", { level: 1, name: "Needs attention" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Inbox" })).toBeVisible();
   expect(await page.evaluate(() => (window as Window & { survived?: boolean }).survived), "the document was replaced").toBeUndefined();
   expect(await page.evaluate(() => caches.keys()), "the worker's caches are gone and nothing else is").toEqual(["unrelated"]);
 });
