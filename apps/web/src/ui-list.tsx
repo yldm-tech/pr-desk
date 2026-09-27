@@ -5,12 +5,12 @@ import { cx } from "./ui-controls";
 // The grid of every list row, by kind. Track counts only ever grow with width, which is what the layout suite's monotonicity sweep checks: a row that loses a column while the window widens has a band in the wrong place.
 // list: an Inbox row. 3 tracks at every width: glyph, body, and a trailing column that holds the age on the title's line. Below its list container's `row` width the verbs sit on a line of their own under the body; from `row` they join the trailing column under the age, so the age and the verbs share one right edge in every row.
 // list-split: the same row in the split view, where the list pane is at least 28rem: always the wide form, with no container query, so the flip into split mode cannot move anything.
-// table: a pull-request row. 2 tracks, then 4 from `row`, then 5 from `table`, all measured against <main>.
+// table: a pull-request row. 2 tracks, then 5 from `row`, measured against <main>. The last two are fixed widths rather than `auto`, because each row is its own grid and only a fixed track lines up under its header in every row; 6rem fits the longest Activity header (Japanese アクティビティ).
 // repo: a repository row. 2 tracks, then 3 from `row`, then 6 from `table`.
 export const itemTracks = {
   list: "grid-cols-[20px_minmax(0,1fr)_auto]",
   "list-split": "grid-cols-[20px_minmax(0,1fr)_auto]",
-  table: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_auto] @table/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_4.5rem_5rem]",
+  table: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.4fr)_4.5rem_6rem]",
   repo: "grid-cols-[minmax(0,1fr)_auto] @row/dashboard:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] @table/dashboard:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_5rem_auto]",
 } as const;
 export type ItemTracks = keyof typeof itemTracks;
@@ -130,7 +130,9 @@ export function ItemRow({ as = "div", tracks, glyph, title, meta, excerpt, aside
       onClick={handleClick}
       className={cx(
         "relative grid min-h-11 items-start gap-x-1 gap-y-1 px-3 py-2.5 transition-colors duration-[var(--dur-fast)] outline-offset-[-2px] hover:bg-bg-subtle data-active:bg-bg-muted data-active:shadow-[inset_2px_0_0_var(--accent)] data-highlight:animate-highlight @max-split/dashboard:gap-y-1.5",
-        "after:absolute after:right-0 after:bottom-0 after:left-9 after:h-px after:bg-line last:after:hidden",
+        // The rule under a list row starts at the title, past the glyph; under a table row it spans the row, as the header's rule does.
+        "after:absolute after:right-0 after:bottom-0 after:h-px after:bg-line last:after:hidden",
+        list ? "after:left-9" : "after:left-0",
         itemTracks[tracks],
         !list && "gap-x-3",
         onBodyClick && "cursor-pointer",

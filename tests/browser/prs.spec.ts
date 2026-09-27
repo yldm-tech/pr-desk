@@ -74,7 +74,7 @@ test("the table carries the follow-up state, and reading the thread records it",
   await expect(row.getByTestId("row-follow-up").locator("[data-tone]")).toHaveAttribute("data-tone", "action");
   await expect(row.getByTestId("unread-dot")).toBeVisible();
   const posted = page.waitForRequest((request) => request.url().endsWith("/follow-ups/1") && request.method() === "POST");
-  await row.getByRole("button", { name: "Unread activity on #17" }).click();
+  await row.getByRole("button", { name: "2 comments, unread — fixture/calendar #17" }).click();
   expect((await posted).postDataJSON()).toMatchObject({ action: "read" });
   // The decision can be recorded here rather than on a second trip to the Inbox.
   await expect(page.getByRole("button", { name: /^Handled · wait for others/ })).toBeVisible();
@@ -142,7 +142,7 @@ test("the activity sheet asks for the pull request by its id, not its number", a
   await page.goto("/#/prs");
   const row = page.getByRole("row").filter({ hasText: "Review storage migration" });
   const requested = page.waitForRequest((request) => /\/pull-requests\/\d+\/activity$/.test(new URL(request.url()).pathname));
-  await row.getByRole("button", { name: /activity .*#24$/ }).click();
+  await row.getByRole("button", { name: /^0 comments(, unread)? — fixture\/reviewer #24$/ }).click();
   expect(new URL((await requested).url()).pathname).toMatch(/\/pull-requests\/102\/activity$/);
   const dialog = page.getByRole("dialog", { name: "Comments · fixture/reviewer #24" });
   await expect(dialog).toBeVisible();
@@ -150,7 +150,7 @@ test("the activity sheet asks for the pull request by its id, not its number", a
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(row.getByRole("button", { name: /activity .*#24$/ })).toBeFocused();
+  await expect(row.getByRole("button", { name: /^0 comments(, unread)? — fixture\/reviewer #24$/ })).toBeFocused();
 });
 
 // j and k walk the table the way they walk the Inbox. Moving the cursor is looking, not reading, so it posts nothing; Enter is the explicit request and opens the activity, which is what records the read.

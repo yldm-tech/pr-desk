@@ -128,11 +128,21 @@ export function PullRequestsPage() {
   else if (isError && !data) body = <ErrorState title={t("prs.unavailable")} error={error} onRetry={() => void refetch()} />;
   else if (shown.length === 0)
     body = (
+      // The title says which kind of empty this is: a search that found nothing names the query and offers the way out of it; an empty view without a filter is simply empty, and the open view points at the work that has already landed.
       <EmptyState
         icon={GitPullRequest}
-        title={t("emptyResultsTitle")}
+        title={search ? t("prs.noMatchesFor", { query: search }) : filtered || page > 0 ? t("emptyResultsTitle") : view === "open" ? t("prs.noOpen") : t("prs.emptyViewTitle")}
         description={t(filtered || page > 0 ? "emptyResultsDescription" : view === "open" ? "noOpenResults" : "prs.emptyView")}
         action={page > 0 ? <Button onClick={() => setPage(0)}>{t("firstPage")}</Button> : filtered ? <Button onClick={clearFilters}>{t("clearFilters")}</Button> : view !== "open" && <LinkButton to={paths.prs}>{t("prs.showOpen")}</LinkButton>}
+        secondary={
+          !filtered &&
+          page === 0 &&
+          view === "open" && (
+            <LinkButton variant="ghost" size="sm" to={prViewPath("merged")} className="text-accent-text">
+              {t("prs.showMerged")}
+            </LinkButton>
+          )
+        }
       />
     );
   else
@@ -184,6 +194,10 @@ export function PullRequestsPage() {
         {repository && <FilterChip testId="repository-chip" label={repository} clearLabel={t("clearRepositoryFilter", { repo: repository })} onClear={() => filterRepository("")} />}
       </Toolbar>
       {isError && data && <StaleNotice onRetry={() => void refetch()} />}
+      {/* The search commits on Enter and the list changes under the field, so the outcome is said once for a screen reader; nothing is said for the unfiltered view. */}
+      <p className="sr-only" aria-live="polite">
+        {filtered && data && !isPlaceholderData ? t("prs.results", { count: total }) : ""}
+      </p>
       <div className="min-w-0">{body}</div>
     </div>
   );

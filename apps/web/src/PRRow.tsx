@@ -8,23 +8,19 @@ import { Button, cx } from "./ui-controls";
 import { FactChip, StateGlyph, Time } from "./ui-display";
 import { ItemRow, itemTracks } from "./ui-list";
 
-// Where each cell sits in the three bands of the table track contract (2 tracks below `row`, 4 from `row`, 5 from `table`). The DOM order is the column order, so a screen reader's table navigation pairs every cell with its own header; the narrow card is arranged by placement alone. Every band states both start and end, because a longhand only unsets what the shorthand below it wrote when both are given.
-// Narrow: title over repository beside the activity button, then the status chips beside the age, both indented to the title past the glyph (20px plus the 8px gap). From `row`: title | repository | status | updated, with the activity button under the date in the same column and the status spanning both lines, so the button fills space the chips already take. From `table`: one line, five columns.
-// Between `row` and `table` the fourth track is `auto`, which every row sizes to its own content; the 5rem floor on the header, the date and the button keeps that track the same width in every row, so the columns line up. From `table` the track is fixed and the floor is dropped.
+// Where each cell sits in the two bands of the table track contract (2 tracks below `row`, 5 from it). The DOM order is the column order, so a screen reader's table navigation pairs every cell with its own header; the narrow card is arranged by placement alone. Every band states both start and end, because a longhand only unsets what the shorthand below it wrote when both are given.
+// Narrow: a two-column card. The title with its age at the right, the repository with the comment count at the right, then the status and its chips across the width, all indented to the title past the glyph (20px plus the 8px gap). From `row`: one line, five columns.
 const cell = {
-  repository: "col-start-1 col-end-2 row-start-2 min-w-0 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1",
-  status: "col-start-1 col-end-2 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1 @row/dashboard:row-end-3 @table/dashboard:row-end-auto",
-  updated:
-    "col-start-2 col-end-3 row-start-3 self-center justify-self-end text-caption whitespace-nowrap text-fg-muted tabular-nums @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-1 @row/dashboard:min-w-20 @row/dashboard:self-start @row/dashboard:pt-0.5 @row/dashboard:text-right @table/dashboard:min-w-0",
-  activity:
-    "col-start-2 col-end-3 row-start-1 row-end-3 self-center justify-self-end @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:row-start-2 @row/dashboard:row-end-3 @row/dashboard:min-w-20 @row/dashboard:self-start @row/dashboard:text-right @table/dashboard:col-start-5 @table/dashboard:col-end-6 @table/dashboard:row-start-1 @table/dashboard:row-end-2 @table/dashboard:min-w-0 @table/dashboard:-mt-1",
+  repository: "col-start-1 col-end-2 row-start-2 min-w-0 self-center pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-start",
+  status: "col-start-1 col-end-3 row-start-3 flex min-w-0 flex-wrap items-center gap-1.5 pl-7 @row/dashboard:pl-0 @row/dashboard:col-start-3 @row/dashboard:col-end-4 @row/dashboard:row-start-1",
+  updated: "col-start-2 col-end-3 row-start-1 justify-self-end pt-0.5 text-caption whitespace-nowrap text-fg-muted tabular-nums @row/dashboard:col-start-4 @row/dashboard:col-end-5 @row/dashboard:text-right",
+  activity: "col-start-2 col-end-3 row-start-2 self-center justify-self-end @row/dashboard:col-start-5 @row/dashboard:col-end-6 @row/dashboard:row-start-1 @row/dashboard:self-start @row/dashboard:-mt-1",
 };
 
-// The same visually-hidden recipe ItemList's own header uses: in the accessibility tree at every width, painted only once the column exists.
+// The same visually-hidden recipe ItemList's own header uses: in the accessibility tree at every width, painted only once the columns exist.
 const hiddenUntilRow = "absolute h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)] @row/dashboard:static @row/dashboard:h-auto @row/dashboard:w-auto @row/dashboard:overflow-visible @row/dashboard:whitespace-normal @row/dashboard:[clip-path:none]";
-const hiddenUntilTable = "absolute h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)] @table/dashboard:static @table/dashboard:h-auto @table/dashboard:w-auto @table/dashboard:overflow-visible @table/dashboard:[clip-path:none]";
 
-// The column headers, always five and always in the accessibility tree. Drawn here rather than by ItemList because between `row` and `table` the table has four tracks for five columns: Activity shares the date's column in that band, so its header is only painted once it has a column of its own.
+// The column headers, always five and always in the accessibility tree, painted from `row` where every column has its own track.
 export function PRTableHeader({ labels }: { labels: [string, string, string, string, string] }) {
   const [pullRequest, repository, status, updated, activity] = labels;
   return (
@@ -38,10 +34,10 @@ export function PRTableHeader({ labels }: { labels: [string, string, string, str
       <span role="columnheader" className="min-w-0 truncate">
         {status}
       </span>
-      <span role="columnheader" className="min-w-0 truncate text-right @row/dashboard:min-w-20 @table/dashboard:min-w-0">
+      <span role="columnheader" className="min-w-0 truncate text-right">
         {updated}
       </span>
-      <span role="columnheader" className={cx("min-w-0 truncate text-right", hiddenUntilTable)}>
+      <span role="columnheader" className="min-w-0 text-right">
         {activity}
       </span>
     </div>
@@ -123,9 +119,10 @@ export function PRRow({ pr, followUp, now, active, onFilterRepository, onOpen, r
       </div>
       <div role="cell" className={cell.activity}>
         {/* The count is a lifetime total and reads the same whether the last comment arrived in March or four minutes ago. The unread dot is a shape rather than a colour, and the accessible name changes with it, so the signal survives both greyscale and a screen reader. */}
-        <Button data-testid="pr-activity" variant="ghost" size="sm" icon={MessageSquare} title={t("viewActivity")} aria-label={followUp?.unread ? t("unreadActivity", { number: pr.number }) : t("viewPRActivity", { number: pr.number })} onClick={(event) => onOpen(event.currentTarget)} className="tabular-nums">
+        {/* The count leads the accessible name, as it leads what is on screen, and the repository makes the name unique across repositories that reuse a number. The unread dot always has its slot, so the counts line up down the column whether a row is unread or not. */}
+        <Button data-testid="pr-activity" variant="ghost" size="sm" icon={MessageSquare} title={t("viewActivity")} aria-label={t(followUp?.unread ? "prs.activityUnread" : "prs.activity", { count: pr.comments ?? 0, repo: pr.repo, number: pr.number })} onClick={(event) => onOpen(event.currentTarget)} className="tabular-nums">
           {pr.comments}
-          {followUp?.unread && <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent" />}
+          {followUp?.unread ? <span data-testid="unread-dot" aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-accent" /> : <span aria-hidden="true" className="size-1.5 shrink-0" />}
         </Button>
       </div>
     </ItemRow>
