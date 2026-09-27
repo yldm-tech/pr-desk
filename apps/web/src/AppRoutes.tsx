@@ -78,7 +78,7 @@ function InsightsRoute() {
 }
 
 // The tab title every route falls back to; a page that knows something more specific, such as a count, sets its own and wins. The words are the page headings the shell prints.
-const titleKeys: Record<Destination, string> = { inbox: "navAttention", prs: "navAll", repos: "navRepositories", insights: "navOverview", settings: "followup.settings", about: "navAbout" };
+const titleKeys: Record<Destination, string> = { inbox: "shell.navInbox", prs: "shell.navPulls", repos: "shell.navRepos", insights: "shell.navInsights", settings: "followup.settings", about: "navAbout" };
 
 function useRouteTitle() {
   const { t } = useTranslation();
