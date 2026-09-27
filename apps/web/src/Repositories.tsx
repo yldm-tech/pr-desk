@@ -67,7 +67,8 @@ function RepositoryRow({ repo }: { repo: RepositorySummary }) {
         </TextLink>
       }
     >
-      <div className="col-start-1 col-end-3 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 pl-7 text-caption @row/dashboard:pl-0 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:self-center @table/dashboard:contents @table/dashboard:text-body">
+      {/* Below `row` the counts are a run of inline text balanced across its lines, so four of them break two and two rather than three and a lone "1 failing PR"; from `row` they are a flex line beside the name, and from `table` each is its own column. */}
+      <div className="col-start-1 col-end-3 row-start-2 block min-w-0 pl-7 text-caption leading-7 text-balance *:mr-3 @row/dashboard:col-start-2 @row/dashboard:col-end-3 @row/dashboard:row-start-1 @row/dashboard:flex @row/dashboard:flex-wrap @row/dashboard:items-center @row/dashboard:gap-x-3 @row/dashboard:gap-y-2 @row/dashboard:self-center @row/dashboard:pl-0 @row/dashboard:leading-normal @row/dashboard:*:mr-0 @table/dashboard:contents @table/dashboard:text-body">
         <Count value={repo.open} phrase={t("repos.openCount", { count: repo.open })} tone="plain" to={prs} repo={repo.repo} />
         <Count value={repo.needs_attention} phrase={t("repos.attentionCount", { count: repo.needs_attention })} tone="action" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
         <Count value={repo.conflicts} phrase={t("repos.conflictsCount", { count: repo.conflicts })} tone="blocked" to={blocked} title={t("repos.blockedSuperset")} repo={repo.repo} />
