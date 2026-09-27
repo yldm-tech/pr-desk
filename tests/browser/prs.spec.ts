@@ -306,8 +306,11 @@ test("the sheet's verb keys stand down while its reminder menu is open", async (
   const dialog = page.getByRole("dialog", { name: "Comments · fixture/calendar #17" });
   await expect(dialog).toBeVisible();
   await expect.poll(() => posts).toEqual([{ id: "1", action: "read" }]);
-  await page.keyboard.press("s");
-  await expect(page.getByRole("button", { name: /^3 days/ })).toBeVisible();
+  // The sheet ignores its verb keys while the read it posted on opening is still in flight, so `s` is pressed until the menu answers.
+  await expect(async () => {
+    if (!(await page.getByRole("button", { name: /^3 days/ }).isVisible())) await page.keyboard.press("s");
+    await expect(page.getByRole("button", { name: /^3 days/ })).toBeVisible({ timeout: 500 });
+  }).toPass();
   await page.keyboard.press("e");
   await page.waitForTimeout(300);
   expect(posts.filter((post) => post.action === "handled")).toEqual([]);
