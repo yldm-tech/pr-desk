@@ -7,6 +7,7 @@ import { apiURL } from "./api-url";
 import { resources } from "./i18n";
 import { openInstallPopup } from "./github-access";
 import { hardReload } from "./service-worker";
+import { INSTALLED, iosStandalone } from "./HardRefresh";
 import { groupOf, reasonTone, type FollowUp } from "./followup-view";
 import { useAuth, useFollowUps, useSyncMutation, useSyncPending } from "./queries";
 import { paths, prViewPath, prViews, prViewTitleKeys, type Destination } from "./routes";
@@ -19,10 +20,6 @@ import { Sheet } from "./ui-overlay";
 
 // The second key of each `g` sequence and where it goes. `n` is Insights because `i` is taken by the Inbox, the destination people reach for most.
 const goKeys: Record<string, Destination> = { i: "inbox", p: "prs", r: "repos", n: "insights", s: "settings" };
-
-// The same display modes HardRefresh.tsx treats as installed: only there does "Reload the app" earn a place, because a browser tab already has a reload button.
-const INSTALLED = "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen), (display-mode: window-controls-overlay)";
-const iosStandalone = () => (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
@@ -134,6 +131,7 @@ function PaletteDialog() {
   const sync = useSyncMutation();
   const syncing = useSyncPending();
   const theme = useTheme();
+  // Only an installed window gets "Reload the app", the same display modes HardRefresh.tsx answers to, because a browser tab already has a reload button.
   const installed = useMediaQuery(INSTALLED) || iosStandalone();
   const coarse = useMediaQuery("(pointer: coarse)");
   // The Sheet opens the <dialog> in its own effect, which runs before this one; focusing here puts the caret in the query field rather than on the close button, while the Sheet still remembers the real opener to return focus to.
@@ -157,7 +155,7 @@ function PaletteDialog() {
     ...[
       { tab: "", label: t("followup.tabSchedule") },
       { tab: "notifications", label: t("followup.tabNotifications") },
-      { tab: "github", label: t("palette.settingsGitHub") },
+      { tab: "github", label: t("settings.tabGitHub") },
       { tab: "access", label: t("followup.tabAccess") },
     ].map(({ tab, label }): Entry => ({ id: `go-settings-${tab || "reminders"}`, context: t("palette.settings"), label, icon: Settings2, keys: tab ? undefined : ["g", "s"], run: go(tab ? `${paths.settings}?tab=${tab}` : paths.settings) })),
     { id: "go-about", label: t("palette.about"), icon: Info, run: go(paths.about) },

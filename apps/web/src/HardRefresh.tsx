@@ -5,10 +5,10 @@ import { hardReload } from "./service-worker";
 import { IconButton } from "./ui-controls";
 
 // Every display mode an installed PR Desk can be opened in, which is the whole question this control asks: a tab has the browser's own reload and does not need a second one taking space in the header, an installed window has no chrome at all. `window-controls-overlay` and `minimal-ui` are in the list because both are installed modes that hide the reload — minimal-ui keeps a back button on some platforms and nothing else.
-const INSTALLED = "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen), (display-mode: window-controls-overlay)";
+export const INSTALLED = "(display-mode: standalone), (display-mode: minimal-ui), (display-mode: fullscreen), (display-mode: window-controls-overlay)";
 
 // iOS added the display-mode query in 13; older home-screen installs report themselves only through this non-standard flag, and a reader on one of them is exactly the reader with no reload.
-const iosStandalone = () => (navigator as Navigator & { standalone?: boolean }).standalone === true;
+export const iosStandalone = () => (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
 const installed = () => (typeof matchMedia === "function" && matchMedia(INSTALLED).matches) || iosStandalone();
 
