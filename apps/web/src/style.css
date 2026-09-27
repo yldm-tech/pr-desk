@@ -6,15 +6,128 @@
 @theme {
   /* Tailwind's sm/md/lg/xl/2xl are min-width tokens named after nothing. Clearing the namespace makes an off-scale name compile to nothing, which the lint:responsive grep turns into a hard failure rather than a silent one. This does NOT touch --container-3xs..7xl, so max-w-sm / max-w-5xl still work. */
   --breakpoint-*: initial;
-  --breakpoint-roomy: 480px; /* >= 480: the top bar has room for text labels */
+  --breakpoint-roomy: 480px; /* >= 480: the top bar has room for text labels, gutters grow to 24px */
   --breakpoint-shell: 900px; /* >= 900: the 208px sidebar replaces the top bar */
-  --breakpoint-wide: 1200px; /* >= 1200: the sidebar gets its full padding */
+  --breakpoint-wide: 1200px; /* >= 1200: the gutters grow to 32px */
 
-  /* Measured against <main>'s content box unless a nearer container is named. No structural threshold may fall in (647, 867]: <main>'s content width is not monotonic in the viewport (867px at V=899, 647px at V=900, where the fixed sidebar appears), so a threshold inside that window makes widening the window downgrade the layout. */
+  /* Measured against <main>'s content box C unless a nearer container is named. C is not monotonic in the viewport V: it is V-32 below 480 (16px gutters), V-48 from 480 to 899 (24px gutters), V-256 from 900 to 1199 (the 208px sidebar plus 24px gutters) and min(V-272, 1120) from 1200 (32px gutters). Each gutter or shell step makes C fall while V rises, so three windows of C are reached twice, once on each side of a step, and NO container threshold may sit inside them: (432, 447] at the 480 step, (644, 851] at the 900 step and (928, 943] at the 1200 step. A threshold inside a window makes widening the window downgrade the layout. The four tokens below sit outside all three; they flip at V=528 (split), V=608 (pair), V=688 (row) and V=1136 (table). */
   --container-split: 480px; /* >= 480: content may sit two-up */
   --container-pair: 560px; /* >= 560: a heading and its control fit side by side */
   --container-row: 640px; /* >= 640: card layouts become table rows */
-  --container-table: 880px; /* >= 880: full multi-column tables */
+  --container-table: 880px; /* >= 880: full multi-column tables, and the Inbox split view */
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --animate-fade: fade 180ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-pop: pop 180ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-sheet-right: sheet-right 240ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-sheet-up: sheet-up 240ms cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-highlight: highlight 1.2s cubic-bezier(0.2, 0, 0, 1) both;
+  --animate-indeterminate: indeterminate 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+  @keyframes sheet-right {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+  @keyframes highlight {
+    from {
+      background-color: var(--accent-subtle);
+    }
+  }
+  @keyframes indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+}
+
+/* The type scale. `static` because components also read these as plain variables (text-[length:var(--text-caption)]) and a tree-shaken theme would drop a variable no utility happens to use. rem, not px, so the scale tracks the user's browser font-size preference; no font-size is set on :root or html, so 1rem is the user's setting. */
+@theme static {
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-title: 1rem;
+  --text-title--line-height: 1.5rem;
+  --text-page: 1.25rem;
+  --text-page--line-height: 1.75rem;
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.25rem;
+  /* Retired by the redesign; kept as an alias until the last page that reads it is rebuilt. */
+  --text-heading: 0.875rem;
+}
+
+/* Colour utilities (bg-bg, text-fg-muted, border-line-strong, text-tone-blocked ...) resolve to the theme variables at use time, so one class serves both themes and no component ever needs a `dark:` variant. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-bg-muted: var(--bg-muted);
+  --color-surface: var(--surface);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-line: var(--accent-line);
+  --color-focus: var(--focus);
+  --color-tone-blocked: var(--tone-blocked);
+  --color-tone-action: var(--tone-action);
+  --color-tone-waiting: var(--tone-waiting);
+  --color-tone-ready: var(--tone-ready);
+  --color-tone-neutral: var(--tone-neutral);
+  --color-tone-blocked-soft: var(--tone-blocked-soft);
+  --color-tone-action-soft: var(--tone-action-soft);
+  --color-tone-waiting-soft: var(--tone-waiting-soft);
+  --color-tone-ready-soft: var(--tone-ready-soft);
+  --color-info-soft: var(--info-soft);
+  --color-tone-blocked-line: var(--tone-blocked-line);
+  --color-tone-action-line: var(--tone-action-line);
+  --color-tone-waiting-line: var(--tone-waiting-line);
+  --color-tone-ready-line: var(--tone-ready-line);
+  --color-tone-neutral-line: var(--tone-neutral-line);
+  --color-chart-bar: var(--chart-bar);
+  --color-chart-grid: var(--chart-grid);
+  --color-overlay: var(--overlay);
+  --shadow-1: var(--elevation-1);
+  --shadow-2: var(--elevation-2);
 }
 
 /* Height has no namespace in v4 and a landscape phone (844x390) is wide but short. The @media must be written out: `@custom-variant short (height < 480px)` parses the condition as a SELECTOR and emits garbage. */
@@ -24,46 +137,211 @@
 @custom-variant hoverable (@media (hover: hover));
 
 @layer components {
+  /* Light theme, and every value that does not depend on the theme. The ratios each colour pair has to meet are asserted by tokens.test.mjs, which reads this file; change a hex here and that test says whether the pair still passes. */
   :root {
     color-scheme: light;
-    --canvas: #f7f7f9;
+    --bg: #ffffff;
+    --bg-subtle: #f7f7f8;
+    --bg-muted: #efeff1;
     --surface: #ffffff;
-    --surface-muted: #f2f2f5;
-    --foreground: #27272f;
-    --muted: #6b6b78;
-    --border: #e2e2e9;
-    --border-subtle: #eeeef2;
-    --accent: #7260d9;
-    --accent-text: #5d47bd;
-    --accent-soft: #f0ecfb;
-    --accent-border: #c3b8ed;
-    --success: #237a52;
-    --success-soft: #edf7f1;
-    --success-border: #c8e3d3;
-    --warning: #94600c;
-    --warning-soft: #fff7e8;
-    --warning-border: #eddbb5;
-    --danger: #b83e4b;
-    --danger-soft: #fceff0;
-    --info: #3f66a3;
-    --info-soft: #edf2fb;
-    --hero: #2e293e;
-    --hero-muted: #c5bfd7;
-    --hero-text: #faf8ff;
-    --hero-border: #ffffff24;
-    --select-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b6b78' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    --shadow: #24202e14;
-    --overlay: #24202e80;
-    --chart-1: #7260d9;
-    --chart-2: #9986dc;
-    --chart-3: #b4a5e7;
-    --chart-4: #63577e;
-    --chart-5: #aaa4b6;
-    --chart-other: #dedce5;
-    --skeleton-base: #e7e7ed;
-    --skeleton-highlight: #f4f4f7;
-    --skeleton-hero-base: #433c58;
-    --skeleton-hero-highlight: #554b6d;
+    --line: #e4e4e8;
+    --line-strong: #8b8b96;
+    --fg: #18181b;
+    --fg-muted: #5f5f6b;
+    --fg-subtle: #6b6b75;
+    --accent: #6e56cf;
+    --accent-hover: #5b45b8;
+    --accent-fg: #ffffff;
+    --accent-text: #5b45b8;
+    --accent-subtle: #f3f0fd;
+    --focus: #6e56cf;
+    --tone-blocked: #c62a2f;
+    --tone-action: #a64d08;
+    --tone-waiting: #1a66c9;
+    --tone-ready: #18794e;
+    --tone-neutral: #6b6b75;
+    --tone-blocked-soft: #faeeee;
+    --tone-action-soft: #f8f1eb;
+    --tone-waiting-soft: #edf3fb;
+    --tone-ready-soft: #edf4f1;
+    --info-soft: #f3f1fb;
+    --overlay: rgb(15 15 18 / 0.4);
+    --chart-bar: #6e56cf;
+    --chart-grid: #e4e4e8;
+    --skeleton-base: #ededf0;
+    --skeleton-highlight: #f6f6f7;
+    --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235f5f6b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --elevation-1: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.08);
+    --elevation-2: 0 8px 40px rgb(0 0 0 / 0.16);
+
+    /* Derived, so they follow whichever theme block defined the tone. A chip or notice border is the tone at 32%, which keeps the hue without pretending to be a control border. */
+    --tone-blocked-line: color-mix(in srgb, var(--tone-blocked) 32%, transparent);
+    --tone-action-line: color-mix(in srgb, var(--tone-action) 32%, transparent);
+    --tone-waiting-line: color-mix(in srgb, var(--tone-waiting) 32%, transparent);
+    --tone-ready-line: color-mix(in srgb, var(--tone-ready) 32%, transparent);
+    --tone-neutral-line: color-mix(in srgb, var(--tone-neutral) 32%, transparent);
+    --accent-line: color-mix(in srgb, var(--accent) 40%, transparent);
+
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "PingFang SC", "Hiragino Sans", "Apple SD Gothic Neo", "Microsoft YaHei", sans-serif;
+    --ts-chart-tooltip-font: 400 0.75rem/1.5 var(--font-ui);
+    /* Latin headings are tightened a little; CJK gives it back below, since negative tracking breaks ideographic spacing and a case transform has no meaning there. */
+    --tracking-page: -0.01em;
+    --caption-transform: uppercase;
+    --caption-tracking: 0.04em;
+
+    --radius: 6px;
+    --dur-fast: 120ms;
+    --dur-base: 180ms;
+    --dur-slow: 240ms;
+    --dur-layout: 320ms;
+    --content-max: 1120px;
+    --topbar-h: 48px;
+    --tabbar-h: 56px;
+    --sidebar-w: 208px;
+
+    /* Migration aliases: every name the pages built before the redesign read, pointed at its successor so those pages already follow the theme. They are deleted once the last of those pages is rebuilt. */
+    --canvas: var(--bg-subtle);
+    --surface-muted: var(--bg-muted);
+    --foreground: var(--fg);
+    --muted: var(--fg-muted);
+    --border: var(--line);
+    --border-subtle: var(--line);
+    --accent-soft: var(--accent-subtle);
+    --accent-border: var(--accent-line);
+    --success: var(--tone-ready);
+    --success-soft: var(--tone-ready-soft);
+    --success-border: var(--tone-ready-line);
+    --warning: var(--tone-action);
+    --warning-soft: var(--tone-action-soft);
+    --warning-border: var(--tone-action-line);
+    --danger: var(--tone-blocked);
+    --danger-soft: var(--tone-blocked-soft);
+    --info: var(--tone-waiting);
+    /* The hero was a dark card with light ink. It becomes a quiet card, so its ink has to become the normal ink or it would vanish on the new background. */
+    --hero: var(--bg-subtle);
+    --hero-muted: var(--fg-muted);
+    --hero-text: var(--fg);
+    --hero-border: var(--line);
+    --skeleton-hero-base: var(--skeleton-base);
+    --skeleton-hero-highlight: var(--skeleton-highlight);
+    --chart-1: var(--accent);
+    --chart-2: var(--tone-waiting);
+    --chart-3: var(--tone-ready);
+    --chart-4: var(--tone-action);
+    --chart-5: var(--fg-subtle);
+    --chart-other: var(--line);
+    --select-chevron: var(--icon-chevron);
+    --shadow: rgb(0 0 0 / 0.08);
+  }
+
+  /* The dark theme is written twice with identical bodies: once for a system preference the reader has not overridden, once for an explicit choice. light-dark() would say it once but needs Safari 17.5; tokens.test.mjs fails if the two copies ever drift apart. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0f0f12;
+      --bg-subtle: #16161a;
+      --bg-muted: #1f1f24;
+      --surface: #1a1a1f;
+      --line: #2a2a31;
+      --line-strong: #6b6b77;
+      --fg: #ededef;
+      --fg-muted: #a1a1aa;
+      --fg-subtle: #8a8a94;
+      --accent: #6e56cf;
+      --accent-hover: #634bc4;
+      --accent-fg: #ffffff;
+      --accent-text: #b1a4f8;
+      --accent-subtle: #241f3d;
+      --focus: #8b78e8;
+      --tone-blocked: #ff6b70;
+      --tone-action: #f1a10d;
+      --tone-waiting: #5aa2ff;
+      --tone-ready: #3dd68c;
+      --tone-neutral: #8a8a94;
+      --tone-blocked-soft: #311c1f;
+      --tone-action-soft: #2f2311;
+      --tone-waiting-soft: #1a2433;
+      --tone-ready-soft: #152b23;
+      --info-soft: #1e1b2e;
+      --overlay: rgb(0 0 0 / 0.6);
+      --chart-bar: #8b78e8;
+      --chart-grid: #2a2a31;
+      --skeleton-base: #1f1f24;
+      --skeleton-highlight: #27272d;
+      --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      --elevation-1: 0 0 0 1px var(--line), 0 8px 24px rgb(0 0 0 / 0.5);
+      --elevation-2: 0 0 0 1px var(--line), 0 16px 48px rgb(0 0 0 / 0.6);
+      --shadow: rgb(0 0 0 / 0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f0f12;
+    --bg-subtle: #16161a;
+    --bg-muted: #1f1f24;
+    --surface: #1a1a1f;
+    --line: #2a2a31;
+    --line-strong: #6b6b77;
+    --fg: #ededef;
+    --fg-muted: #a1a1aa;
+    --fg-subtle: #8a8a94;
+    --accent: #6e56cf;
+    --accent-hover: #634bc4;
+    --accent-fg: #ffffff;
+    --accent-text: #b1a4f8;
+    --accent-subtle: #241f3d;
+    --focus: #8b78e8;
+    --tone-blocked: #ff6b70;
+    --tone-action: #f1a10d;
+    --tone-waiting: #5aa2ff;
+    --tone-ready: #3dd68c;
+    --tone-neutral: #8a8a94;
+    --tone-blocked-soft: #311c1f;
+    --tone-action-soft: #2f2311;
+    --tone-waiting-soft: #1a2433;
+    --tone-ready-soft: #152b23;
+    --info-soft: #1e1b2e;
+    --overlay: rgb(0 0 0 / 0.6);
+    --chart-bar: #8b78e8;
+    --chart-grid: #2a2a31;
+    --skeleton-base: #1f1f24;
+    --skeleton-highlight: #27272d;
+    --icon-chevron: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    --elevation-1: 0 0 0 1px var(--line), 0 8px 24px rgb(0 0 0 / 0.5);
+    --elevation-2: 0 0 0 1px var(--line), 0 16px 48px rgb(0 0 0 / 0.6);
+    --shadow: rgb(0 0 0 / 0.5);
+  }
+
+  /* The landscape-phone tab bar is shorter, and everything that clears it (main's bottom padding, the toast) reads this one value. */
+  @media (height < 480px) {
+    :root {
+      --tabbar-h: 44px;
+    }
+  }
+
+  /* CJK: a little more leading for dense glyphs, no negative tracking, no case transform. The line heights are the theme's own variables, so every text-* utility picks the change up without a variant. */
+  :root:lang(ja),
+  :root:lang(zh-CN),
+  :root:lang(ko) {
+    --text-caption--line-height: 1.125rem;
+    --text-small--line-height: 1.375rem;
+    --text-body--line-height: 1.375rem;
+    --tracking-page: 0;
+    --caption-transform: none;
+    --caption-tracking: 0;
+  }
+  :lang(ja) body,
+  :lang(zh-CN) body,
+  :lang(ko) body {
+    line-break: strict;
+    letter-spacing: 0;
+  }
+  /* auto-phrase keeps Japanese phrases whole where Chromium can find them and is ignored elsewhere; Korean has spaces between words, so keep-all is enough. */
+  :lang(ja) :is(h1, h2, h3, button, label, [data-tone]) {
+    word-break: auto-phrase;
+  }
+  :lang(ko) :is(h1, h2, h3, button, label) {
+    word-break: keep-all;
   }
 
   * {
@@ -77,48 +355,15 @@
   body {
     margin: 0;
     font-family: var(--font-ui);
-    background: var(--canvas);
-    color: var(--foreground);
-  }
-  button {
-    font-family: inherit;
-  }
-  button {
-    cursor: pointer;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Contribution overview */
-  /* Global rather than per-utility: the scattered `motion-reduce:` opt-ins covered three animated surfaces and missed three more, and the two @keyframes below had no guard at all. An !important declaration in an earlier layer beats one in a later layer, so this wins over anything in @layer utilities. The remaining `motion-reduce:` utilities are now redundant rather than load-bearing. */
-  @media (prefers-reduced-motion: reduce) {
-    .react-loading-skeleton::after {
-      animation: none !important;
-    }
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
-
-  /* Shared type scale across navigation, controls, charts and profile portal. */
-  :root {
-    --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    /* rem, not px, so the scale tracks the user's browser font-size preference -- the only text-scaling lever mobile Safari offers short of pinch-zoom. No font-size is set on :root or html, so 1rem is the user's setting and these are the current pixel values at the 16px default. */
-    --text-body: 0.8125rem;
-    --text-caption: 0.75rem;
-    --text-heading: 0.875rem;
-    --ts-chart-tooltip-font: 400 0.75rem/1.5 var(--font-ui);
-  }
-  body {
     font-size: var(--text-body);
-    line-height: 1.5;
+    line-height: var(--text-body--line-height);
+    background: var(--bg);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Preflight is off, so the browser's heading, paragraph and list margins would otherwise leak into every component. :where() keeps the reset at zero specificity so any utility still wins. */
+  #root :where(h1, h2, h3, p, ul) {
+    margin: 0;
   }
   button,
   input,
@@ -126,7 +371,11 @@
   textarea {
     font-family: var(--font-ui);
     font-size: var(--text-body);
-    line-height: 1.5;
+    line-height: var(--text-body--line-height);
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
   }
   /* iOS Safari zooms the page whenever a focused text control computes under 16px, and index.html deliberately ships no maximum-scale, so it never zooms back out. `button` is excluded on purpose: buttons do not trigger the zoom and inflating every label would be a visible redesign. This rule lives in @layer components, which loses to @layer utilities, so a control whose size comes from a Tailwind utility must carry its own pointer-coarse:text-[length:1rem] as well. */
   @media (pointer: coarse) {
@@ -136,8 +385,27 @@
       font-size: 16px;
     }
   }
-  /* The settings view is reached from here rather than from the nav above, so
-     without this the sidebar shows nothing selected while it is open. */
+  :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  main:focus {
+    outline: none;
+  }
+  button:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+  /* A modal <dialog> does not stop the page behind it from scrolling, which on a phone drags the list under a full-screen sheet. */
+  html:has(dialog[open]:modal) {
+    overflow: hidden;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
   @keyframes sync-flow {
     from {
       background-position: 0 0;
@@ -155,17 +423,41 @@
     }
   }
 
-  :where(button, a, input, select):focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
+  /* Global rather than per-utility: scattered `motion-reduce:` opt-ins always miss a surface. An !important declaration in an earlier layer beats one in a later layer, so this wins over anything in @layer utilities, including the highlight fade, the skeleton shimmer and the sheet slide. */
+  @media (prefers-reduced-motion: reduce) {
+    .react-loading-skeleton::after {
+      animation: none !important;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
-  main:focus {
-    outline: none;
-  }
-  button:disabled {
-    cursor: default;
-  }
-  button:disabled {
-    opacity: 0.5;
+
+  /* Windows high contrast replaces every colour with a small system palette, so status carried by hue alone would disappear. Glyphs and chips keep their shape and take the text colour, control borders take the button border, the list cursor becomes an outline, and bar segments ([data-segment] inside [data-segments]) are separated by visible gaps. */
+  @media (forced-colors: active) {
+    [data-glyph],
+    [data-tone] {
+      color: CanvasText;
+      border-color: CanvasText;
+      forced-color-adjust: none;
+    }
+    :where(button, select, input, textarea) {
+      border-color: ButtonBorder;
+    }
+    [data-active] {
+      outline: 2px solid Highlight;
+      outline-offset: -2px;
+    }
+    [data-segments] {
+      gap: 1px;
+    }
+    [data-segment] {
+      background: CanvasText;
+      forced-color-adjust: none;
+    }
   }
 }

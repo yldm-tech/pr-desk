@@ -4,19 +4,21 @@
 //
 // What is NOT touched, and why it is an early `return` rather than a pass-through fetch: the API (all state, all auth, all of it same-origin in production), cross-origin requests, and anything that is not a GET. Declining to call respondWith leaves the request entirely to the browser, which is both faster and the only way to be sure a worker bug can never corrupt a mutation.
 
-const VERSION = "v1";
-const SHELL_CACHE = `prdesk-shell-${VERSION}`;
-const ASSET_CACHE = `prdesk-assets-${VERSION}`;
+// The shell cache is versioned on its own because its contents changed shape (it now also holds theme-init.js); the asset cache did not, and renaming it would throw away every hashed file a device already has.
+const SHELL_CACHE = "prdesk-shell-v2";
+const ASSET_CACHE = "prdesk-assets-v1";
 const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE];
 // Hashed names accumulate one full set per deploy and nothing ever evicts them by name, so the asset cache is trimmed oldest-first. The Cache API iterates keys in insertion order, which makes "oldest" answerable without storing timestamps. A build is a few dozen entries; 200 leaves several deploys' worth of back-navigation working and still bounds the origin's storage.
 const ASSET_LIMIT = 200;
 
 // The document every route resolves to. The router is a HashRouter and the Go server answers every non-API document route with index.html, so one cache entry is the offline fallback for the whole application rather than one entry per visited path.
 const SHELL_URL = "/";
+// The pre-paint theme script index.html loads synchronously. It belongs with the document rather than with the public files: an offline launch that got the document but not this would paint the system theme under a reader who chose the other one.
+const THEME_INIT_URL = "/theme-init.js";
 
 self.addEventListener("install", (event) => {
   // `cache: "reload"` so a fresh worker cannot adopt the HTTP cache's copy of the document it is about to become the offline fallback for.
-  event.waitUntil(self.caches.open(SHELL_CACHE).then((cache) => cache.add(new Request(SHELL_URL, { cache: "reload" }))));
+  event.waitUntil(self.caches.open(SHELL_CACHE).then((cache) => cache.addAll([new Request(SHELL_URL, { cache: "reload" }), new Request(THEME_INIT_URL, { cache: "reload" })])));
   // Activating immediately is safe here and it is what keeps the worker honest: assets are content-hashed so two builds cannot collide, the document is network-first so the new worker serves the new build, and the one case an open tab can still hit -- a lazy chunk the new build deleted -- is already handled by the single reload in App.tsx's ErrorBoundary. An update prompt would be a fourth mechanism for a problem three already cover.
   self.skipWaiting();
 });
@@ -40,7 +42,11 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/api" || url.pathname.startsWith("/api/") || url.pathname.startsWith("/swagger")) return;
   // `mode: "navigate"` rather than an Accept sniff: it is set by the browser for top-level and iframe document loads only, so a same-origin fetch() for HTML is not mistaken for a page load.
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, SHELL_URL));
+    return;
+  }
+  if (url.pathname === THEME_INIT_URL) {
+    event.respondWith(networkFirst(request, THEME_INIT_URL));
     return;
   }
   if (url.pathname.startsWith("/assets/")) {
@@ -66,18 +72,18 @@ async function store(cacheName, key, response, limit) {
   }
 }
 
-// The document. Network wins whenever there is one, so a deploy is picked up by the next load and no reader is ever pinned to a stale build; the cache is the offline copy, refreshed on every successful load.
-async function networkFirst(request) {
+// The document and the theme script. Network wins whenever there is one, so a deploy is picked up by the next load and no reader is ever pinned to a stale build; the cache is the offline copy, stored under `key` and refreshed on every successful load.
+async function networkFirst(request, key) {
   let response;
   try {
     response = await fetch(request);
   } catch (error) {
-    const cached = await self.caches.match(SHELL_URL, { cacheName: SHELL_CACHE });
+    const cached = await self.caches.match(key, { cacheName: SHELL_CACHE });
     if (cached) return cached;
     throw error;
   }
   // A server redirect needs no handling here, which is worth saying because respondWith does reject when a navigation is answered with a response that was itself redirected. It cannot arise: the HTML specification gives navigation requests redirect mode "manual", fetch(request) preserves that, and http.FileServer's 301 from /index.html to ./ therefore comes back as an opaque redirect -- status 0, so `ok` is false and it is never cached -- which the browser follows itself. Rewriting it into a fresh Response.redirect would only take that back off the browser.
-  if (response.ok) await store(SHELL_CACHE, SHELL_URL, response.clone());
+  if (response.ok) await store(SHELL_CACHE, key, response.clone());
   return response;
 }
 
