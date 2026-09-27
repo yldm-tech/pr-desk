@@ -312,3 +312,14 @@ test("the sheet's verb keys stand down while its reminder menu is open", async (
   await page.waitForTimeout(300);
   expect(posts.filter((post) => post.action === "handled")).toEqual([]);
 });
+
+// The sheet's first stop is its close button, never the PR title link a single Enter would leave the app through.
+test("the activity sheet opens with focus on its close button", async ({ page }) => {
+  await page.goto("/#/prs");
+  await page.locator("#pr-row-101").getByTestId("pr-activity").click();
+  const dialog = page.getByRole("dialog", { name: "Comments · fixture/calendar #17" });
+  await expect(dialog.getByRole("button", { name: "Close activity", exact: true })).toBeFocused();
+  // The tools sit in the header beside Close; the footer holds the verbs.
+  await expect(dialog.locator("header").getByRole("link", { name: /View on GitHub/ })).toBeVisible();
+  await expect(dialog.locator("footer").getByRole("link", { name: /View on GitHub/ })).toHaveCount(0);
+});

@@ -125,15 +125,13 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
         <p className="min-w-0 truncate text-caption text-fg-muted">
           {pr.repo} <span className="text-fg-subtle tabular-nums">#{pr.number}</span>
         </p>
-        {/* Beside the list the pane's own tools sit in its header, where they are on screen however long the activity below runs; the sheet keeps them in its footer, beside the verbs. */}
-        {mode === "pane" && (
-          <div className="-my-1 flex shrink-0 items-center gap-1">
-            <LinkButton href={link} external newTabLabel={t("inbox.newTab")} size="sm" variant="ghost">
-              {t("viewGitHub")}
-            </LinkButton>
-            <IconButton icon={RefreshCw} size="sm" label={activity.isFetching ? t("refreshing") : t("refresh")} busy={activity.isFetching} onClick={() => void activity.refetch()} />
-          </div>
-        )}
+        {/* The pane's and the sheet's own tools sit in the header, where they are on screen however long the activity below runs, and the sheet's footer is left to the follow-up verbs alone. */}
+        <div className="-my-1 flex shrink-0 items-center gap-1">
+          <LinkButton href={link} external newTabLabel={t("inbox.newTab")} size="sm" variant="ghost">
+            {t("viewGitHub")}
+          </LinkButton>
+          <IconButton icon={RefreshCw} size="sm" label={activity.isFetching ? t("refreshing") : t("refresh")} busy={activity.isFetching} onClick={() => void activity.refetch()} />
+        </div>
       </div>
       <h2 id={titleId} className="text-title font-semibold text-fg [overflow-wrap:anywhere]">
         <a href={link} target="_blank" rel="noopener noreferrer" className="text-fg no-underline decoration-fg-subtle underline-offset-2 hover:underline">
@@ -203,16 +201,6 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       {activity.data && <ActivityPanel data={activity.data} />}
     </div>
   );
-  const links = (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <LinkButton href={link} external newTabLabel={t("inbox.newTab")}>
-        {t("viewGitHub")}
-      </LinkButton>
-      <Button icon={RefreshCw} busy={activity.isFetching} onClick={() => void activity.refetch()}>
-        {activity.isFetching ? t("refreshing") : t("refresh")}
-      </Button>
-    </div>
-  );
   if (mode === "pane")
     return (
       <section aria-labelledby={titleId} data-testid="detail-pane" className="sticky top-4 flex max-h-[calc(100dvh-32px)] min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface">
@@ -229,12 +217,7 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       returnFocusTo={detail.opener}
       closeLabel={t("close")}
       header={header}
-      footer={
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          {links}
-          {followUp && <SheetFollowUp item={followUp} now={now} />}
-        </div>
-      }
+      footer={followUp && <SheetFollowUp item={followUp} now={now} />}
     >
       {body}
     </Sheet>
