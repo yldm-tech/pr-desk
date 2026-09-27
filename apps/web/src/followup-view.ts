@@ -26,9 +26,7 @@ export type FollowUp = z.infer<typeof followUpSchema>;
 export type FollowUpResponse = z.infer<typeof responseSchema>;
 export type FollowUpPR = FollowUp["pr"];
 
-// Reasons are grouped by what the reader has to do about them: a blocked PR
-// needs a fix, an action is waiting on the reader, and the timing reasons only
-// say that the clock ran out.
+// Reasons are grouped by what the reader has to do about them: a blocked PR needs a fix, an action is waiting on the reader, and the timing reasons only say that the clock ran out.
 // `changes_requested` and `author_updated` are now reachable: presentation() records the reason that actually raised the confirmation instead of guessing one from the role, so a reviewer whose approval was dismissed no longer reads "Review requested" when nobody requested anything. Both ask the reader to do something, so both take the action tone.
 export const reasonTones: Record<string, string> = { conflict: "blocked", checks_failed: "blocked", review_requested: "action", human_feedback: "action", changes_requested: "action", author_updated: "action", approval_revoked: "action", overdue: "waiting", snooze_due: "waiting" };
 export const reasonTone = (reason: string) => reasonTones[reason] || "neutral";

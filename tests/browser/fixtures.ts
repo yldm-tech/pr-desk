@@ -36,8 +36,7 @@ export const LEGACY_ROUTES: { from: string; to: string }[] = [
 // A replacement for one stubbed endpoint, keyed by its path under /api/v1/ exactly as the switch below spells it ("follow-ups", "sync/progress", "pull-requests/101/activity"). An override answers instead of the default for every method, so a spec that needs a state the defaults do not describe — a failed poll, an incomplete baseline, a 409 — adds it here rather than editing this file.
 export type FixtureOverride = (route: Route) => unknown;
 
-// The stub API both the suite and the comparison harness run against, so a
-// screenshot and a computed-style capture see the same application.
+// The stub API both the suite and the comparison harness run against, so a screenshot and a computed-style capture see the same application.
 // The locale is a parameter rather than a constant because width is not the only axis the layout has to survive: Spanish is the worst case for every label in the shell and Japanese is the worst case for line breaking, and neither was rendered anywhere in the suite before. English stays the default so no existing test changes.
 export async function installFixtures(page: Page, options: { locale?: string; overrides?: Record<string, FixtureOverride> } = {}) {
   const locale = options.locale ?? "en";
