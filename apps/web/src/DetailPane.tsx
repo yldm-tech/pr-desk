@@ -1,6 +1,6 @@
 import { HTTPError } from "ky";
 import { MessageSquare, RefreshCw } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityPanel } from "./ActivityPanel";
 import { useDetail, type DetailTarget } from "./detail-context";
@@ -13,7 +13,7 @@ import { useShortcut } from "./shortcuts";
 import { useReminderSettings } from "./SnoozePopover";
 import { reasonIcon, toneText, type Tone } from "./tone";
 import { useUndoSlot } from "./undo-slot";
-import { Button, cx, LinkButton } from "./ui-controls";
+import { Button, cx, IconButton, LinkButton } from "./ui-controls";
 import { FactChip, formatDate, Notice, Time } from "./ui-display";
 import { Sheet } from "./ui-overlay";
 
@@ -120,9 +120,20 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       <span id={nameId} hidden>
         {`${t("comments")} · ${pr.repo} #${pr.number}`}
       </span>
-      <p className="text-caption text-fg-muted">
-        {pr.repo} <span className="text-fg-subtle tabular-nums">#{pr.number}</span>
-      </p>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-caption text-fg-muted">
+          {pr.repo} <span className="text-fg-subtle tabular-nums">#{pr.number}</span>
+        </p>
+        {/* Beside the list the pane's own tools sit in its header, where they are on screen however long the activity below runs; the sheet keeps them in its footer, beside the verbs. */}
+        {mode === "pane" && (
+          <div className="-my-1 flex shrink-0 items-center gap-1">
+            <LinkButton href={link} external newTabLabel={t("inbox.newTab")} size="sm" variant="ghost">
+              {t("viewGitHub")}
+            </LinkButton>
+            <IconButton icon={RefreshCw} size="sm" label={activity.isFetching ? t("refreshing") : t("refresh")} busy={activity.isFetching} onClick={() => void activity.refetch()} />
+          </div>
+        )}
+      </div>
       <h2 id={titleId} className="text-title font-semibold text-fg [overflow-wrap:anywhere]">
         <a href={link} target="_blank" rel="noopener noreferrer" className="text-fg no-underline decoration-fg-subtle underline-offset-2 hover:underline">
           {pr.title}
@@ -191,12 +202,12 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       {activity.data && <ActivityPanel data={activity.data} />}
     </div>
   );
-  const links: ReactNode = (
+  const links = (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <LinkButton href={link} external newTabLabel={t("inbox.newTab")} size={mode === "pane" ? "sm" : "md"}>
+      <LinkButton href={link} external newTabLabel={t("inbox.newTab")}>
         {t("viewGitHub")}
       </LinkButton>
-      <Button size={mode === "pane" ? "sm" : "md"} icon={RefreshCw} busy={activity.isFetching} onClick={() => void activity.refetch()}>
+      <Button icon={RefreshCw} busy={activity.isFetching} onClick={() => void activity.refetch()}>
         {activity.isFetching ? t("refreshing") : t("refresh")}
       </Button>
     </div>
@@ -206,7 +217,6 @@ export function DetailPane({ target, mode }: { target: DetailTarget; mode: "pane
       <section aria-labelledby={titleId} data-testid="detail-pane" className="sticky top-4 flex max-h-[calc(100dvh-32px)] min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface">
         <header className="shrink-0 border-b border-line px-4 py-3">{header}</header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{body}</div>
-        <footer className="shrink-0 border-t border-line px-4 py-2.5">{links}</footer>
       </section>
     );
   return (

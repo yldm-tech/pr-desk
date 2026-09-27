@@ -72,7 +72,7 @@ export function SnoozePopover({
   const presets = snoozePresets(now, settings);
   const language = i18n.resolvedLanguage;
   const dayFormat = new Intl.DateTimeFormat(language, { weekday: "short", month: "short", day: "numeric" });
-  const timeFormat = new Intl.DateTimeFormat(language, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+  const timeFormat = new Intl.DateTimeFormat(language, { weekday: "short", hour: "numeric", minute: "2-digit" });
   const presetLabel = (key: "3d" | "7d" | "tomorrow") => (key === "3d" ? t("followup.days", { count: 3 }) : key === "7d" ? t("followup.days", { count: 7 }) : t("inbox.tomorrowMorning"));
   const outOfRange = !date || date < bounds.min || date > bounds.max;
   const reset = () => {

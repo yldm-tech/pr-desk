@@ -16,7 +16,8 @@ import { ItemRow } from "./ui-list";
 export type RowReport = { text: string; tone: "success" | "error"; undo?: UndoTarget };
 
 // The verbs the page's keys drive on the row under the cursor, registered by each row so the key and the button are the same code path.
-export type RowCommands = { run: (action: FollowUpActionInput) => void; openSnooze: () => void; busy: () => boolean };
+// `quiet` is for a read the page posts because the row was opened: the reader asked to see the row, not to be told it was marked read.
+export type RowCommands = { run: (action: FollowUpActionInput, options?: { quiet?: boolean }) => void; openSnooze: () => void; busy: () => boolean };
 
 // The announcement names the action that was taken, in the words of the verb.
 const actionLabels: Record<string, string> = { snooze: "snooze", read: "read", handled: "handled", followed_up: "followedUp", unsnooze: "cancelReminder" };
@@ -84,10 +85,15 @@ export function InboxRow({
   const exiting = !present;
   const [snoozeOpen, setSnoozeOpen] = useState(false);
   const snoozeRef = useRef<HTMLButtonElement>(null);
+  const quiet = useRef(false);
   const action = useFollowUpAction({
     item,
     onDone: (done) => {
       if (done.action === "snooze") setSnoozeOpen(false);
+      if (done.action === "read" && quiet.current) {
+        quiet.current = false;
+        return;
+      }
       const label = t(`followup.${actionLabels[done.action] ?? "followedUp"}`);
       // Handled clears the confirmation and nothing else, while conflict and checks_failed are re-derived from GitHub on every read; saying so is the difference between a button that looks broken and one whose limit is understood.
       const survives = done.action === "handled" && factsSurvive(item);
@@ -108,10 +114,17 @@ export function InboxRow({
   // A 409 comes back after onSettled has already refetched, so the row holds the newer version by the time the message shows; keyed on the version, the message clears exactly when what it describes stops being true.
   useEffect(() => reset(), [item.version, reset]);
   const commands = useRef<RowCommands | null>(null);
-  commands.current = { run: (input) => mutate(input), openSnooze: () => setSnoozeOpen(true), busy: () => isBusy };
+  commands.current = {
+    run: (input, options) => {
+      quiet.current = !!options?.quiet;
+      mutate(input);
+    },
+    openSnooze: () => setSnoozeOpen(true),
+    busy: () => isBusy,
+  };
   useEffect(() => {
     if (exiting) return;
-    register(item.id, { run: (input) => commands.current?.run(input), openSnooze: () => commands.current?.openSnooze(), busy: () => commands.current?.busy() ?? false });
+    register(item.id, { run: (input, options) => commands.current?.run(input, options), openSnooze: () => commands.current?.openSnooze(), busy: () => commands.current?.busy() ?? false });
     return () => register(item.id, null);
   }, [exiting, item.id, register]);
 

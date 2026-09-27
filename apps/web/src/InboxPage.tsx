@@ -166,7 +166,7 @@ export function InboxPage() {
   const claimRead = (item: FollowUp) => {
     if (!item.unread || claimed.current.has(item.id)) return;
     claimed.current.add(item.id);
-    registry.current.get(item.id)?.run({ action: "read" });
+    registry.current.get(item.id)?.run({ action: "read" }, { quiet: true });
   };
   const openItem = (item: FollowUp, opener: HTMLElement) => {
     if (split) {
