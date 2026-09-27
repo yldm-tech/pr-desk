@@ -9,9 +9,11 @@ test("settings save timezone and selected review teams", async ({ page }) => {
   await page.goto("/#/settings");
   await page.getByLabel("Timezone", { exact: true }).fill("Europe/Madrid");
   await page.getByRole("checkbox", { name: /fixture\/reviewers/ }).check();
+  // The digest language is the server's, labelled apart from the app's own language.
+  await page.getByLabel("Digest language", { exact: true }).selectOption("zh-CN");
   const saved = page.waitForRequest((req) => req.url().endsWith("/follow-up-settings") && req.method() === "POST");
   await page.getByRole("button", { name: "Save", exact: true }).click();
-  expect((await saved).postDataJSON()).toMatchObject({ timezone: "Europe/Madrid", digest_time: "09:00", teams: ["fixture/reviewers"] });
+  expect((await saved).postDataJSON()).toMatchObject({ timezone: "Europe/Madrid", digest_time: "09:00", language: "zh-CN", teams: ["fixture/reviewers"], repository_days: {} });
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
   await page.getByLabel("Follow up after (days)", { exact: true }).fill("9");
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toHaveCount(0);
@@ -23,6 +25,7 @@ test("repository waiting periods report the offending line instead of failing th
   page.on("request", (request) => {
     if (request.url().endsWith("/follow-up-settings") && request.method() === "POST") posted = true;
   });
+  await page.getByRole("button", { name: "Edit as text" }).click();
   await page.getByLabel("Repository waiting periods", { exact: true }).fill("fixture/calendar=14\nbroken-line");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Line 2" })).toBeVisible();
@@ -39,6 +42,9 @@ test("the reminder schedule renders on the default settings tab", async ({ page 
 test("telegram destination validates the chat ID before calling the API", async ({ page }, testInfo) => {
   await page.goto("/#/settings?tab=notifications");
   await expect(page.getByText("No destinations yet. Reminders stay inside the app.")).toBeVisible();
+  await page.getByRole("button", { name: "Add destination" }).click();
+  // Opening the form puts the focus on its first field.
+  await expect(page.getByLabel("Channel", { exact: true })).toBeFocused();
   let posted = false;
   page.on("request", (request) => {
     if (request.url().endsWith("/notification-destinations") && request.method() === "POST") posted = true;
@@ -57,6 +63,7 @@ test("telegram destination validates the chat ID before calling the API", async 
 
 test("channel selection swaps the destination fields and posts the channel", async ({ page }, testInfo) => {
   await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
   const channel = page.getByLabel("Channel", { exact: true });
   await channel.selectOption("lark");
   await expect(page.getByLabel("Bot token", { exact: true })).toHaveCount(0);
@@ -88,6 +95,7 @@ test("channel selection swaps the destination fields and posts the channel", asy
 
 test("a display name is accepted in email addresses", async ({ page }) => {
   await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
   await page.getByLabel("Channel", { exact: true }).selectOption("email");
   await page.getByLabel("Name", { exact: true }).fill("Inbox");
   await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
@@ -104,6 +112,7 @@ test("private webhook addresses are allowed when the server opts in", async ({ p
     return route.fulfill({ json: { id: 1, name: "internal", kind: "webhook", enabled: true } });
   });
   await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
   await page.getByLabel("Channel", { exact: true }).selectOption("webhook");
   await page.getByLabel("Name", { exact: true }).fill("internal");
   await page.getByLabel("Webhook URL", { exact: true }).fill("http://10.0.0.9/hooks/pr-desk");
@@ -151,6 +160,7 @@ test("the settings tabs are addressable and only display the open one", async ({
   await page.goto("/#/settings");
   // The first tab is the default and says so without a parameter of its own.
   await expect(page.getByRole("tab", { name: "Reminders" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab")).toHaveText(["Reminders", "Notifications", "GitHub access", "Agent access"]);
   await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toHaveCount(0);
 
@@ -171,10 +181,20 @@ test("the settings tabs are addressable and only display the open one", async ({
     return Math.round(open.top - strip.bottom);
   });
   expect(gap).toBeLessThanOrEqual(24);
+
+  // The GitHub App installation, which used to sit in the sidebar, has its own tab and address.
+  await page.getByRole("tab", { name: "GitHub access" }).click();
+  expect(new URL(page.url()).hash).toContain("tab=github");
+  await expect(page.getByRole("heading", { name: "GitHub App access" })).toBeVisible();
+  await expect(page.getByRole("tabpanel").locator('a[href$="/api/v1/repository-access/install"]')).toBeVisible();
+  // The default tab carries no parameter of its own.
+  await page.getByRole("tab", { name: "Reminders" }).click();
+  expect(new URL(page.url()).hash).toBe("#/settings");
 });
 
 test("a half-filled destination survives a trip to another settings tab", async ({ page }) => {
   await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
   await page.getByLabel("Channel", { exact: true }).selectOption("email");
   await page.getByLabel("Name", { exact: true }).fill("Inbox");
   await page.getByLabel("SMTP host", { exact: true }).fill("smtp.example.com");
@@ -182,7 +202,7 @@ test("a half-filled destination survives a trip to another settings tab", async 
   await page.getByRole("tab", { name: "Reminders" }).click();
   await expect(page.getByRole("heading", { name: "Reminder schedule" })).toBeVisible();
   await page.getByRole("tab", { name: "Notifications" }).click();
-  // Everything typed, including the password the browser will not refill, is still there.
+  // The form is still open, and everything typed, including the password the browser will not refill, is still there.
   await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Inbox");
   await expect(page.getByLabel("SMTP host", { exact: true })).toHaveValue("smtp.example.com");
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue("fixture-secret");
@@ -197,12 +217,14 @@ test("a failed refresh keeps the settings on screen instead of replacing them", 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Update failed" })).toBeVisible();
   await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue("Europe/Madrid");
+  await expect(page.getByText("Settings could not be loaded.")).toHaveCount(0);
   await expect(page.getByText("Follow-ups could not be loaded")).toHaveCount(0);
 });
 
 test("a rejected destination reports the field the server refused", async ({ page }) => {
   await page.route("**/api/v1/notification-destinations", (route) => (route.request().method() === "POST" ? route.fulfill({ status: 400, json: { error: "The sender address is not a valid email address" } }) : route.fulfill({ json: { data: [] } })));
   await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
   await page.getByLabel("Channel", { exact: true }).selectOption("email");
   await page.getByLabel("Name", { exact: true }).fill("Inbox");
   await page.getByLabel("From address", { exact: true }).fill("desk@example.com");
@@ -226,4 +248,124 @@ test("the revoke confirmation takes the focus and hands it back on Escape", asyn
   await page.keyboard.press("Escape");
   await expect(token.getByText("Revoke this access?")).toHaveCount(0);
   await expect(token.getByRole("button", { name: "Revoke" })).toBeFocused();
+});
+
+test("a repository waiting period is added as a row and saved as repository_days", async ({ page }) => {
+  await page.goto("/#/settings");
+  await expect(page.getByText("No repository has its own waiting period yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Add repository" }).click();
+  // The new row takes the focus, with the default waiting period filled in.
+  const repository = page.getByLabel("Repository", { exact: true });
+  await expect(repository).toBeFocused();
+  await expect(page.getByLabel("Days", { exact: true })).toHaveValue("7");
+  await repository.fill("fixture/calendar");
+  await page.getByLabel("Days", { exact: true }).fill("14");
+  const saved = page.waitForRequest((request) => request.url().endsWith("/follow-up-settings") && request.method() === "POST");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saved).postDataJSON()).toMatchObject({ repository_days: { "fixture/calendar": 14 } });
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await page.getByRole("button", { name: "Remove fixture/calendar" }).click();
+  await expect(page.getByRole("button", { name: "Add repository" })).toBeFocused();
+});
+
+test("a row that is not a repository is refused on the field, without a save", async ({ page }) => {
+  await page.route("**/api/v1/follow-up-settings", (route) => (route.request().method() === "POST" ? route.fulfill({ json: { saved: true } }) : route.fulfill({ json: { timezone: "Asia/Tokyo", digest_time: "09:00", wait_days: 7, teams: [], repository_days: { "fixture/calendar": 14 } } })));
+  await page.goto("/#/settings");
+  await expect(page.getByLabel("Repository", { exact: true })).toHaveValue("fixture/calendar");
+  let posted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/follow-up-settings") && request.method() === "POST") posted = true;
+  });
+  await page.getByRole("button", { name: "Add repository" }).click();
+  await page.getByLabel("Repository", { exact: true }).last().fill("calendar");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Use the form owner/repository." })).toBeVisible();
+  // The focus lands on the field that stopped the save.
+  await expect(page.getByLabel("Repository", { exact: true }).last()).toBeFocused();
+  await expect(page.getByLabel("Repository", { exact: true }).last()).toHaveAttribute("aria-invalid", "true");
+  expect(posted).toBe(false);
+});
+
+test("switching to text and back carries the waiting periods across", async ({ page }) => {
+  await page.route("**/api/v1/follow-up-settings", (route) => (route.request().method() === "POST" ? route.fulfill({ json: { saved: true } }) : route.fulfill({ json: { timezone: "Asia/Tokyo", digest_time: "09:00", wait_days: 7, teams: [], repository_days: { "fixture/calendar": 14 } } })));
+  await page.goto("/#/settings");
+  const toggle = page.getByRole("button", { name: "Edit as text" });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const text = page.getByLabel("Repository waiting periods", { exact: true });
+  await expect(text).toHaveValue("fixture/calendar=14");
+  // A line that does not parse keeps the text view open instead of being dropped on the way back.
+  await text.fill("fixture/calendar=14\nfixture/reviewer=3\nnot a line");
+  await toggle.click();
+  await expect(page.getByRole("alert").filter({ hasText: "Line 3" })).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await text.fill("fixture/calendar=14\nfixture/reviewer=3");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByLabel("Repository", { exact: true })).toHaveCount(2);
+  await expect(page.getByLabel("Repository", { exact: true }).last()).toHaveValue("fixture/reviewer");
+  await expect(page.getByLabel("Days", { exact: true }).last()).toHaveValue("3");
+  const saved = page.waitForRequest((request) => request.url().endsWith("/follow-up-settings") && request.method() === "POST");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await saved).postDataJSON()).toMatchObject({ repository_days: { "fixture/calendar": 14, "fixture/reviewer": 3 } });
+});
+
+test("settings that cannot be loaded offer a retry and a reconnect, and leave the other tabs working", async ({ page }) => {
+  await page.route("**/api/v1/follow-up-settings", (route) => route.fulfill({ status: 500, json: { error: "boom" } }));
+  await page.goto("/#/settings");
+  const failure = page.getByRole("alert").filter({ hasText: "Settings could not be loaded." });
+  await expect(failure).toBeVisible();
+  await expect(failure.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", /\/api\/v1\/auth\/github$/);
+  await expect(failure.getByRole("button", { name: "Retry" })).toBeVisible();
+  await page.getByRole("tab", { name: "Agent access" }).click();
+  await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toBeVisible();
+});
+
+test("removing a destination asks once in place and says it is done", async ({ page }) => {
+  await page.goto("/#/settings?tab=notifications");
+  await page.getByRole("button", { name: "Add destination" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Team channel");
+  await page.getByLabel("Bot token", { exact: true }).fill("fixture:token");
+  await page.getByLabel("Chat ID", { exact: true }).fill("-100");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  const row = page.getByTestId("destination").filter({ hasText: "Team channel" });
+  await expect(row).toContainText("Enabled");
+  await expect(page.getByRole("status").filter({ hasText: "Destination added." })).toBeAttached();
+  // Cancel closes the form and hands the focus to the button that opened it.
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByLabel("Channel", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add destination" })).toBeFocused();
+
+  await row.getByRole("button", { name: "Remove" }).click();
+  await expect(row.getByRole("button", { name: "Remove" })).toBeFocused();
+  await expect(row.getByRole("button", { name: "Remove" })).toHaveAccessibleDescription("Remove this destination?");
+  await page.keyboard.press("Escape");
+  await expect(row.getByText("Remove this destination?")).toHaveCount(0);
+  await expect(row.getByRole("button", { name: "Remove" })).toBeFocused();
+  await row.getByRole("button", { name: "Remove" }).click();
+  const removed = page.waitForRequest((request) => request.url().endsWith("/notification-destinations/1") && request.method() === "DELETE");
+  await row.getByRole("button", { name: "Remove" }).click();
+  await removed;
+  await expect(page.getByRole("status").filter({ hasText: "Destination removed." })).toBeAttached();
+});
+
+test("an out-of-range waiting period for a row is named on the row, not left to the browser", async ({ page }) => {
+  await page.goto("/#/settings");
+  let posted = false;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/follow-up-settings") && request.method() === "POST") posted = true;
+  });
+  await page.getByRole("button", { name: "Add repository" }).click();
+  await page.getByLabel("Repository", { exact: true }).fill("fixture/calendar");
+  await page.getByLabel("Days", { exact: true }).fill("400");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Use a whole number from 1 to 365." })).toBeVisible();
+  await expect(page.getByLabel("Days", { exact: true })).toBeFocused();
+  // The schedule's own fields keep the browser's range check, so a cleared default (which the field holds as 0) is never posted.
+  await page.getByLabel("Days", { exact: true }).fill("30");
+  await page.getByLabel("Follow up after (days)", { exact: true }).fill("");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect(await page.getByLabel("Follow up after (days)", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
+  expect(posted).toBe(false);
 });

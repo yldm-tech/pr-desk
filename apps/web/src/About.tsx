@@ -1,46 +1,64 @@
-import { secondaryAction } from "./action-styles";
-import { ExternalLink, FolderGit2, GitPullRequest, Inbox, RefreshCw } from "lucide-react";
+import { FolderGit2, Inbox, LineChart, RefreshCw, type LucideIcon } from "lucide-react";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 import { projectRepository, projectVersion } from "./project";
+import { LinkButton, TextLink } from "./ui-controls";
 
-// This page lives inside <main>, so its width branches are measured against @container/dashboard. They used to be written with Tailwind's default sm and md prefixes, which this project clears from the breakpoint namespace — an unknown variant compiles to no rule at all rather than to an error, so neither the padding nor the three-up card grid actually changed at any width.
+const features: { icon: LucideIcon; title: string; description: string }[] = [
+  { icon: Inbox, title: "aboutAttentionTitle", description: "aboutAttentionDescription" },
+  { icon: LineChart, title: "aboutOverviewTitle", description: "aboutOverviewDescription" },
+  { icon: RefreshCw, title: "aboutSyncTitle", description: "aboutSyncDescription" },
+];
+
+// Reachable signed out as well as signed in, so it depends on nothing but the bundle: no query, no session. One readable column, widths measured against @container/dashboard like every other page.
 export function About() {
   const { t } = useTranslation();
+  const featuresId = useId();
+  const startId = useId();
   return (
-    <article className="mx-auto grid max-w-5xl gap-5">
-      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 @row/dashboard:p-8">
-        <div className="flex flex-wrap items-center gap-3">
-          <img src="/favicon.svg" alt="" className="h-12 w-12 rounded-xl" />
-          <h2 className="text-2xl font-semibold tracking-tight">PR Desk</h2>
-          <span className="rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted)]">{projectVersion}</span>
-        </div>
-        <p className="mt-6 max-w-2xl text-xl font-medium leading-relaxed">{t("aboutTagline")}</p>
-        <p className="mt-3 max-w-3xl leading-relaxed text-[var(--muted)]">{t("aboutDescription")}</p>
-        <a className={`${secondaryAction} mt-6 inline-flex max-w-full items-center gap-2`} href={projectRepository} target="_blank" rel="noopener noreferrer">
-          <FolderGit2 size={18} aria-hidden="true" />
-          {t("aboutRepository")}
-          <ExternalLink size={14} aria-hidden="true" />
-        </a>
-        <a className="mt-3 block w-fit max-w-full break-all text-sm text-[var(--muted)] underline decoration-[var(--border)] underline-offset-4 hover:text-[var(--foreground)]" href={projectRepository} target="_blank" rel="noopener noreferrer">
-          {projectRepository}
-        </a>
-      </section>
-      <section aria-label={t("aboutFeatures")} className="grid gap-4 @row/dashboard:grid-cols-3">
-        {[
-          { icon: GitPullRequest, title: "aboutOverviewTitle", description: "aboutOverviewDescription" },
-          { icon: Inbox, title: "aboutAttentionTitle", description: "aboutAttentionDescription" },
-          { icon: RefreshCw, title: "aboutSyncTitle", description: "aboutSyncDescription" },
-        ].map(({ icon: Icon, title, description }) => (
-          <div key={title} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <Icon size={21} className="text-[var(--muted)]" aria-hidden="true" />
-            <h3 className="mt-4 font-semibold">{t(title)}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{t(description)}</p>
+    <article className="mx-auto grid w-full max-w-[40rem] min-w-0 gap-8 pt-2 pb-10 @row/dashboard:pt-6">
+      <header className="grid min-w-0 gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <img src="/favicon.svg" alt="" className="size-12 shrink-0" />
+          <div className="grid min-w-0 gap-0.5">
+            <h1 className="text-page font-semibold tracking-[var(--tracking-page)] text-fg">{t("pages.aboutTitle")}</h1>
+            <p className="text-small text-fg-subtle tabular-nums">{t("pages.version", { version: projectVersion })}</p>
           </div>
-        ))}
+        </div>
+        <p className="text-title font-medium text-fg">{t("aboutTagline")}</p>
+        <p className="text-body text-fg-muted">{t("aboutDescription")}</p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          <LinkButton href={projectRepository} external newTabLabel={t("pages.newTab")} icon={FolderGit2}>
+            {t("aboutRepository")}
+          </LinkButton>
+          <TextLink href={projectRepository} external externalIcon={false} newTabLabel={t("pages.newTab")} tone="muted" className="min-w-0 text-small break-all">
+            {projectRepository}
+          </TextLink>
+        </div>
+      </header>
+      <section aria-labelledby={featuresId} className="grid min-w-0 gap-4">
+        <h2 id={featuresId} className="text-title font-semibold text-fg">
+          {t("aboutFeatures")}
+        </h2>
+        <dl className="m-0 grid min-w-0 gap-4">
+          {features.map(({ icon: Icon, title, description }) => (
+            <div key={title} className="grid min-w-0 gap-0.5">
+              <dt className="flex items-center gap-2.5 text-body font-semibold text-fg">
+                <span aria-hidden="true" className="inline-grid size-7 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent-text">
+                  <Icon size={15} />
+                </span>
+                {t(title)}
+              </dt>
+              <dd className="m-0 pl-[2.375rem] text-body text-fg-muted">{t(description)}</dd>
+            </div>
+          ))}
+        </dl>
       </section>
-      <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
-        <h3 className="font-semibold">{t("aboutGettingStartedTitle")}</h3>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--muted)]">{t("aboutGettingStartedDescription")}</p>
+      <section aria-labelledby={startId} className="grid min-w-0 gap-2 rounded-lg border border-line bg-bg-subtle p-4 @pair/dashboard:p-5">
+        <h2 id={startId} className="text-title font-semibold text-fg">
+          {t("aboutGettingStartedTitle")}
+        </h2>
+        <p className="text-body text-fg-muted">{t("aboutGettingStartedDescription")}</p>
       </section>
     </article>
   );
