@@ -42,7 +42,7 @@ export function About() {
         </h2>
         <dl className="m-0 grid min-w-0 gap-4">
           {features.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="grid min-w-0 gap-1">
+            <div key={title} className="grid min-w-0 gap-0.5">
               <dt className="flex items-center gap-2.5 text-body font-semibold text-fg">
                 <span aria-hidden="true" className="inline-grid size-7 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent-text">
                   <Icon size={15} />

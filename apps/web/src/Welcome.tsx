@@ -49,7 +49,7 @@ export function Welcome() {
         ))}
       </ul>
       {/* The only language switch a signed-out visitor needs on this page, as a native select: it is what every platform does best. */}
-      <Select label={t("language")} value={i18n.resolvedLanguage || "en"} onChange={(event) => void i18n.changeLanguage(event.target.value)} options={Object.keys(resources).map((code) => ({ value: code, label: t("nativeName", { lng: code }) }))} />
+      <Select className="mt-2" label={t("language")} value={i18n.resolvedLanguage || "en"} onChange={(event) => void i18n.changeLanguage(event.target.value)} options={Object.keys(resources).map((code) => ({ value: code, label: t("nativeName", { lng: code }) }))} />
     </section>
   );
 }

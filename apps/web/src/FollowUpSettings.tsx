@@ -400,7 +400,7 @@ function DestinationForm({ draft, setDraft, errors, setErrors, allowPrivate, onC
       <p className="sr-only" role="status">
         {added.text && `${added.text}${added.id % 2 ? " " : ""}`}
       </p>
-      <div className="grid min-w-0 gap-4 @pair/dashboard:grid-cols-2">
+      <div className="grid min-w-0 items-start gap-4 @pair/dashboard:grid-cols-2">
         <Field label={t("followup.channel")} htmlFor={`${id}-kind`}>
           <select
             ref={channelSelect}
@@ -639,8 +639,9 @@ export function FollowUpSettings() {
   return (
     <div className="grid w-full max-w-[720px] min-w-0 gap-4">
       <PageHeader title={t("followup.settings")} />
+      {/* A two-character label ("通知") is narrower than a fingertip, and the primitive only raises a tab's height on a coarse pointer, so the width floor is set here. */}
       {/* Radix carries the roving tab order and the arrow keys; the Tabs primitive keeps a visited panel mounted and hidden, so a half-filled form survives a trip to another tab while a tab never opened costs no request. */}
-      <Tabs value={active} onValueChange={select} label={t("followup.settings")} items={settingsTabs.map((tab) => ({ value: tab, label: t(tabLabels[tab]) }))} panelClassName="grid min-w-0 gap-4">
+      <Tabs className="pointer-coarse:[&_[role=tab]]:min-w-11 pointer-coarse:[&_[role=tab]]:justify-center" value={active} onValueChange={select} label={t("followup.settings")} items={settingsTabs.map((tab) => ({ value: tab, label: t(tabLabels[tab]) }))} panelClassName="min-w-0 gap-4 data-[state=active]:grid">
         {(tab) => (tab === "schedule" ? <ReminderSettings /> : tab === "notifications" ? <NotificationDestinations /> : tab === "github" ? <GitHubAccess /> : <AccessSettings />)}
       </Tabs>
     </div>
