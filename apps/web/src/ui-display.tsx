@@ -270,8 +270,8 @@ export function errorKind(error: unknown): "auth" | "server" | "offline" | null 
 }
 
 // The one failure state every page uses in its content region, in the same place and alignment as EmptyState: what could not be loaded (the title), why in words chosen by the kind of failure, the retry, and for an ended session the way to reconnect. `actions` are the page's own extra ways out, after the retry.
-// `reconnect` offers the reconnect whatever the failure, for a page whose load most often fails for want of a GitHub scope rather than a session.
-export function ErrorState({ title, error, description, onRetry, actions, reconnect = false, className }: { title: string; error?: unknown; description?: string; onRetry: () => void; actions?: ReactNode; reconnect?: boolean; className?: string }) {
+// The reconnect is offered only when the failure says the GitHub connection is the problem (a 401, which is what the API answers for a lapsed or missing session and for an account it cannot act for); a 500 is the server's own and reconnecting would not fix it, so it gets the retry alone.
+export function ErrorState({ title, error, description, onRetry, actions, className }: { title: string; error?: unknown; description?: string; onRetry: () => void; actions?: ReactNode; className?: string }) {
   const { t } = useTranslation();
   const kind = errorKind(error);
   const said = description ?? (kind === "auth" ? t("shell.errorAuth") : kind === "offline" ? t("shell.errorOffline") : kind === "server" ? t("shell.errorServer") : undefined);
@@ -286,7 +286,7 @@ export function ErrorState({ title, error, description, onRetry, actions, reconn
         <Button icon={RefreshCw} onClick={onRetry}>
           {t("retry")}
         </Button>
-        {(kind === "auth" || reconnect) && (
+        {kind === "auth" && (
           <a href={apiURL + "/api/v1/auth/github"} className={buttonClass("ghost")}>
             {t("followup.reconnect")}
           </a>

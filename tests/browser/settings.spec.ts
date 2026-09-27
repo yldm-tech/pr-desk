@@ -217,7 +217,7 @@ test("a failed refresh keeps the settings on screen instead of replacing them", 
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Update failed" })).toBeVisible();
   await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue("Europe/Madrid");
-  await expect(page.getByText("Settings could not be loaded.")).toHaveCount(0);
+  await expect(page.getByText("Settings could not be loaded")).toHaveCount(0);
   await expect(page.getByText("Follow-ups could not be loaded")).toHaveCount(0);
 });
 
@@ -311,15 +311,23 @@ test("switching to text and back carries the waiting periods across", async ({ p
   expect((await saved).postDataJSON()).toMatchObject({ repository_days: { "fixture/calendar": 14, "fixture/reviewer": 3 } });
 });
 
-test("settings that cannot be loaded offer a retry and a reconnect, and leave the other tabs working", async ({ page }) => {
-  await page.route("**/api/v1/follow-up-settings", (route) => route.fulfill({ status: 500, json: { error: "boom" } }));
+// A server error is the server's to fix, so it is offered the retry alone: a reconnect there sent the reader through GitHub's OAuth for a failure a new session cannot cure. Only a 401, the API's answer for a connection it cannot act for, offers the reconnect.
+test("settings that cannot be loaded offer a retry, a reconnect only when the connection is the cause, and leave the other tabs working", async ({ page }) => {
+  let status = 500;
+  await page.route("**/api/v1/follow-up-settings", (route) => route.fulfill({ status, json: { error: status === 401 ? "Reconnect GitHub to configure account follow-ups" : "boom" } }));
   await page.goto("/#/settings");
-  const failure = page.getByRole("alert").filter({ hasText: "Settings could not be loaded." });
+  const failure = page.getByRole("alert").filter({ hasText: "Settings could not be loaded" });
   await expect(failure).toBeVisible();
-  await expect(failure.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", /\/api\/v1\/auth\/github$/);
   await expect(failure.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(failure.getByRole("link", { name: "Reconnect GitHub" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Agent access" }).click();
   await expect(page.getByRole("heading", { name: "AI agent access (MCP)" })).toBeVisible();
+
+  status = 401;
+  await page.getByRole("tab", { name: "Reminders" }).click();
+  await failure.getByRole("button", { name: "Retry" }).click();
+  await expect(failure.getByRole("link", { name: "Reconnect GitHub" })).toHaveAttribute("href", /\/api\/v1\/auth\/github$/);
+  await expect(failure.getByRole("button", { name: "Retry" })).toBeVisible();
 });
 
 test("removing a destination asks once in place and says it is done", async ({ page }) => {

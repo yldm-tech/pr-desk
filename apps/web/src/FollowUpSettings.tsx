@@ -328,7 +328,7 @@ function ReminderSettings() {
       </div>
     );
   // A background refetch that fails leaves the settings in hand: replacing the panel then would throw away a half-filled form along with what it shows.
-  if (query.isError && !query.data) return <ErrorState title={t("settings.unavailable")} error={query.error} reconnect onRetry={() => void query.refetch()} />;
+  if (query.isError && !query.data) return <ErrorState title={t("settings.unavailable")} error={query.error} onRetry={() => void query.refetch()} />;
   return (
     <div className="grid min-w-0 gap-4">
       {query.isError && <StaleNotice onRetry={() => void query.refetch()} />}
