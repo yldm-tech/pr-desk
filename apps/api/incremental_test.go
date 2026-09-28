@@ -29,6 +29,10 @@ func TestIncrementalSyncPreservesHistoryAndCheckpointOnFailure(t *testing.T) {
 	fail := true
 	queries := []string{}
 	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		// The sync asks each repository's current name before it searches; this one kept its name. It is not a search, so it is neither a full scan nor one of the queries below.
+		if repo, ok := strings.CutPrefix(r.URL.Path, "/repos/"); ok {
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"full_name":"` + repo + `"}`)), Request: r}, nil
+		}
 		q := r.URL.Query().Get("q")
 		queries = append(queries, q)
 		code, body := 200, `{"total_count":0,"items":[]}`

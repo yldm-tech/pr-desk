@@ -56,7 +56,11 @@ type PullRequest struct {
 	// GitHub answered. Without it an unresolvable repository is asked about on
 	// every overview request.
 	RepoVisibilityCheckedAt *time.Time `json:"-"`
-	UpdatedAt               time.Time  `json:"updated_at" gorm:"index"`
+	// GitHub's id for the pull request, which a repository rename or transfer leaves alone while it changes Repo and URL. Zero on rows stored before it was kept, until the sync next reads them.
+	GitHubID int64 `json:"-" gorm:"column:git_hub_id;index"`
+	// When GitHub was last asked what this repository is called now (see reconcileRepositoryNames).
+	RepoNameCheckedAt *time.Time `json:"-"`
+	UpdatedAt         time.Time  `json:"updated_at" gorm:"index"`
 }
 type OAuthToken struct {
 	GitHubID           int64      `gorm:"not null;default:0"`
@@ -708,6 +712,10 @@ func (s *Server) syncSession(ctx context.Context, sid string, automatic, full bo
 		if err := s.db.Model(&OAuthToken{}).Where("id = ?", t.ID).Update("git_hub_created_at", from).Error; err != nil {
 			return syncResult{500, gin.H{"error": "Unable to save account history range"}}
 		}
+	}
+	// Before any row is written, so a pull request of a renamed repository is matched against rows already under its new name rather than stored beside them. A failure here costs only this pass: the next sync asks again.
+	if err := s.reconcileRepositoryNames(ctx, gh, sid); err != nil {
+		log.Printf("Repository name check stopped: %v", err)
 	}
 	progress.set("history", 0, 0)
 	syncStarted := time.Now().UTC()

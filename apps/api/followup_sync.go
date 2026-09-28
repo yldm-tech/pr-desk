@@ -136,15 +136,17 @@ func (s *Server) syncReviewRequests(ctx context.Context, token OAuthToken, plain
 
 func (s *Server) saveReviewDiscovery(ctx context.Context, sid string, item *github.Issue) error {
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var existing PullRequest
-		err := tx.Where("session_id = ? AND url = ?", sid, item.GetHTMLURL()).First(&existing).Error
-		if err == nil {
-			return nil
-		}
-		if err != gorm.ErrRecordNotFound {
+		existing, found, err := storedPullRequest(tx, sid, item)
+		if err != nil {
 			return err
 		}
+		if found {
+			if existing.GitHubID == 0 && item.GetID() != 0 {
+				return tx.Model(&PullRequest{}).Where("id = ?", existing.ID).UpdateColumn("git_hub_id", item.GetID()).Error
+			}
+			return nil
+		}
 		created := item.GetCreatedAt().Time
-		return tx.Create(&PullRequest{SessionID: sid, Role: "reviewer", Author: item.GetUser().GetLogin(), Repo: strings.TrimPrefix(item.GetRepositoryURL(), "https://api.github.com/repos/"), Number: item.GetNumber(), Title: item.GetTitle(), State: item.GetState(), URL: item.GetHTMLURL(), PRCreatedAt: &created, UpdatedAt: item.GetUpdatedAt().Time}).Error
+		return tx.Create(&PullRequest{SessionID: sid, Role: "reviewer", Author: item.GetUser().GetLogin(), Repo: repositoryOf(item), Number: item.GetNumber(), Title: item.GetTitle(), State: item.GetState(), URL: item.GetHTMLURL(), GitHubID: item.GetID(), PRCreatedAt: &created, UpdatedAt: item.GetUpdatedAt().Time}).Error
 	})
 }

@@ -161,9 +161,12 @@ func (s *Server) syncPRDetails(ctx context.Context, token, sid string, issue *gi
 		}
 	}
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var pr PullRequest
-		if err := tx.Where("session_id = ? AND number = ? AND url = ?", sid, issue.GetNumber(), issue.GetHTMLURL()).First(&pr).Error; err != nil {
+		pr, found, err := storedPullRequest(tx, sid, issue)
+		if err != nil {
 			return err
+		}
+		if !found {
+			return gorm.ErrRecordNotFound
 		}
 		// UpdatedAt is GitHub activity time, not the time our poll ran.
 		updates := map[string]any{"comments_count": detail.Comments + detail.ReviewComments, "merged_at": detail.MergedAt, "review_status": reviewStatus, "checks_status": checksStatus, "checks_detail": recordedChecks, "updated_at": pr.UpdatedAt, "draft": detail.Draft}
