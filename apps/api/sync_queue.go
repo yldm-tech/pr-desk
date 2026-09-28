@@ -85,11 +85,14 @@ func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*githu
 				delete(updates, "url")
 			}
 			lookup := tx.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL())
+			identity := PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}
 			if found {
+				// FirstOrCreate queries by its second argument as well, so a row kept under its stored name has to be named by its stored URL, or the query misses it and a second row is created.
 				lookup = tx.Where("id = ?", stored.ID)
+				identity = PullRequest{SessionID: sid, Number: stored.Number, URL: stored.URL}
 			}
 			var pr PullRequest
-			if err := lookup.Assign(updates).FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
+			if err := lookup.Assign(updates).FirstOrCreate(&pr, identity).Error; err != nil {
 				return err
 			}
 			if x.GetState() == "closed" {
