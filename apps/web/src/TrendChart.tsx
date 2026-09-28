@@ -6,7 +6,7 @@ import { barY, defineChart, tickY } from "@tanstack/charts";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { tooltip } from "@tanstack/charts/tooltip";
-import { useTheme } from "./theme";
+import { useThemeColors } from "./chart-colors";
 import { Button } from "./ui-controls";
 
 export type TrendMonth = { month: string; merged: number };
@@ -25,21 +25,11 @@ export function fillMonths(months: TrendMonth[], year: number, now = new Date())
 // The narrowest panel that still carries a label for every month; below it the axis is thinned. Thirteen months with a two-digit year at -35deg need about 35px of axis each, which a laptop panel has and a phone's 250-350px does not, and there the library drops the labels that collide. The number cannot be a container query: nothing in CSS can reach a chart option, so the panel has to be measured.
 const allMonthsWidth = 420;
 
-// The chart library paints SVG attributes, which cannot follow a custom property, so the colours are read from the theme once per theme change and handed over as values.
-function useChartColors() {
-  const { resolved } = useTheme();
-  return useMemo(() => {
-    const style = getComputedStyle(document.documentElement);
-    const read = (name: string) => style.getPropertyValue(name).trim() || "currentColor";
-    return { bar: read("--chart-bar"), baseline: read("--fg-subtle") };
-  }, [resolved]);
-}
-
 // Merges per month for the period, one series in the chart colour. The heading carries the period in the reader's language and says the months are UTC, which is how the server buckets them; `controls` is the repository picker, which sits in the header so changing it never moves the chart.
 export function TrendChart({ months, loading, error, onRetry, controls }: { months: TrendMonth[]; loading: boolean; error: boolean; onRetry: () => void; controls?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
-  const colors = useChartColors();
+  const [bar, baseline] = useThemeColors(["--chart-bar", "--fg-subtle"]);
   const panel = useRef<HTMLElement>(null);
   // Starts optimistic so a browser without ResizeObserver, or the frame before the first observation, renders the full axis rather than a thinned one.
   const [fitsEveryMonth, setFitsEveryMonth] = useState(true);
@@ -62,11 +52,11 @@ export function TrendChart({ months, loading, error, onRetry, controls }: { mont
     () =>
       defineChart({
         marks: [
-          barY(months, { x: "month", y: "merged", fill: colors.bar, radius: { end: 3 }, maxThickness: 28 }),
+          barY(months, { x: "month", y: "merged", fill: bar, radius: { end: 3 }, maxThickness: 28 }),
           // A month with nothing merged still gets a mark on the baseline, so zero is visibly a value rather than a missing bar.
           tickY(
             months.filter((item) => item.merged === 0),
-            { x: "month", y: "merged", stroke: colors.baseline, strokeWidth: 2, span: 0.4 },
+            { x: "month", y: "merged", stroke: baseline, strokeWidth: 2, span: 0.4 },
           ),
         ],
         scales: {
@@ -89,7 +79,7 @@ export function TrendChart({ months, loading, error, onRetry, controls }: { mont
           ],
         },
       }),
-    [months, colors, fitsEveryMonth, monthLabel, t],
+    [months, bar, baseline, fitsEveryMonth, monthLabel, t],
   );
   return (
     <section ref={panel} aria-labelledby="merge-activity-heading" aria-busy={loading} className="@container/chart grid min-w-0 gap-3">
