@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -67,15 +66,26 @@ var errHistoryStorage = errors.New("unable to save history page")
 func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*github.Issue) error {
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, x := range items {
-			updates := map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": strings.TrimPrefix(x.GetRepositoryURL(), "https://api.github.com/repos/"), "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time, "role": "authored", "author": x.GetUser().GetLogin()}
+			updates := map[string]interface{}{"title": x.GetTitle(), "state": x.GetState(), "repo": repositoryOf(x), "url": x.GetHTMLURL(), "updated_at": x.GetUpdatedAt().Time, "pr_created_at": x.GetCreatedAt().Time, "role": "authored", "author": x.GetUser().GetLogin()}
 			if x.Repository != nil && x.Repository.Private != nil {
 				updates["repo_private"] = x.Repository.GetPrivate()
+			}
+			if x.GetID() != 0 {
+				updates["git_hub_id"] = x.GetID()
 			}
 			if links := x.GetPullRequestLinks(); links != nil && links.MergedAt != nil {
 				updates["merged_at"] = links.MergedAt.Time
 			}
+			stored, found, err := storedPullRequest(tx, sid, x)
+			if err != nil {
+				return err
+			}
+			lookup := tx.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL())
+			if found {
+				lookup = tx.Where("id = ?", stored.ID)
+			}
 			var pr PullRequest
-			if err := tx.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL()).Assign(updates).FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
+			if err := lookup.Assign(updates).FirstOrCreate(&pr, PullRequest{SessionID: sid, Number: x.GetNumber(), URL: x.GetHTMLURL()}).Error; err != nil {
 				return err
 			}
 			if x.GetState() == "closed" {
