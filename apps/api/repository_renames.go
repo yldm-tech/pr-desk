@@ -22,22 +22,20 @@ func repositoryOf(item *github.Issue) string {
 	return strings.TrimPrefix(item.GetRepositoryURL(), "https://api.github.com/repos/")
 }
 
-// storedPullRequest finds the row for a pull request GitHub returned: by GitHub's id, which survives a rename, or failing that by the URL rows were stored under before the id was kept. A row found by id under another repository name means that repository has been renamed since, and every row of it moves to the new name before the caller writes this one.
+// storedPullRequest finds the row for a pull request GitHub returned: by GitHub's id, which survives a rename, or failing that by the URL rows were stored under before the id was kept.
+//
+// A row found by id under another repository name means one of the two names is out of date, but not which: search results can still carry a repository's old name for a while after a rename. So nothing is renamed here. Both names are marked for the name check at the start of the next sync, which asks GitHub's repository endpoint and moves and merges the rows then, and the caller leaves this row's name and URL as they are (see keepsStoredName).
 func storedPullRequest(tx *gorm.DB, sid string, item *github.Issue) (PullRequest, bool, error) {
 	var pr PullRequest
 	if id := item.GetID(); id != 0 {
 		err := tx.Where("session_id = ? AND git_hub_id = ?", sid, id).First(&pr).Error
 		if err == nil {
-			repo := repositoryOf(item)
-			if repo == "" || pr.Repo == repo {
-				return pr, true, nil
+			if repo := repositoryOf(item); repo != "" && pr.Repo != repo {
+				if err := tx.Model(&PullRequest{}).Where("session_id = ? AND repo IN ?", sid, []string{pr.Repo, repo}).UpdateColumn("repo_name_checked_at", nil).Error; err != nil {
+					return PullRequest{}, false, err
+				}
 			}
-			if err := renameRepository(tx, sid, pr.Repo, repo); err != nil {
-				return PullRequest{}, false, err
-			}
-			// The rename may have merged this row into another copy of the same pull request; the merge carries the id to whichever row survives.
-			err = tx.Where("session_id = ? AND git_hub_id = ?", sid, id).First(&pr).Error
-			return pr, err == nil, err
+			return pr, true, nil
 		}
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return PullRequest{}, false, err
@@ -48,6 +46,11 @@ func storedPullRequest(tx *gorm.DB, sid string, item *github.Issue) (PullRequest
 		return PullRequest{}, false, nil
 	}
 	return pr, err == nil, err
+}
+
+// keepsStoredName reports whether a write must leave a stored row's repository and URL alone because GitHub returned the pull request under another name (see storedPullRequest).
+func keepsStoredName(stored PullRequest, found bool, item *github.Issue) bool {
+	return found && stored.Repo != repositoryOf(item)
 }
 
 // renameRepository moves every row of a session from one repository name to another, then merges the rows the move leaves describing the same pull request twice.
@@ -71,15 +74,26 @@ func renameRepository(tx *gorm.DB, sid, from, to string) error {
 	if err := tx.Where("session_id = ? AND repo = ?", sid, to).Order("updated_at DESC, id DESC").Find(&rows).Error; err != nil {
 		return err
 	}
-	kept := map[int]PullRequest{}
+	// Two rows under one number are one pull request unless both carry GitHub ids and those differ: then they are two, such as a pull request of a deleted repository whose name a renamed one has since taken, and neither may absorb the other.
+	kept := map[int][]PullRequest{}
 	for _, row := range rows {
-		survivor, seen := kept[row.Number]
-		if !seen {
-			kept[row.Number] = row
+		survivors := kept[row.Number]
+		index := -1
+		for i, survivor := range survivors {
+			if survivor.GitHubID == 0 || row.GitHubID == 0 || survivor.GitHubID == row.GitHubID {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			kept[row.Number] = append(survivors, row)
 			continue
 		}
-		if err := mergePullRequest(tx, survivor, row); err != nil {
+		if err := mergePullRequest(tx, survivors[index], row); err != nil {
 			return err
+		}
+		if survivors[index].GitHubID == 0 {
+			survivors[index].GitHubID = row.GitHubID
 		}
 	}
 	log.Printf("Repository renamed on GitHub: session rows moved from %s to %s", from, to)
@@ -178,7 +192,11 @@ func (s *Server) reconcileRepositoryNames(ctx context.Context, gh *github.Client
 			if isRateLimited(err) {
 				return err
 			}
-			if response == nil || (response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusForbidden && response.StatusCode != http.StatusUnavailableForLegalReasons) {
+			// No answer at all, or a server error that outlasted the transport's retries, is GitHub being unreachable rather than this repository's problem: every other repository would wait out the same retries before the sync could start.
+			if response == nil || response.StatusCode >= http.StatusInternalServerError {
+				return err
+			}
+			if response.StatusCode != http.StatusNotFound && response.StatusCode != http.StatusForbidden && response.StatusCode != http.StatusUnavailableForLegalReasons {
 				log.Printf("Repository name check skipped for %s: %v", repo, err)
 				continue
 			}

@@ -80,6 +80,10 @@ func (s *Server) saveHistoryPage(ctx context.Context, sid string, items []*githu
 			if err != nil {
 				return err
 			}
+			if keepsStoredName(stored, found, x) {
+				delete(updates, "repo")
+				delete(updates, "url")
+			}
 			lookup := tx.Where("session_id = ? AND number = ? AND url = ?", sid, x.GetNumber(), x.GetHTMLURL())
 			if found {
 				lookup = tx.Where("id = ?", stored.ID)

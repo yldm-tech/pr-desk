@@ -24,14 +24,16 @@ func renamedGitHub(t *testing.T, requests *atomic.Int32) *github.Client {
 		"1355334712": "metasequoiaime/msime",
 		"1187844001": "metasequoiaime/msime-web",
 		"1362229808": "metasequoiaime/msime-backup",
+		"5":          "yldm-tech/new-name",
 	}
 	moved := map[string]string{
 		"/repos/metasequoiaime/MSIME-Apple":  "1355334712",
 		"/repos/metasequoiaime/msime-apple":  "1355334712",
 		"/repos/metasequoiaime/MSIME-Web":    "1187844001",
 		"/repos/metasequoiaime/MSIME-Client": "1362229808",
+		"/repos/yldm-tech/Old-Name":          "5",
 	}
-	here := map[string]bool{"/repos/metasequoiaime/msime": true, "/repos/metasequoiaime/msime-web": true, "/repos/metasequoiaime/msime-backup": true, "/repos/metasequoiaime/MSIME-Windows": true}
+	here := map[string]bool{"/repos/metasequoiaime/msime": true, "/repos/metasequoiaime/msime-web": true, "/repos/metasequoiaime/msime-backup": true, "/repos/metasequoiaime/MSIME-Windows": true, "/repos/yldm-tech/new-name": true}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		if id, ok := moved[r.URL.Path]; ok {
@@ -270,44 +272,119 @@ func TestRepositoryNameCheckFoldsEveryOldNameIntoTheCurrentOne(t *testing.T) {
 	}
 }
 
-// A rename is also seen the moment the sync meets a pull request it already holds by id under another name: every row of the old name moves then, rather than waiting for the daily name check while the list shows the repository twice.
-func TestSyncMovesARenamedRepositoryWhenItMeetsAKnownPullRequest(t *testing.T) {
-	db := integrationDB(t)
-	s := &Server{db: db}
-	old := "yldm-tech/Old-Name"
-	renameRow(t, db, old, 4, 77, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
-	sibling := renameRow(t, db, old, 6, 0, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+func renamedIssue(id int64, number int, repo string) *github.Issue {
 	updated := github.Timestamp{Time: time.Date(2026, 9, 20, 0, 0, 0, 0, time.UTC)}
-	item := &github.Issue{
-		ID:            github.Ptr(int64(77)),
-		Number:        github.Ptr(4),
+	return &github.Issue{
+		ID:            github.Ptr(id),
+		Number:        github.Ptr(number),
 		Title:         github.Ptr("renamed"),
 		State:         github.Ptr("open"),
-		HTMLURL:       github.Ptr("https://github.com/yldm-tech/new-name/pull/4"),
-		RepositoryURL: github.Ptr("https://api.github.com/repos/yldm-tech/new-name"),
+		HTMLURL:       github.Ptr("https://github.com/" + repo + "/pull/" + strconv.Itoa(number)),
+		RepositoryURL: github.Ptr("https://api.github.com/repos/" + repo),
 		UpdatedAt:     &updated,
 		CreatedAt:     &updated,
 		User:          &github.User{Login: github.Ptr("houko")},
 	}
-	if err := s.saveHistoryPage(context.Background(), "renames", []*github.Issue{item}); err != nil {
-		t.Fatal(err)
-	}
+}
+
+func renamedRows(t *testing.T, db *gorm.DB) []PullRequest {
+	t.Helper()
 	var rows []PullRequest
-	if err := db.Where("session_id = ?", "renames").Order("number").Find(&rows).Error; err != nil {
+	if err := db.Where("session_id = ?", "renames").Order("number, id").Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
+	return rows
+}
+
+// A pull request the sync already holds by id, returned under another repository name, is updated where it is and not stored again. Which name is current is left to the repository endpoint: both names are marked for the name check, and at the start of the next sync every row of the old name moves.
+func TestSyncMeetingAKnownPullRequestUnderANewNameLeavesTheRenameToTheNameCheck(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	ctx := context.Background()
+	old := "yldm-tech/Old-Name"
+	renameRow(t, db, old, 4, 77, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	sibling := renameRow(t, db, old, 6, 0, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	if err := db.Model(&PullRequest{}).Where("session_id = ?", "renames").UpdateColumn("repo_name_checked_at", time.Now()).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.saveHistoryPage(ctx, "renames", []*github.Issue{renamedIssue(77, 4, "yldm-tech/new-name")}); err != nil {
+		t.Fatal(err)
+	}
+	rows := renamedRows(t, db)
 	if len(rows) != 2 {
 		t.Fatalf("rows after the sync = %d, want 2: the known pull request is updated, not stored again", len(rows))
 	}
+	if rows[0].Title != "renamed" || rows[0].Repo != old || rows[0].URL != "https://github.com/yldm-tech/Old-Name/pull/4" {
+		t.Fatalf("the pull request the sync met = %+v, want its new title under the name it was stored with", rows[0])
+	}
 	for _, row := range rows {
-		if row.Repo != "yldm-tech/new-name" {
-			t.Fatalf("row %d is still under %q", row.Number, row.Repo)
+		if row.RepoNameCheckedAt != nil {
+			t.Fatalf("row %d was not marked for the name check", row.Number)
 		}
 	}
-	if rows[0].Title != "renamed" || rows[0].URL != "https://github.com/yldm-tech/new-name/pull/4" {
-		t.Fatalf("the pull request the sync met was not updated: %+v", rows[0])
+
+	var requests atomic.Int32
+	if err := s.reconcileRepositoryNames(ctx, renamedGitHub(t, &requests), "renames"); err != nil {
+		t.Fatal(err)
 	}
-	if rows[1].ID != sibling.ID || rows[1].URL != "https://github.com/yldm-tech/new-name/pull/6" {
-		t.Fatalf("the sibling the sync did not meet was not moved with its repository: %+v", rows[1])
+	rows = renamedRows(t, db)
+	if len(rows) != 2 || rows[0].URL != "https://github.com/yldm-tech/new-name/pull/4" || rows[1].ID != sibling.ID || rows[1].URL != "https://github.com/yldm-tech/new-name/pull/6" {
+		t.Fatalf("rows after the name check = %+v, want both moved to yldm-tech/new-name", rows)
+	}
+}
+
+// The pull request's id can sit on the older of two copies: the row under the old name, with a later copy stored under the new name before ids were kept. The name check folds them into one row that carries the id and the sync's latest write.
+func TestNameCheckFoldsTheCopyTheSyncWroteThroughIntoOneRow(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	ctx := context.Background()
+	renameRow(t, db, "yldm-tech/Old-Name", 4, 77, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	renameRow(t, db, "yldm-tech/new-name", 4, 0, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
+	if err := s.saveHistoryPage(ctx, "renames", []*github.Issue{renamedIssue(77, 4, "yldm-tech/new-name")}); err != nil {
+		t.Fatal(err)
+	}
+	var requests atomic.Int32
+	if err := s.reconcileRepositoryNames(ctx, renamedGitHub(t, &requests), "renames"); err != nil {
+		t.Fatal(err)
+	}
+	rows := renamedRows(t, db)
+	if len(rows) != 1 || rows[0].GitHubID != 77 || rows[0].Title != "renamed" || rows[0].URL != "https://github.com/yldm-tech/new-name/pull/4" {
+		t.Fatalf("rows after the name check = %+v, want one row carrying id 77, the sync's title and the new URL", rows)
+	}
+}
+
+// Search results can carry a repository's old name for a while after a rename. A row already under the current name must not be moved back by them.
+func TestAStaleNameInSearchResultsDoesNotMoveARowBack(t *testing.T) {
+	db := integrationDB(t)
+	s := &Server{db: db}
+	ctx := context.Background()
+	current := renameRow(t, db, "yldm-tech/new-name", 4, 77, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	if err := s.saveHistoryPage(ctx, "renames", []*github.Issue{renamedIssue(77, 4, "yldm-tech/Old-Name")}); err != nil {
+		t.Fatal(err)
+	}
+	var requests atomic.Int32
+	if err := s.reconcileRepositoryNames(ctx, renamedGitHub(t, &requests), "renames"); err != nil {
+		t.Fatal(err)
+	}
+	rows := renamedRows(t, db)
+	if len(rows) != 1 || rows[0].ID != current.ID || rows[0].Repo != "yldm-tech/new-name" || rows[0].URL != current.URL || rows[0].Title != "renamed" {
+		t.Fatalf("rows after a stale search result = %+v, want the row kept under yldm-tech/new-name with the new title", rows)
+	}
+}
+
+// Two rows under one number whose GitHub ids differ are two pull requests: a renamed repository that took a deleted one's name must not fold the deleted repository's pull request into its own.
+func TestRenameKeepsPullRequestsWithDifferentGitHubIDsApart(t *testing.T) {
+	db := integrationDB(t)
+	old := renameRow(t, db, "yldm-tech/tool", 1, 11, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC))
+	moved := renameRow(t, db, "yldm-tech/tool2", 1, 22, time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC))
+	if err := db.Transaction(func(tx *gorm.DB) error { return renameRepository(tx, "renames", "yldm-tech/tool2", "yldm-tech/tool") }); err != nil {
+		t.Fatal(err)
+	}
+	var rows []PullRequest
+	if err := db.Where("session_id = ?", "renames").Order("id").Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].ID != old.ID || rows[0].GitHubID != 11 || rows[1].ID != moved.ID || rows[1].GitHubID != 22 {
+		t.Fatalf("rows after the rename = %+v, want both pull requests kept with their own ids", rows)
 	}
 }
