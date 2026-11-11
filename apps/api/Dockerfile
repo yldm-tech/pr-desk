@@ -1,5 +1,5 @@
 ARG VP_IMAGE=ghcr.io/voidzero-dev/vite-plus:0.3.1
-ARG GO_IMAGE=mirror.gcr.io/library/golang:1.26.8-alpine
+ARG GO_IMAGE=mirror.gcr.io/library/golang:1.26.11-alpine
 ARG RUNTIME_IMAGE=mirror.gcr.io/library/alpine:3.22
 FROM ${VP_IMAGE} AS web
 WORKDIR /home/vp/app
