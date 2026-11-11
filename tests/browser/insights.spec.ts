@@ -56,6 +56,8 @@ test("the repository breakdown is a table whose rows open the repository's pull 
 });
 
 test("the stat strip and the outcomes print every value", async ({ page }) => {
+  // The chart's thirteen months end at the current month (fillMonths), so the clock is pinned to the fixture's last month; otherwise the expected range goes stale the month after this was written.
+  await page.clock.setFixedTime(new Date("2026-09-15T12:00:00Z"));
   await installFixtures(page);
   await page.goto("/#/insights");
   await expect(page.getByText("Merge rate", { exact: true }).locator("..")).toContainText("83.3%");
