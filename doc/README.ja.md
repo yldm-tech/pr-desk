@@ -8,6 +8,8 @@
 [![React](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)](../apps/web/package.json)
 [![Bun](https://img.shields.io/badge/Bun-1.3.4-000000?logo=bun&logoColor=white)](../package.json)
 [![Stars](https://img.shields.io/github/stars/yldm-tech/pr-desk?style=flat)](https://github.com/yldm-tech/pr-desk/stargazers)
+[![X](https://img.shields.io/badge/X-%40suzukaze__haduki-000000?logo=x&logoColor=white)](https://x.com/suzukaze_haduki)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/houko)
 
 自分でホストできる GitHub PR ダッシュボードです。複数のリポジトリに送った PR のチェック失敗、変更要求、マージ競合をまとめて確認でき、過去の活動とバックグラウンド同期にも対応しています。
 
